@@ -3,14 +3,29 @@
 **Input**: `spec.md`, `plan.md`, `research.md`, `data-model.md`,
 `contracts/openapi.yaml`, and `quickstart.md` in this feature directory.
 
-**Order**: Implement and validate a local Admin/configuration/FAQ slice first; then connect
-Meta, receive webhooks, deliver the text+FAQ path, enable AI fallback, and show conversations.
-Only after that working vertical slice add audio, photographs, the final dashboard, and
-cross-cutting release hardening.
+**Order**: `T001-T098` is preserved as the historical implementation baseline. The approved
+extension begins at `T099` with the Tenant/Company model, safe migration, conversation states,
+Bot/Humano concurrency, human actions, OpenAI, audio, image, private storage, complete
+conversations, and final validation. Standard and Coexistence remain supported for new messages;
+Coexistence history and `smb_*` synchronization are explicitly deferred.
+
+**Approved POC scope**: Tenant/Company and memberships; one active WhatsApp number per Tenant as
+an operational limit only; future multiple integrations per company; `AttentionMode` Bot/Humano;
+`LifecycleStatus` Abierta/Cerrada; human priority, handoff, manual replies, reopen, audit,
+OpenAI, text, audio, image, private media and initial 30-day retention.
+
+**Explicitly deferred**: `history`, `smb_app_state_sync`, `smb_message_echoes`, historical
+contact/conversation synchronization, video, documents, location, teams, queues, campaigns,
+operational templates, plans and operational feature flags. No task from `T099-T138` implements
+those deferred capabilities.
 
 **Task format**: Every task has an ID, explicit `Dependencies`, expected file path(s), and
 an observable completion condition. `[P]` means the task can proceed concurrently with other
 ready `[P]` tasks because it does not share their output files.
+
+Tasks `T001-T098` retain their original meaning and completion markers. New tasks are extensions
+or corrections and must not be used to reinterpret historical tasks as if they originally
+covered the current Tenant, Bot/Humano, AI or multimedia scope.
 
 ## Phase 1: Setup — Solution and Host
 
@@ -160,6 +175,61 @@ conversation history. Outside the permitted window, no free-form FAQ/AI response
 - [ ] T097 Run the ordered full demo from `specs/001-whatsapp-business-bot-poc/quickstart.md` and record evidence in `specs/001-whatsapp-business-bot-poc/demo-validation.md`; Dependencies: T032, T037, T049, T058, T062, T064, T078, T082, T087, T090, T091, T092, T093, T094, T095, T096; done when Admin → bot config → FAQ → Meta → webhook → text/FAQ → AI fallback → visible conversation → audio → photo completes with consented test data.
 - [ ] T098 Verify clean-install SQL Server LocalDB preparation, solution build/tests, supported .NET 10 servicing, approved retention/AI processing, Meta access, and one-active-number policy in `specs/001-whatsapp-business-bot-poc/release-readiness.md`; Dependencies: T097; done when `sqllocaldb`/`sqlcmd` checks pass, `Initialize-DevelopmentDatabase.ps1` prepares a fresh `(localdb)\MSSQLLocalDB` database named `WhatsAppBot`, catalog validation finds expected tables and Stored Procedures, no unsupported runtime or unapproved external-service/data-processing gate remains, and deployed environments remain compatible with configured SQL Server.
 
+## Phase 10: Tenant, Contracts, Migration, and Runtime Safety
+
+- [ ] T099 Extend shared and domain models for `TenantId`, `AttentionMode`, `LifecycleStatus`, actor, origin, `OnboardingType`, outcomes, assignment and conversation version in `src/WhatsAppBot.Shared/Enums/`, `src/WhatsAppBot.Shared/DTOs/`, `src/WhatsAppBot.Api/Models/Entities/`, and `src/WhatsAppBot.Api/Models/Contracts/`; Dependencies: T011, T015, T016, T017; done when the new fields are represented without using one combined Bot/Humano/Cerrada enum.
+- [ ] T100 [OAS] Synchronize OpenAPI contracts and contract tests for Tenant-scoped conversations, actions, manual replies, safe outcomes, connection modality, `409` conflicts, `410` expired media and authorized media in `specs/001-whatsapp-business-bot-poc/contracts/openapi.yaml` and `tests/WhatsAppBot.Api.ContractTests/`; Dependencies: T099; done when the OpenAPI document parses and contract tests detect DTO/route/status drift.
+- [ ] T101 [SP] Create the Tenant-aware logical SQL model for Company, TenantMembership, TenantId relationships, separate attention/lifecycle states, `AssignedAdminId`, audit events, `rowversion` and the operational one-active-WhatsApp-number-per-Tenant invariant in `src/WhatsAppBot.Api/Persistence/StoredProcedures/Schema/005_TenantModel.sql` and `006_TenantIndexes.sql`; Dependencies: T099; done when the schema supports multiple Tenants and future multiple integrations without a global singleton constraint.
+- [ ] T102 [SP] Implement server-side Tenant bootstrap, membership lookup and active-Tenant session context in `src/WhatsAppBot.Api/Business/Abstractions/TenantPorts.cs`, `src/WhatsAppBot.Api/Infrastructure/Security/TenantContext.cs`, `src/WhatsAppBot.Api/Business/UseCases/`, and `src/WhatsAppBot.Api/Persistence/Repositories/`; Dependencies: T099, T101; done when bootstrap creates the first Tenant and associates the bootstrap administrator, and requests cannot select Tenant solely from browser input.
+- [ ] T103 [SP] Migrate the current singleton data model to the initial Tenant without data loss in `src/WhatsAppBot.Api/Persistence/StoredProcedures/Schema/007_TenantMigration.sql`, `src/WhatsAppBot.Api/Persistence/StoredProcedures/Procedures/`, and `scripts/sql/Initialize-DevelopmentDatabase.ps1`; Dependencies: T101, T102; done when the existing integration, administrator, conversations and messages keep their identities and are associated with the initial Tenant.
+- [ ] T104 [P] Bind independent configurable budgets for Admin, Meta, SQL, OpenAI, media storage and FFmpeg in `src/WhatsAppBot.Api/Infrastructure/Options/` and `src/WhatsAppBot.Admin/Configuration/`; Dependencies: T004, T008, T099; done when invalid required configuration fails explicitly and no model, timeout or budget value is hardcoded in an integration.
+- [ ] T105 Propagate deadlines and contain provider/cancellation failures in `src/WhatsAppBot.Api/Integrations/`, `src/WhatsAppBot.Api/Business/Workers/`, and `tests/WhatsAppBot.Integrations.Tests/ProviderFailureTests.cs`; Dependencies: T104; done when Meta, SQL, OpenAI, storage and FFmpeg failures do not terminate workers or produce success-shaped results.
+- [ ] T106 [SP] Persist and reconcile `CompletionStateUnknown` in `src/WhatsAppBot.Api/Helpers/CompletionExecutionContext.cs`, `CompletionPhaseLogger.cs`, `src/WhatsAppBot.Api/Business/UseCases/`, `src/WhatsAppBot.Api/Persistence/Repositories/`, and `src/WhatsAppBot.Api/Persistence/StoredProcedures/Procedures/`; Dependencies: T102, T103, T104; done when an indeterminate Embedded Signup result is persisted safely, its state can be queried/reconciled, and a single-use authorization code is never retried blindly.
+- [ ] T107 [SP] Normalize and route new Meta message/status events in `src/WhatsAppBot.Api/Integrations/Meta/MetaWebhookEventParser.cs`, `src/WhatsAppBot.Api/Business/Workers/WebhookInboxWorker.cs`, and `src/WhatsAppBot.Api/Models/Contracts/`; Dependencies: T099, T102, T063, T064; done when text/audio/image/status events reach the correct worker, while `history`, `smb_app_state_sync` and `smb_message_echoes` are ignored safely without implementation tasks or fabricated messages.
+
+## Phase 11: Conversation Lifecycle and Human Attention
+
+- [ ] T108 [SP] Implement Tenant-scoped conversation persistence and reopening in `src/WhatsAppBot.Api/Persistence/Repositories/ConversationRepository.cs`, `src/WhatsAppBot.Api/Persistence/StoredProcedures/Procedures/sp_Conversation_GetOrCreate.sql`, and `src/WhatsAppBot.Api/Models/Entities/Entities.cs`; Dependencies: T101, T102, T107, T066, T067, T068; done when a closed conversation keeps its `ConversationId` and reopens as `Abierta + Bot` when enabled or `Abierta + Humano` when disabled.
+- [ ] T109 [SP] Implement conversation actions, assignment and audit in `src/WhatsAppBot.Api/Business/UseCases/`, `src/WhatsAppBot.Api/Persistence/StoredProcedures/Procedures/sp_Conversation_ApplyAction.sql`, `sp_Conversation_RecordAuditEvent.sql`, and `sp_Conversation_SetAssignment.sql`; Dependencies: T108; done when take, manual handoff, return-to-bot, close, reopen and assignment persist actor, origin, timestamp and reason.
+- [ ] T110 [SP] Implement optimistic conversation concurrency with SQL Server `rowversion` in `src/WhatsAppBot.Api/Business/Services/`, `src/WhatsAppBot.Api/Persistence/Repositories/ConversationRepository.cs`, and `tests/WhatsAppBot.Persistence.Tests/`; Dependencies: T108, T109; done when stale transitions return a controlled conflict and cannot overwrite a newer state.
+- [ ] T111 [SP] Revalidate Tenant, Integration, `AttentionMode`, `LifecycleStatus`, `rowversion` and messaging window before outbox send in `src/WhatsAppBot.Api/Business/Services/MessageProcessingService.cs`, `src/WhatsAppBot.Api/Business/Workers/MessageOutboxWorker.cs`, and `src/WhatsAppBot.Api/Persistence/StoredProcedures/Procedures/`; Dependencies: T105, T107, T110, T072, T073, T074, T075; done when a human takeover invalidates pending Bot work before effective provider delivery.
+- [ ] T112 Implement automatic handoff rules for customer request, bot inability, business rule and blocking error in `src/WhatsAppBot.Api/Business/Services/ConversationHandoffService.cs`, `src/WhatsAppBot.Api/Business/UseCases/`, and `tests/WhatsAppBot.Business.Tests/`; Dependencies: T110, T111; done when each automatic handoff changes attention to Humano, records an allowlisted reason and prevents a concurrent Bot response.
+- [ ] T113 [SP] [OAS] [Meta] Implement manual Admin text replies in `src/WhatsAppBot.Api/Business/UseCases/SendManualConversationMessage.cs`, `src/WhatsAppBot.Api/Controllers/ConversationsController.cs`, `src/WhatsAppBot.Admin/Services/WhatsAppBotApiClient.cs`, and `src/WhatsAppBot.Api/Persistence/StoredProcedures/Procedures/sp_Message_CreateAdminOutboundPending.sql`; Dependencies: T109, T111, T072, T073, T074, T075; done when free-form text is allowed only in Humano mode and the permitted window, is stored as Admin/AdminPanel, and is blocked safely outside the window without implementing template campaigns.
+- [ ] T114 [SP] [Meta] Implement idempotent and out-of-order delivery reconciliation in `src/WhatsAppBot.Api/Business/UseCases/ApplyMessageStatus.cs`, `src/WhatsAppBot.Api/Persistence/StoredProcedures/Procedures/sp_Message_ApplyDeliveryStatus.sql`, and message repositories; Dependencies: T107, T111, T075; done when `Sent → Delivered → Read` never regresses, `Failed` remains auditable, and stale provider events cannot overwrite later confirmed states.
+- [ ] T115 [OAS] [US2] Project safe message outcomes independently from AI and conversation actions in `src/WhatsAppBot.Api/Models/Enums/MessageOutcomeCode.cs`, `src/WhatsAppBot.Api/Models/Contracts/`, `src/WhatsAppBot.Api/Controllers/ConversationsController.cs`, and `src/WhatsAppBot.Admin/Pages/Conversations/`; Dependencies: T100, T111, T114; done when all allowlisted outcomes are visible without raw provider errors and unsent messages are never shown as Sent.
+- [ ] T116 [OAS] [US3] Complete the Tenant-scoped Conversations API and Admin experience in `src/WhatsAppBot.Api/Controllers/ConversationsController.cs`, `src/WhatsAppBot.Api/Business/UseCases/`, `src/WhatsAppBot.Admin/Pages/Conversations/`, and `src/WhatsAppBot.Admin/Services/WhatsAppBotApiClient.cs`; Dependencies: T100, T108, T109, T110, T111, T113, T114, T115; done when list/detail and actions show lifecycle, attention, responsible admin, actor/origin, audit, delivery, outcomes and authorized history.
+
+## Phase 12: Integration State and OpenAI Text
+
+- [ ] T117 [SP] [US1] Persist Standard/Coexistence modality, Tenant, WABA, Phone Number ID and effective configuration in `src/WhatsAppBot.Api/Models/Entities/`, `src/WhatsAppBot.Api/Integrations/Meta/MetaEmbeddedSignupAdapter.cs`, `src/WhatsAppBot.Api/Persistence/Repositories/`, and integration Stored Procedures; Dependencies: T101, T102, T053, T054; done when Standard and Coexistence are distinguishable, Phone Number discovery remains unambiguous, and one active integration is enforced per Tenant only.
+- [ ] T118 [OAS] [US1] Complete connection UI and contract coverage in `src/WhatsAppBot.Admin/Pages/Settings/WhatsApp/`, `src/WhatsAppBot.Admin/wwwroot/js/meta-embedded-signup-events.js`, and `tests/WhatsAppBot.Api.ContractTests/WhatsAppIntegrationContractTests.cs`; Dependencies: T100, T117, T057; done when modality, date, number, WABA, bot state and all connection states are displayed without declaring unknown completion successful or failed.
+- [ ] T119 [P] [AI] Implement the provider-neutral OpenAI adapter and secure configuration in `src/WhatsAppBot.Api/Integrations/OpenAI/OpenAiReplyGenerator.cs`, `OpenAiServiceCollectionExtensions.cs`, and `src/WhatsAppBot.Api/Infrastructure/Options/`; Dependencies: T011, T099, T104; done when API keys remain server-side, models/timeouts/limits are configurable, and Business sees only provider-neutral results.
+- [ ] T120 [AI] Implement AI context construction and response processing in `src/WhatsAppBot.Api/Business/Services/`, `src/WhatsAppBot.Api/Business/UseCases/ProcessInboundText.cs`, and new AI context components; Dependencies: T108, T110, T119; done when FAQ hit/miss, transcript context and configured `FaqOnly/FaqThenAi/AiOnly` behavior are applied without processing a Humano conversation as Bot.
+- [ ] T121 [AI] Implement AI timeout/error/fallback and handoff integration in `src/WhatsAppBot.Api/Business/Services/ConversationHandoffService.cs`, `ProcessInboundText.cs`, and `tests/WhatsAppBot.Business.Tests/`; Dependencies: T105, T112, T120; done when provider failure, inability or business rule can trigger an audited Humano handoff without implementing outcome projection in this task.
+- [ ] T122 [P] [US2] Add stubbed text vertical-slice tests in `tests/WhatsAppBot.Api.ContractTests/TextReplyFlowTests.cs`, `tests/WhatsAppBot.Business.Tests/`, and `tests/WhatsAppBot.Persistence.Tests/`; Dependencies: T111, T115, T120, T121; done when webhook-to-persistence-to-FAQ/AI-to-policy-to-outbox covers replay, Bot/Humano priority, conflicts, window blocks and safe outcomes.
+
+## Phase 13: Private Storage, Audio, Image, and Retention
+
+- [ ] T123 [P] [Storage] Implement provider-neutral private media storage and approval gate in `src/WhatsAppBot.Api/Business/Abstractions/`, `src/WhatsAppBot.Api/Infrastructure/MediaStorage/`, `src/WhatsAppBot.Api/Infrastructure/Options/`, and the approved retention documentation; Dependencies: T011, T020, T104; done when storage is private, access is authorized, no permanent public URL exists, and the initial retention is 30 days without fixing an unapproved cloud provider.
+- [ ] T124 [SP] [Meta] [Storage] Implement Meta media download, validation and metadata persistence in `src/WhatsAppBot.Api/Integrations/Meta/MetaMediaClient.cs`, `src/WhatsAppBot.Api/Infrastructure/MediaStorage/`, `src/WhatsAppBot.Api/Persistence/Repositories/`, and `sp_MediaAttachment_Upsert.sql`; Dependencies: T106, T107, T117, T123; done when MIME/size limits are enforced and SQL stores only private references, state and expiry metadata.
+- [ ] T125 [SP] [AI] [Storage] Implement the complete audio pipeline in `src/WhatsAppBot.Api/Integrations/Audio/AudioNormalizationService.cs`, `src/WhatsAppBot.Api/Integrations/OpenAI/OpenAiAudioTranscriptionService.cs`, `src/WhatsAppBot.Api/Business/UseCases/ProcessInboundAudio.cs`, and `sp_Transcript_Upsert.sql`; Dependencies: T119, T123, T124; done when download, storage, OGG/Opus normalization, transcription, persistence, FAQ/AI processing and temporary-file cleanup are complete.
+- [ ] T126 [AI] [Storage] Implement the complete image pipeline in `src/WhatsAppBot.Api/Integrations/OpenAI/OpenAiImageAnalysisService.cs`, `src/WhatsAppBot.Api/Business/UseCases/ProcessInboundImage.cs`, and image persistence mappings; Dependencies: T111, T119, T123, T124; done when images are stored privately, analyzed only for AI-enabled modes, persisted truthfully and routed through the same policy/outbox guards.
+- [ ] T127 [OAS] [Storage] Implement authorized media access and Admin rendering in `src/WhatsAppBot.Api/Business/UseCases/GetMessageMedia.cs`, `src/WhatsAppBot.Api/Controllers/MessageMediaController.cs`, and `src/WhatsAppBot.Admin/Pages/Conversations/Details.cshtml`; Dependencies: T116, T123, T124, T125, T126; done when access is Tenant/conversation-authorized, expired media returns a safe expired result, and no storage URL is exposed publicly.
+- [ ] T128 [SP] [Storage] Implement configurable media expiration and cleanup in `src/WhatsAppBot.Api/Business/Workers/RetentionCleanupWorker.cs` and `src/WhatsAppBot.Api/Persistence/StoredProcedures/Procedures/`; Dependencies: T123, T127; done when files expire after the configured initial 30-day period while messages, allowed metadata and transcripts remain.
+- [ ] T129 [P] [AI] [Storage] Add media processing tests in `tests/WhatsAppBot.Integrations.Tests/AudioProcessingTests.cs`, `ImageAnalysisTests.cs`, and storage/failure test files; Dependencies: T123, T124, T125, T126, T127, T128; done when size/MIME rejection, provider failure, FFmpeg cleanup, private access, expiration and no-public-URL behavior are covered with stubs.
+
+## Phase 14: Isolation, External Validation, Demo, and Release
+
+- [ ] T130 [SP] [US3] Add Tenant isolation and authorization tests in `tests/WhatsAppBot.Api.ContractTests/TenantIsolationTests.cs`, `SecurityAndFailureTests.cs`, and Persistence tests; Dependencies: T102, T116, T127; done when multiple Tenants and memberships cannot cross configuration, integrations, conversations, messages or media.
+- [ ] T131 [AI] [Storage] Add cross-provider failure and timeout tests in `tests/WhatsAppBot.Api.ContractTests/SecurityAndFailureTests.cs`, `tests/WhatsAppBot.Integrations.Tests/ProviderFailureTests.cs`, and completion tests; Dependencies: T105, T119, T123, T127; done when Meta, OpenAI, SQL, storage, FFmpeg and cancellation failures are bounded, redacted and non-success-shaped.
+- [ ] T132 [US3] Extend the existing dashboard task `T092` with API-backed connection, bot, Tenant and recent activity data in `src/WhatsAppBot.Admin/Pages/Dashboard/`, API contracts and client services; Dependencies: T116, T117; done when the dashboard contains no hardcoded connection/activity values and respects the effective Tenant.
+- [ ] T133 [Meta] [US1] Validate Standard Embedded Signup with Meta real in `tests/WhatsAppBot.Integrations.Tests/LiveStandardValidation.md`; Dependencies: T105, T117, T118; done when authorization, Phone Number ID validation, registration, WABA subscription and truthful Connected state are evidenced.
+- [ ] T134 [Meta] [US1] Validate Coexistence Embedded Signup with Meta real in `tests/WhatsAppBot.Integrations.Tests/LiveCoexistenceValidation.md`; Dependencies: T105, T117, T118; done when an eligible WhatsApp Business App number completes onboarding without Standard `/register` and only new messages are in scope.
+- [ ] T135 [Meta] [AI] [US2] Validate live text and OpenAI processing in `tests/WhatsAppBot.Integrations.Tests/LiveTextAiValidation.md`; Dependencies: T122, T133, T134; done when an in-window customer message produces the correct FAQ/AI result, delivery state, safe outcome and audited handoff behavior.
+- [ ] T136 [Meta] [AI] [Storage] [US2] Validate live audio and image processing in `tests/WhatsAppBot.Integrations.Tests/LiveMediaValidation.md`; Dependencies: T129, T133, T134; done when real media is downloaded, privately stored, transcribed/analyzed, displayed with authorization and retained according to policy.
+- [ ] T137 [Meta] [AI] [Storage] Run the expanded final demonstration extending `T097` in `specs/001-whatsapp-business-bot-poc/demo-validation.md`; Dependencies: T115, T122, T129, T132, T135, T136; done when Tenant isolation, Bot/Humano actions, manual reply, Standard/Coexistence new messages, text, AI, audio, image and retention are evidenced with consented data.
+- [ ] T138 [SP] [Meta] [AI] [Storage] Complete release readiness extending `T098` in `specs/001-whatsapp-business-bot-poc/release-readiness.md`; Dependencies: T103, T130, T131, T133, T134, T135, T136, T137; done when clean install, data-preserving migration, SQL catalog, tests, runtime, Meta, OpenAI, storage, retention and Tenant isolation gates pass.
+
 ## Dependency Order and Incremental Checkpoints
 
 1. **Admin foundation**: T001-T032. The first administrator is securely bootstrapped; Admin
@@ -176,10 +246,24 @@ conversation history. Outside the permitted window, no free-form FAQ/AI response
    message and conversation flow; audio transcripts use exactly the text response-mode rules.
 7. **Dashboard and final gates**: T092-T098. Finish UI summary, security/resilience, timed
    SC-006 proof, and complete demo only after the vertical slices are working.
+8. **Tenant and runtime foundation**: T099-T107. Add the Tenant boundary, safe migration,
+   configurable budgets, bounded failures, unknown completion reconciliation, and normalized
+   Meta events before extending conversation behavior.
+9. **Human conversation**: T108-T116. Preserve conversation identity on reopen, enforce
+   Bot/Humano priority and optimistic concurrency, then add audited handoff, manual replies,
+   delivery reconciliation, safe outcomes, and complete Admin visibility.
+10. **Integration and AI**: T117-T122. Persist Standard/Coexistence state, complete the
+    connection contract, add provider-neutral OpenAI text processing, and verify the text slice.
+11. **Multimedia and storage**: T123-T129. Approve private storage, process audio and image
+    messages, authorize media access, expire files, and test provider failures and cleanup.
+12. **Security and validation**: T130-T138. Verify Tenant isolation, external failures,
+    API-backed dashboard behavior, Standard/Coexistence live flows, AI/media validation, demo,
+    and release readiness.
 
 The media-provider/retention decision and private media adapter are required before processing
 real audio/photo data; they do not block earlier local Admin, FAQ, Meta connection, webhook, or
-text-only increments.
+text-only increments. The Tenant migration and isolation gates are required before treating the
+new multi-Tenant scope as release-ready.
 
 The Admin, SQL, FAQ, mode, and matcher increments can be tested without Meta/OpenAI credentials.
 The Meta-connected text increment uses Meta test assets; the OpenAI service is required only
@@ -196,14 +280,22 @@ numbers, billing, CRM, campaigns, advanced reporting, or complex roles.
 - T083 and T088 are separate media adapter test suites; they may be prepared in parallel after
   media interfaces are stable, though implementation phases remain audio then photography.
 - T094 can proceed independently of the SC-006 documentation task T093 after its prerequisites.
+- T117 and T119 can proceed in parallel once their separate integration and configuration
+  prerequisites are ready.
+- T133 and T134 can proceed in parallel because they record separate live validation paths.
+- T135 and T136 can proceed in parallel after the text and media vertical slices are ready.
 - LocalDB is the Development-only target for T022/T026/T098; deployment configuration remains
   SQL Server-compatible and is not coupled to the LocalDB instance.
 
 ## Validation Summary
 
-- **Total tasks**: 98, sequential IDs T001-T098.
+- **Total tasks**: 138, sequential IDs T001-T138; T001-T098 remain the historical baseline and
+  T099-T138 are the approved Tenant, Bot/Humano, AI and multimedia extension.
 - **Dependencies**: Explicit on every task; `None` is stated where there is no prerequisite.
 - **Parallel tasks**: Only tasks with separate files and satisfied prerequisites are marked
   `[P]`; the task list and opportunities section identify their boundaries.
-- **Scope**: One active number; no multi-company, simultaneous numbers, billing, CRM, campaigns,
-  advanced reporting, complex permissions, or Meta template authoring/sending.
+- **Scope**: Tenant/Company and memberships; one active WhatsApp number per Tenant as an
+  operational POC limit; future multiple integrations per company; Bot/Humano attention,
+  lifecycle, handoff, manual replies, OpenAI, text/audio/image, private media and initial
+  30-day retention. History synchronization, `smb_*`, billing, CRM, campaigns, operational
+  templates, advanced reporting, teams, queues and plans remain out of scope.

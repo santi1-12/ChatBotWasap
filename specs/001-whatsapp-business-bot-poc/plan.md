@@ -15,7 +15,9 @@ The API uses the mandated Middleware, Business, Persistence, Infrastructure, Int
 Models, and Helpers layers. SQL Server stored procedures are the only persistence interface.
 Meta WhatsApp Cloud API and AI/media providers are accessed behind Integration contracts.
 Persist inbound webhook events before acknowledging Meta, process them idempotently in a
-background worker, and track outbound work/status independently from AI generation.
+background worker, and track outbound work/status independently from AI generation. Tenant
+authorization, conversation attention state and optimistic concurrency are Business policies,
+not concerns of Controllers or Admin pages.
 
 For the POC, use Meta Embedded Signup v4, OpenAI API for response generation, image analysis
 and transcription, and FFmpeg to convert WhatsApp OGG/Opus voice media to an accepted
@@ -63,7 +65,7 @@ contracts.
 **Performance Goals**: Persist and acknowledge valid Meta webhook deliveries promptly (target
 under 2 seconds at p95, without waiting for media downloads or AI); process replies
 asynchronously. Admin list/detail screens should be usable within 2 seconds at p95 for the
-single-number POC and a demo-sized conversation history.
+tenant-sized POC and a demo-sized conversation history.
 
 **Constraints**: Use only official Meta WhatsApp Business Platform / Cloud API; no WhatsApp Web,
 scraping, or client simulation. Controllers and webhook handlers only validate transport
@@ -73,10 +75,13 @@ Never log or expose access tokens, App Secret, Verify Token, AI keys, raw media,
 payloads. Respect WhatsApp customer opt-in, messaging-window and approved-template policy.
 The FAQ feature is internal bot content, not a Meta message-template substitute.
 
-**Scale/Scope**: One active WhatsApp integration and one Admin account for initial POC flows;
-use IntegrationId as a relationship boundary so the data model can later support more
-numbers/businesses without singleton-column redesign. No billing, campaigns, multi-company
-administration, CRM, advanced permissions, or advanced reporting.
+**Scale/Scope**: The POC validates Standard and Coexistence, new messages, text/audio/image,
+OpenAI processing, conversations, Bot/Humano attention, manual Admin replies, lifecycle control,
+and a tenant/company boundary with multiple administrators and simple assignment. The initial
+demonstration may use one active integration per tenant; this is not a global singleton and does
+not exclude future multiple integrations per company. No teams, queues, billing, campaigns, CRM,
+advanced permissions, or advanced reporting are implemented. Coexistence history, contacts and
+`history`/`smb_app_state_sync`/`smb_message_echoes` remain a later extension.
 
 ## Constitution Check
 
@@ -92,12 +97,12 @@ administration, CRM, advanced permissions, or advanced reporting.
 | Official WhatsApp integration | Embedded Signup v4 and Cloud API only; Graph API isolated in Integrations | PASS |
 | Business/Integrations boundary | Business owns use cases and policies; provider adapters remain behind interfaces | PASS |
 | Admin/API boundary | Razor Pages communicates only with Api; no Admin SQL access or business rules | PASS |
-| Future multi-number support | All WhatsApp-owned records reference IntegrationId; only one active integration is enabled by POC policy | PASS |
+| Tenant and future multi-number support | Tenant-scoped records use IntegrationId as the technical integration boundary; one active integration per tenant may remain an operational POC limit without a global singleton | PASS |
 | Supported runtime | Use the explicitly requested .NET 10 LTS and latest supported 10.0.x servicing patch at build/deployment; verify lifecycle status before release. | PASS |
 
 No architectural constitution rule is waived. Media/message retention must be approved before
-use with real customer data; this plan proposes a configurable 30-day POC retention window for
-stored conversation content and raw media.
+use with real customer data; this plan uses private storage with an initial 30-day media expiry,
+configurable later. Expiring an attachment never deletes its message or allowed metadata.
 
 ## System Design
 
@@ -174,11 +179,15 @@ authentication, authorization, endpoints, Swagger, and the four extensions.
 contains presentation validation only, never business rules or direct SQL. Api authenticates
 administrators and returns `ResponseE<T>` DTO contracts.
 
-**Meta onboarding**: The Admin launches Meta's Embedded Signup v4 JS flow. It sends the
-one-time authorization code and returned WABA ID / Phone Number ID to Api. Api delegates
-exchange, phone registration, and WABA webhook subscription to the Meta integration. The
-resulting customer business token is stored in the configured secret store; SQL stores only an
-opaque secret reference and non-secret identifiers/status.
+**Meta onboarding**: The Admin launches Meta's Embedded Signup v4 JS flow and explicitly selects
+Standard or Coexistence. It sends the one-time authorization code and returned WABA ID / optional
+Phone Number ID to Api. Api uses `Meta:EmbeddedSignupConfigId` for Standard and
+`Meta:CoexistenceEmbeddedSignupConfigId` for Coexistence when present, falling back to the
+Standard config otherwise. A supplied Phone Number ID is validated; when absent, Api discovers
+it from the WABA and continues only for one unambiguous match. Standard performs the normal
+registration; Coexistence does not run Standard `/register`. Both flows subscribe the WABA to
+webhooks. The resulting customer business token is stored in the configured secret store; SQL
+stores only an opaque secret reference and non-secret identifiers/status.
 
 **Webhook receipt**: GET verifies `hub.verify_token` and returns the challenge only on a
 constant-time match. POST validates `X-Hub-Signature-256` against the raw request body using
@@ -186,32 +195,65 @@ the App Secret, validates the event envelope, and asks Business to persist an id
 inbox event. Return 200 only after durable persistence. A hosted worker processes the persisted
 event so slow media and AI work do not hold the webhook request open.
 
-**Inbound processing**: Persist contact/message and establish conversation; check bot state;
-for configured FAQ modes, normalize text (or the audio transcript) and compare against active
-expressions; choose highest priority, tie-break by stable FAQ ID. On no match, invoke AI only
-for fallback or AI-only mode. `FaqOnly` never invokes AI and records a no-match without reply;
-`FaqThenAi` is the default and invokes AI only on a FAQ miss; `AiOnly` skips FAQ lookup.
-These rules apply equally to text and audio transcripts. Before enqueueing any outbound text,
-Business checks the current WhatsApp messaging-window and template policy through an Integration
-port. The POC demo is limited to customer-initiated conversations within the permitted customer
-service window. If an official template is required, FAQ/AI content is not sent as a substitute;
-the inbound processing result records a visible no-reply/policy outcome. Image messages are
-passed to vision in AI-enabled modes. Create an outbound pending message/outbox item only after
-policy approval, send via Meta adapter, then reconcile `wamid` and sent/delivered/read/failed
-status webhooks. Duplicates do not create duplicate messages or replies.
+**Inbound processing**: Resolve the authenticated tenant and integration, persist contact/message
+and establish or reopen the same conversation identity. A closed conversation reopens as
+`Abierta + Bot` when the bot is enabled; with the bot disabled it reopens without automatic
+processing. Before any Bot work, check `AttentionMode`; `Humano > Bot` and a human-taken
+conversation suppresses Bot candidates. Persist an audit event for automatic handoff when the
+client requests a person, the bot cannot resolve, a business rule applies or a blocking error
+occurs. For configured FAQ modes, normalize text (or the audio transcript) and compare against
+active expressions; choose highest priority, tie-break by stable FAQ ID. On no match, invoke AI
+only for fallback or AI-only mode. `FaqOnly` never invokes AI and records a no-match without
+reply; `FaqThenAi` is the default and invokes AI only on a FAQ miss; `AiOnly` skips FAQ lookup.
+These rules apply equally to text and audio transcripts. Image messages are passed to vision in
+AI-enabled modes. Before any automatic or manual outbound item enters the outbox, Business
+revalidates tenant authorization, lifecycle, attention mode, assignment/version and the current
+WhatsApp messaging-window/template policy. A human transition invalidates pending Bot work. The
+POC demo is limited to customer-initiated conversations within the permitted customer-service
+window. If an official template is required, FAQ/AI/manual content is not sent as a substitute;
+the result records a visible no-reply/policy outcome. Approved work is sent via the Meta adapter,
+then reconciles `wamid` and sent/delivered/read/failed status webhooks. Duplicates do not create
+duplicate messages or replies.
 
-**Admin experiences**: Login; dashboard; WhatsApp connection/status and bot state/mode;
-frequent response CRUD; conversation list and detail timeline with direction/type/status,
-transcription, secure image access, and whether the response source is FAQ or AI.
+**Admin experiences**: Tenant-scoped login/session; dashboard; WhatsApp connection/status and bot
+state/mode; frequent response CRUD; conversation list and detail timeline with direction/type,
+lifecycle, attention mode, assignment, actor/origin, audit events, transcription, secure image
+access, and whether the response source is FAQ, AI or Admin. Actions include take/handoff,
+manual text reply, return-to-bot, close and reopen. Teams and queues are not part of this POC.
+
+**Future Coexistence events**: The webhook envelope and normalized event dispatch must leave an
+extension point for `history`, `smb_app_state_sync` and `smb_message_echoes`, but the POC ignores
+those events safely and does not import historical conversations or synchronize contacts.
+
+### Tenant and Conversation Control
+
+Tenant scope is resolved from the authenticated Admin membership and carried through every
+Business use case and repository port. `TenantId` is the ownership boundary; `IntegrationId`
+identifies the WhatsApp number/connection within that tenant. Controllers do not accept an
+untrusted tenant selector, and Persistence applies both boundaries to reads and writes.
+
+Conversation control uses two independent dimensions: `AttentionMode` (`Bot` or `Humano`) and
+`LifecycleStatus` (`Abierta` or `Cerrada`). A simple `AssignedAdminId` identifies the responsible
+administrator. Taking, returning, closing, reopening, assigning, automatic handoff and manual
+reply each produce an audit event. Automatic work and manual work use an expected conversation
+version; the outbox rechecks the version and mode immediately before sending. This enforces
+`Humano > Bot` without requiring a broker or a second workflow store.
+
+The first inbound message after closure reuses the same conversation identity. If the bot is
+enabled it transitions to `Abierta + Bot`; otherwise it reopens without automatic processing.
+Manual Admin replies are initially text, are persisted as `Admin` origin, and pass the same
+messaging-window/template guard as Bot replies.
 
 ## Constitution Check (Post-Design)
 
 The design preserves the official Meta-only integration requirement, keeps all Graph API,
 OpenAI, transcription, and image-analysis calls behind Integrations adapters, assigns
-orchestration to Business, and isolates SQL Server/stored procedures in Persistence. Admin is a
-thin API consumer. Credentials are stored as secure references and never returned in DTOs.
-Webhook events, messages, and outbound sends are idempotent and observable. No custom NLP,
-unofficial WhatsApp library, or unnecessary broker is introduced.
+orchestration, tenant isolation and Bot/Humano guards to Business, and isolates SQL
+Server/stored procedures in Persistence. Admin is a thin API consumer. Credentials are stored as
+secure references and never returned in DTOs. Webhook events, messages, transitions and outbound
+sends are idempotent and observable. Optimistic conversation versioning prevents concurrent Bot
+and Humano sends. No custom NLP, unofficial WhatsApp library, or unnecessary broker is
+introduced.
 
 **Post-design result**: PASS for architecture and runtime target. Release remains conditional on
 Meta app access/review, and approved retention/consent policy.
@@ -266,6 +308,8 @@ Meta app access/review, and approved retention/consent policy.
   media URL as the durable record.
 - **Admin**: initial administrator provisioning path, HTTPS origin, cookie protection keys,
   JWT signing key held in a secret store, and allowed origins/CSRF configuration.
+- **Tenant authorization**: authenticated Admin memberships, an active tenant context, and a
+  simple `AssignedAdminId` policy. The POC does not require teams, queues or complex roles.
 - **Audio normalization**: deploy a pinned, patched FFmpeg binary or image package. WhatsApp
   voice notes are commonly OGG/Opus; OpenAI transcription currently documents mp3, mp4, mpeg,
   mpga, m4a, wav and webm (25 MB max), not OGG. Convert only when required; delete temporary
@@ -288,27 +332,33 @@ Meta app access/review, and approved retention/consent policy.
    validation gates; these approvals do not block local Admin, SQL, FAQ, and mode development.
 2. Create solution/projects, dependency directions, DI extension methods, validated Options,
    secure configuration providers, global exception middleware, structured logs and trace IDs.
-3. Define SQL schema, stored procedures, least-privilege database identity and persistence
-   tests; securely bootstrap the first administrator through a one-time command that delegates
-   to Business, then implement Admin login/session and the typed Admin-to-Api client.
-4. Implement bot configuration (enabled state and three modes) and frequent-response CRUD,
+3. Define the logical tenant, membership, integration, conversation-state, audit and
+   concurrency model before schema work. Securely bootstrap the first administrator through a
+   one-time command that delegates to Business, then implement Admin login/session and the typed
+   Admin-to-Api client with an explicit tenant context.
+4. Define SQL schema, stored procedures, least-privilege database identity and persistence
+   tests; every read/write must enforce tenant plus integration scope and every transition must
+   use an expected conversation version.
+5. Implement bot configuration (enabled state and three modes) and frequent-response CRUD,
    matching and Admin screens. Validate these locally against SQL before any Meta or AI setup.
-5. Configure Meta Embedded Signup v4 and implement server-side code exchange, number
+6. Configure Meta Embedded Signup v4 with explicit Standard/Coexistence branching, server-side
+   code exchange, Phone Number ID validation/discovery, config-ID fallback, conditional number
    registration, token references, WABA subscription and truthful connection status.
-6. Implement webhook verification/signature validation, durable idempotent inbox and status
-   ingestion. Test with signed fixtures before enabling the worker for real messages.
-7. Implement text ingestion and conversation/message persistence first. Verify `FaqOnly`
+7. Implement webhook verification/signature validation, durable idempotent inbox and status
+   ingestion. Parse only new `messages`/status events for this POC; retain extension points for
+   future `history`, `smb_app_state_sync` and `smb_message_echoes` without importing them now.
+8. Implement text ingestion and conversation/message persistence first. Apply closed-conversation
+   reopen rules, `Humano > Bot`, automatic handoff reasons and audit events. Verify `FaqOnly`
    matching/no-reply and `FaqThenAi` matching locally using a fake sender/provider; then enable
    the real Meta sender and OpenAI fallback behind their interfaces.
-8. Enforce the WhatsApp customer-service window and template policy before every send. For the
-   POC, demonstrate only customer-initiated conversations in the permitted window; never
-   substitute a configured or AI response for an official template.
-9. Implement Admin conversation list/detail and verify a complete text → FAQ / AI reply →
-   persisted visible conversation journey.
-10. Only after the text journey is validated, add audio download/transcription/mode evaluation,
-    then image download/analysis/reply. Add private media storage, bounds and cleanup.
-11. Complete the final dashboard summary, security/resilience checks, timed SC-006 scenario,
-    and end-to-end demo/release validation with consented test data.
+9. Add Admin conversation controls for take/handoff, manual text reply, return-to-bot, close,
+   reopen, assignment and audit display. Revalidate state, tenant, version and messaging policy
+   before every automatic or manual outbox item.
+10. Add audio download/transcription/mode evaluation, then image download/analysis/reply. Use
+    private media storage, authorized reads, 30-day initial expiry, metadata/transcript retention
+    and cleanup without deleting messages.
+11. Complete the final dashboard summary, security/resilience checks, tenant-isolation checks,
+    timed SC-006 scenario, and end-to-end demo/release validation with consented test data.
 
 ## Project Structure
 
@@ -367,4 +417,6 @@ not additional production solution layers.
 No constitution violations or unnecessary architectural projects are proposed. A hosted worker
 and durable inbox/outbox are required to decouple webhook acknowledgement from slow AI/media
 processing and prevent duplicate replies; SQL Server is reused as the durable work store, so
-the POC does not add a broker.
+the POC does not add a broker. Tenant scope, a simple administrator assignment, and optimistic
+conversation versioning are deliberate additions required to guarantee isolation and the
+Bot/Humano priority without introducing teams, queues or a second coordination service.

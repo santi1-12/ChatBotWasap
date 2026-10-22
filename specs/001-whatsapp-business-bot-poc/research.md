@@ -2,24 +2,32 @@
 
 **Date**: 2026-09-29  
 **Scope**: Resolve design choices for Meta onboarding, API processing, persistence, AI/media,
-security, and runtime support. This document records planning decisions; it does not implement
-the solution or change `spec.md`.
+security, runtime support, tenant isolation and human attention. This document records planning
+decisions; it does not implement the solution. Normative requirements are synchronized with
+`spec.md`, `plan.md`, `data-model.md` and `contracts/openapi.yaml`.
 
 ## Decisions
 
 ### 1. Meta onboarding: Embedded Signup v4 and server-side token exchange
 
-**Decision**: Use the current Embedded Signup v4 flow with the Cloud API product only. The
-browser launches Meta's Facebook Login for Business SDK/configuration and returns the
-one-time authorization code plus WABA ID and Phone Number ID to `WhatsAppBot.Api`. Api
-exchanges the code server-to-server, registers the selected number, and subscribes the app to
-the WABA. Persist only IDs, states, and a secret-store reference.
+**Decision**: Use the current Embedded Signup v4 flow with the Cloud API product only and branch
+explicitly between Standard and WhatsApp Business App Coexistence. The browser launches Meta's
+Facebook Login for Business SDK/configuration and returns the one-time authorization code plus
+WABA ID and an optional Phone Number ID to `WhatsAppBot.Api`. Api uses
+`Meta:EmbeddedSignupConfigId` for Standard and `Meta:CoexistenceEmbeddedSignupConfigId` for
+Coexistence when configured, otherwise falling back to the Standard config. A supplied Phone
+Number ID is validated; when absent, Api discovers it from the WABA and proceeds only when the
+match is unambiguous. Standard registers the number; Coexistence does not run Standard
+`/register`. Both flows subscribe the app to the WABA. Persist only IDs, states, onboarding type
+and a secret-store reference.
 
 **Rationale**: Meta says Embedded Signup gathers business information, creates/links assets,
-and grants the app access. The successful flow returns WABA ID, Phone Number ID, and an
-exchangeable code; the server exchanges the code for a business token, registers the number,
-and subscribes webhooks. Meta currently warns that Embedded Signup v2 is deprecated on
-2026-10-15, so v4 is the appropriate new implementation for this POC.
+and grants the app access. The successful flow returns WABA ID, an optional Phone Number ID and
+an exchangeable code; the server exchanges the code for a business token and subscribes
+webhooks. Standard and Coexistence have different registration requirements, so the branch must
+be explicit rather than hiding the difference in one generic registration flow. Meta currently
+warns that Embedded Signup v2 is deprecated on 2026-10-15, so v4 is the appropriate new
+implementation for this POC.
 
 **Alternatives considered**: Manual phone-number entry is not authorization or verification
 and is prohibited by the spec/constitution. Direct Meta calls from Admin would expose sensitive
@@ -28,17 +36,21 @@ announced deprecation.
 
 **Operational constraints**: Cloud API onboarding requires `whatsapp_business_management`
 and `whatsapp_business_messaging`; customer onboarding may require advanced access/App Review.
-Existing WhatsApp Business App numbers need the relevant coexistence flow. Whether this
-organization is a Tech Provider, Solution Partner, or direct developer changes token,
-review, onboarding, and credit-line requirements and must be confirmed before a real customer
-demo. Do not assume partner credit-line features.
+Existing WhatsApp Business App numbers need the relevant Coexistence flow. Whether this
+organization is a Tech Provider, Solution Partner, or direct developer changes token, review,
+onboarding, and credit-line requirements and must be confirmed before a real customer demo. Do
+not assume partner credit-line features. Coexistence scope for this POC is connection plus new
+messages only.
 
 ### 2. Webhook processing: verify, durably store, acknowledge, then process
 
 **Decision**: Separate webhook transport acceptance from message processing. Validate the GET
 challenge with the configured Verify Token. Validate POST `X-Hub-Signature-256` against the
-raw request bytes with the App Secret. Persist the event idempotently, then acknowledge; a
-worker processes stored events and writes outbound work to a SQL-backed outbox.
+raw request bytes with the App Secret. Resolve the tenant/integration boundary, persist the
+normalized event idempotently, then acknowledge; a worker processes stored events and writes
+outbound work to a SQL-backed outbox. The POC processes new `messages` and status events. It
+ignores `history`, `smb_app_state_sync` and `smb_message_echoes` safely while preserving an
+event-dispatch extension point for a future synchronization phase.
 
 **Rationale**: Meta webhooks include both inbound messages and outbound status updates.
 Media retrieval and AI calls are variable-latency work and should not run in the webhook
@@ -101,8 +113,10 @@ separate vendors for transcription and vision adds operational configuration. Pr
 data-processing terms must be approved before sending customer content.
 
 **POC data handling**: Transmit only the message/media needed for the requested operation.
-Keep raw media private and propose a configurable 30-day retention period for conversation
-content and attachments, subject to project-owner approval before real customer data is used.
+Keep raw media in private storage with authorized reads and an initial 30-day expiry. Retention
+must become configurable later. Expiring an audio/image object does not delete its message,
+allowed metadata or available transcript. The project-owner approval and provider data-processing
+gate remain prerequisites before real customer data is used.
 
 ### 6. SQL Server access: stored procedures only
 
@@ -157,6 +171,65 @@ responses sent within the currently permitted customer-service window. If the wi
 expired or Meta requires a template, do not send free-form FAQ/AI content; record a safe,
 visible no-reply outcome such as `MessagingWindowClosed` or `TemplateRequired`. Do not add
 template authoring/sending to this POC.
+
+### 10. Conversation attention and human priority
+
+**Decision**: Model conversation control with two independent dimensions: `AttentionMode` is
+`Bot` or `Humano`; `LifecycleStatus` is `Abierta` or `Cerrada`. Do not use a combined
+`Bot/Humano/Cerrada` enum. The effective priority is `Humano > Bot`: taking a conversation or an
+automatic handoff pauses Bot processing for that conversation. Returning to the bot explicitly
+sets `AttentionMode = Bot`.
+
+**Rationale**: Closed is a lifecycle condition, not an attention actor. Separating the dimensions
+allows a closed conversation to reopen without losing its history and allows audit/retry rules to
+reason about attention independently from whether the conversation is active.
+
+**Transition rules**: A closed conversation receiving a new message reuses its identity and moves
+to `Abierta + Bot` when the bot is enabled. If the bot is disabled, it reopens without automatic
+processing and remains available for Human attention. Automatic handoff is allowed for a customer
+request, bot inability, business rule or blocking error; every handoff records an allowlisted
+reason. Admin take, manual reply, return-to-bot, close and reopen actions record actor and time.
+
+**Concurrency rule**: Use an expected conversation version for transitions and revalidate tenant,
+lifecycle, attention mode, assignment and version immediately before an outbound item enters the
+outbox. A Bot item invalidated by a human action is discarded safely; it must not be sent later.
+
+### 11. Tenant and simple assignment boundary
+
+**Decision**: Introduce `Tenant`/Company and `TenantMembership` conceptually now. A tenant owns
+administrators, WhatsApp integrations, bot configuration, contacts, conversations, messages and
+media. `IntegrationId` remains the technical number/connection boundary but is not the complete
+multi-company model. Use optional `AssignedAdminId` for simple responsibility. Do not introduce
+teams, queues or complex roles in this POC. Leave an extension point for future tenant limits,
+plans and feature flags without making them prerequisites for the current flow.
+
+**Rationale**: Adding tenant ownership now prevents future isolation changes from requiring a
+global singleton redesign. Membership-based authorization also permits several administrators per
+company without expanding the POC into a full permission system.
+
+### 12. Coexistence future-event boundary
+
+**Decision**: The POC validates Coexistence connection and new messages only. It does not import
+`history`, process `smb_app_state_sync` or `smb_message_echoes`, synchronize contacts, or recover
+previous conversations. The normalized webhook envelope and dispatch registry must leave a stable
+extension point for those future event families.
+
+**Future research**: Before implementing synchronization, confirm Meta's current payload schemas,
+event identifiers, ordering/replay behavior, retention rules, contact identity mapping and how
+messages authored in WhatsApp Business App should appear in the timeline. These questions are not
+required to validate the current POC flow.
+
+### 13. Extensible media and retention
+
+**Decision**: The current POC supports text, audio and image. Store media privately, expose it
+only through an authorized API path, and expire files after an initial 30-day period. Preserve
+message metadata, processing/availability state and any completed transcript after file expiry.
+Keep the media type model open for video, documents, location, contacts and other future types,
+but do not implement or validate them now.
+
+**Rationale**: Media references and message history have different retention semantics. Removing
+the binary object must not rewrite history or present a missing attachment as if the message never
+existed. A provider-neutral storage port also avoids coupling Business to a storage vendor.
 
 ## Official references
 

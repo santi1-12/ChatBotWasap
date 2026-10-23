@@ -40,6 +40,11 @@ BEGIN
     WHERE outbox.MessageId = @MessageId
       AND outbox.TenantId = @TenantId
       AND outbox.IntegrationId = @IntegrationId
+      AND integration.TenantId = @TenantId
+      AND message.TenantId = @TenantId
+      AND message.IntegrationId = @IntegrationId
+      AND conversation.TenantId = @TenantId
+      AND conversation.IntegrationId = @IntegrationId
       AND message.ConversationId = @ConversationId;
 
     SELECT @LastCustomerMessageAtUtc = MAX(message.ProviderTimestampUtc)

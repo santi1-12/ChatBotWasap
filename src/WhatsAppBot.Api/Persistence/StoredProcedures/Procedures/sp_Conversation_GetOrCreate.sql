@@ -36,6 +36,10 @@ BEGIN
     DECLARE @WasClosed bit = 0;
 
     SELECT @ConversationId = ConversationId
+         , @WasClosed = CASE
+             WHEN LifecycleStatus = N'Cerrada' THEN 1
+             ELSE 0
+           END
     FROM dbo.Conversation WITH (UPDLOCK, SERIALIZABLE)
     WHERE TenantId = @TenantId
       AND IntegrationId = @IntegrationId
@@ -54,13 +58,6 @@ BEGIN
     END
     ELSE
     BEGIN
-        SELECT @WasClosed = CASE
-            WHEN LifecycleStatus = N'Cerrada' THEN 1
-            ELSE 0
-        END
-        FROM dbo.Conversation WITH (UPDLOCK, HOLDLOCK)
-        WHERE ConversationId = @ConversationId;
-
         UPDATE dbo.Conversation
         SET BasicStatus = N'Open',
             LifecycleStatus = N'Abierta',

@@ -16,7 +16,11 @@ BEGIN
         INNER JOIN dbo.Message m ON m.MessageId = o.MessageId
         INNER JOIN dbo.Conversation conv ON conv.ConversationId = m.ConversationId
         WHERE i.IsActive = 1 AND i.ConnectionState = N'Connected'
+          AND i.TenantId = o.TenantId
           AND o.TenantId = conv.TenantId
+          AND o.IntegrationId = conv.IntegrationId
+          AND m.TenantId = conv.TenantId
+          AND m.IntegrationId = conv.IntegrationId
           AND o.ConversationVersion = conv.Version
           AND ((m.ReplySource = N'Admin' AND conv.AttentionMode = N'Humano')
                OR (m.ReplySource <> N'Admin' AND conv.AttentionMode = N'Bot'))
@@ -45,10 +49,14 @@ BEGIN
         SELECT MAX(inbound.ProviderTimestampUtc) AS LastCustomerMessageAtUtc
         FROM dbo.Message inbound
         WHERE inbound.IntegrationId = o.IntegrationId
+          AND inbound.TenantId = o.TenantId
           AND inbound.ConversationId = m.ConversationId
           AND inbound.Direction = N'Inbound'
     ) latestCustomerMessage
     INNER JOIN dbo.Conversation conv ON conv.ConversationId = m.ConversationId
-    INNER JOIN dbo.Contact c ON c.ContactId = conv.ContactId;
+    INNER JOIN dbo.Contact c
+        ON c.ContactId = conv.ContactId
+       AND c.TenantId = conv.TenantId
+       AND c.IntegrationId = conv.IntegrationId;
 END;
 GO

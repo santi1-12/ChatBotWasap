@@ -14,23 +14,23 @@ public sealed class MetaMessageSender(
     public async Task<MetaMessageSendResult> SendTextAsync(
         string phoneNumberId, string recipient, string text, CancellationToken cancellationToken)
     {
-        var integration = await integrationRepository.GetCurrentAsync(cancellationToken);
-        if (!integration.IsActive ||
-            integration.ConnectionState != ConnectionState.Connected ||
-            !string.Equals(integration.PhoneNumberId, phoneNumberId, StringComparison.Ordinal) ||
-            string.IsNullOrWhiteSpace(integration.AccessTokenSecretRef))
-        {
-            return new MetaMessageSendResult(false, null, "MetaCredentialsMissing", false);
-        }
-
-        var accessToken = await secretResolver.ResolveAsync(integration.AccessTokenSecretRef, cancellationToken);
-        if (string.IsNullOrWhiteSpace(accessToken))
-        {
-            return new MetaMessageSendResult(false, null, "MetaCredentialsMissing", false);
-        }
-
         try
         {
+            var integration = await integrationRepository.GetCurrentAsync(cancellationToken);
+            if (!integration.IsActive ||
+                integration.ConnectionState != ConnectionState.Connected ||
+                !string.Equals(integration.PhoneNumberId, phoneNumberId, StringComparison.Ordinal) ||
+                string.IsNullOrWhiteSpace(integration.AccessTokenSecretRef))
+            {
+                return new MetaMessageSendResult(false, null, "MetaCredentialsMissing", false);
+            }
+
+            var accessToken = await secretResolver.ResolveAsync(integration.AccessTokenSecretRef, cancellationToken);
+            if (string.IsNullOrWhiteSpace(accessToken))
+            {
+                return new MetaMessageSendResult(false, null, "MetaCredentialsMissing", false);
+            }
+
             return await cloudApiClient.SendTextAsync(
                 accessToken, phoneNumberId, recipient, text, cancellationToken);
         }
@@ -45,6 +45,22 @@ public sealed class MetaMessageSender(
         catch (JsonException)
         {
             return new MetaMessageSendResult(false, null, "MetaInvalidResponse", false);
+        }
+        catch (HttpRequestException)
+        {
+            return new MetaMessageSendResult(false, null, "MetaUnavailable", true);
+        }
+        catch (InvalidOperationException)
+        {
+            return new MetaMessageSendResult(false, null, "MetaSecretStoreUnavailable", true);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return new MetaMessageSendResult(false, null, "MetaSecretStoreUnavailable", true);
+        }
+        catch (IOException)
+        {
+            return new MetaMessageSendResult(false, null, "MetaSecretStoreUnavailable", true);
         }
     }
 }

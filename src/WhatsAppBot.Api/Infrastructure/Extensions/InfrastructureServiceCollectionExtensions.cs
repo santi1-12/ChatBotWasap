@@ -79,6 +79,17 @@ public static class InfrastructureServiceCollectionExtensions
             .Validate(options => options.MaxDurationSeconds is > 0 and <= 7200,
                 "FFmpeg:MaxDurationSeconds must be between 1 and 7200.")
             .ValidateOnStart();
+        services.AddOptions<WorkerOptions>()
+            .Bind(configuration.GetSection(WorkerOptions.SectionName))
+            .Validate(options => options.PollIntervalSeconds is > 0 and <= 60,
+                "Workers:PollIntervalSeconds must be between 1 and 60.")
+            .Validate(options => options.ItemTimeoutSeconds is > 0 and <= 1800,
+                "Workers:ItemTimeoutSeconds must be between 1 and 1800.")
+            .Validate(options => options.MaximumAttempts is > 0 and <= 20,
+                "Workers:MaximumAttempts must be between 1 and 20.")
+            .Validate(options => options.RetryBaseDelaySeconds is > 0 and <= 300,
+                "Workers:RetryBaseDelaySeconds must be between 1 and 300.")
+            .ValidateOnStart();
         services.AddOptions<ApiOptions>().Bind(configuration.GetSection(ApiOptions.SectionName))
             .Validate(options => options.RequestTimeoutSeconds is > 0 and <= 120,
                 "Api:RequestTimeoutSeconds must be between 1 and 120.")

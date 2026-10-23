@@ -55,6 +55,15 @@ public sealed class FfmpegOptions
     public int MaxDurationSeconds { get; init; } = 300;
 }
 
+public sealed class WorkerOptions
+{
+    public const string SectionName = "Workers";
+    public int PollIntervalSeconds { get; init; } = 1;
+    public int ItemTimeoutSeconds { get; init; } = 120;
+    public int MaximumAttempts { get; init; } = 5;
+    public int RetryBaseDelaySeconds { get; init; } = 5;
+}
+
 public sealed class ApiOptions
 {
     public const string SectionName = "Api";

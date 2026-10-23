@@ -185,35 +185,69 @@ public sealed class MetaCloudApiClient(
             text = new { body = text, preview_url = false }
         });
 
-        var response = await restClient.ExecuteAsync(request, cancellationToken);
-        if (!response.IsSuccessful)
+        try
         {
-            return new MetaMessageSendResult(
-                false, null, MapSafeFailureCode(response.StatusCode), IsTransient(response.StatusCode));
+            var response = await ExecuteAsync(request, cancellationToken);
+            using var document = JsonDocument.Parse(response.Content!);
+            var messages = document.RootElement.TryGetProperty("messages", out var values) &&
+                           values.ValueKind == JsonValueKind.Array
+                ? values
+                : default;
+            var providerId = messages.ValueKind == JsonValueKind.Array && messages.GetArrayLength() > 0 &&
+                             messages[0].TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.String
+                ? id.GetString()
+                : null;
+            return string.IsNullOrWhiteSpace(providerId)
+                ? new MetaMessageSendResult(false, null, "MetaInvalidResponse", false)
+                : new MetaMessageSendResult(true, providerId, null, false);
         }
-
-        if (string.IsNullOrWhiteSpace(response.Content))
+        catch (MetaApiException exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            return new MetaMessageSendResult(false, null, exception.SafeCode, exception.IsTransient);
+        }
+        catch (JsonException) when (!cancellationToken.IsCancellationRequested)
         {
             return new MetaMessageSendResult(false, null, "MetaInvalidResponse", false);
         }
-
-        using var document = JsonDocument.Parse(response.Content);
-        var messages = document.RootElement.TryGetProperty("messages", out var values) &&
-                       values.ValueKind == JsonValueKind.Array
-            ? values
-            : default;
-        var providerId = messages.ValueKind == JsonValueKind.Array && messages.GetArrayLength() > 0 &&
-                         messages[0].TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.String
-            ? id.GetString()
-            : null;
-        return string.IsNullOrWhiteSpace(providerId)
-            ? new MetaMessageSendResult(false, null, "MetaInvalidResponse", false)
-            : new MetaMessageSendResult(true, providerId, null, false);
     }
 
     private async Task<RestResponse> ExecuteAsync(RestRequest request, CancellationToken cancellationToken)
     {
-        var response = await restClient.ExecuteAsync(request, cancellationToken);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(TimeSpan.FromSeconds(options.Value.RequestTimeoutSeconds));
+
+        RestResponse response;
+        try
+        {
+            response = await restClient.ExecuteAsync(request, deadline.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new MetaApiException("MetaRequestTimedOut", true);
+        }
+        catch (HttpRequestException)
+        {
+            throw new MetaApiException("MetaUnavailable", true);
+        }
+        catch (TimeoutException)
+        {
+            throw new MetaApiException("MetaRequestTimedOut", true);
+        }
+
+        if (response.ErrorException is OperationCanceledException)
+        {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                throw new OperationCanceledException(cancellationToken);
+            }
+
+            throw new MetaApiException("MetaRequestTimedOut", true);
+        }
+        if (response.ErrorException is HttpRequestException && (int)response.StatusCode == 0)
+        {
+            throw new MetaApiException("MetaUnavailable", true);
+        }
+
         if (!response.IsSuccessful)
         {
             throw new MetaApiException(

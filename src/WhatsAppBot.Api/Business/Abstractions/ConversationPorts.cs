@@ -53,6 +53,12 @@ public interface IConversationStateRepository
         Guid tenantId, long conversationId, CancellationToken cancellationToken);
 }
 
+public interface IConversationAuditRepository
+{
+    Task<IReadOnlyList<ConversationAuditEventRecord>> ListAuditAsync(
+        Guid tenantId, long conversationId, CancellationToken cancellationToken);
+}
+
 public interface ISendManualConversationMessage
 {
     Task<ManualConversationMessageResult> ExecuteAsync(

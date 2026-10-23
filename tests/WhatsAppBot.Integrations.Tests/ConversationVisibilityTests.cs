@@ -228,6 +228,9 @@ public sealed class ConversationVisibilityTests
                 integrationId, "waba", "phone", "+15550000000", "Test", ConnectionState.Connected,
                 DateTimeOffset.UtcNow, true));
 
+        public Task<WhatsAppIntegration> GetByPhoneNumberIdAsync(
+            string phoneNumberId, CancellationToken cancellationToken) => GetCurrentAsync(cancellationToken);
+
         public Task SaveSignupResultAsync(MetaSignupResult result, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
         public Task SetConnectionStateAsync(
@@ -359,6 +362,14 @@ public sealed class ConversationVisibilityTests
             DetailException is null
                 ? Task.FromResult(DetailResponse)
                 : Task.FromException<ResponseE<ConversationDetailDTO>?>(DetailException);
+
+        public Task<ResponseE<ConversationDetailDTO>?> ApplyConversationActionAsync(
+            long conversationId, ConversationActionRequestDTO request, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<ResponseE<MessageDTO>?> SendManualConversationMessageAsync(
+            long conversationId, ManualMessageRequestDTO request, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
 
         public Task<ResponseE<AuthResponseDTO>?> LoginAsync(
             LoginRequestDTO request, CancellationToken cancellationToken) => throw new NotSupportedException();

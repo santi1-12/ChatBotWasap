@@ -30,7 +30,8 @@ public sealed class ProcessInboundText(
             throw new BusinessValidationException("Only complete inbound text events can be processed.");
         }
 
-        var integration = await integrationRepository.GetCurrentAsync(cancellationToken);
+        var integration = await integrationRepository.GetByPhoneNumberIdAsync(
+            inboundEvent.PhoneNumberId, cancellationToken);
         if (!integration.IsActive ||
             integration.ConnectionState != ConnectionState.Connected ||
             !string.Equals(integration.PhoneNumberId, inboundEvent.PhoneNumberId, StringComparison.Ordinal))
@@ -43,7 +44,8 @@ public sealed class ProcessInboundText(
             inboundEvent.WhatsAppUserId,
             inboundEvent.ContactDisplayName,
             cancellationToken);
-        var configuration = await botConfigurationService.GetAsync(cancellationToken);
+        var configuration = await botConfigurationService.GetForIntegrationAsync(
+            integration.IntegrationId, cancellationToken);
         var conversationId = await conversationRepository.GetOrCreateAsync(
             integration.IntegrationId,
             integration.TenantId

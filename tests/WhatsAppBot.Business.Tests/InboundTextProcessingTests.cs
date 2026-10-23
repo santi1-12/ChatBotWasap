@@ -159,6 +159,8 @@ public sealed class InboundTextProcessingTests
     {
         public Task<WhatsAppIntegration> GetCurrentAsync(CancellationToken cancellationToken) =>
             Task.FromResult(integration);
+        public Task<WhatsAppIntegration> GetByPhoneNumberIdAsync(
+            string phoneNumberId, CancellationToken cancellationToken) => GetCurrentAsync(cancellationToken);
         public Task SaveSignupResultAsync(MetaSignupResult result, CancellationToken cancellationToken) =>
             throw new NotImplementedException();
         public Task SetConnectionStateAsync(
@@ -260,6 +262,8 @@ public sealed class InboundTextProcessingTests
     {
         public Task<BotConfiguration> GetAsync(CancellationToken cancellationToken) =>
             Task.FromResult(configuration);
+        public Task<BotConfiguration> GetForIntegrationAsync(
+            Guid integrationId, CancellationToken cancellationToken) => GetAsync(cancellationToken);
         public Task<BotConfiguration> UpdateAsync(
             bool isBotEnabled, BotReplyMode replyMode, CancellationToken cancellationToken) =>
             throw new NotImplementedException();

@@ -26,7 +26,6 @@ BEGIN
             message.ActorType,
             message.Origin,
             message.CreatedByAdminId,
-            message.SourceInboundMessageId,
             message.ReplySource,
             message.ProcessingState,
             message.DeliveryState,
@@ -56,7 +55,7 @@ BEGIN
         message_page.ActorType,
         message_page.Origin,
         message_page.CreatedByAdminId,
-        message_page.SourceInboundMessageId,
+         outbox.SourceInboundMessageId,
         CASE WHEN transcript.State = N'Completed' THEN transcript.TranscriptText END AS Transcription,
         CONVERT(bit, CASE WHEN media.MediaAttachmentId IS NULL THEN 0 ELSE 1 END) AS MediaAvailable,
         message_page.ReplySource,
@@ -84,6 +83,8 @@ BEGIN
     ) AS lastMessage
     LEFT JOIN message_page
         ON 1 = 1
+    LEFT JOIN dbo.MessageOutbox AS outbox
+        ON outbox.MessageId = message_page.MessageId
     LEFT JOIN dbo.MediaAttachment AS media
         ON media.MessageId = message_page.MessageId
        AND media.AvailabilityState = N'Available'

@@ -15,7 +15,18 @@ public sealed class DetailsModel(IWhatsAppBotApiClient apiClient) : PageModel
     public ConversationDetailDTO? Conversation { get; private set; }
     public long? BeforeMessageId { get; private set; }
     public string? ErrorMessage { get; private set; }
+    public string? SuccessMessage { get; private set; }
     public bool HasOlderMessages => Conversation?.Messages.Count >= MessagePageSize;
+
+    [BindProperty]
+    public ConversationActionRequestDTO ActionRequest { get; set; } = new()
+    {
+        Action = ConversationAction.Take,
+        ExpectedVersion = string.Empty
+    };
+
+    [BindProperty]
+    public ManualMessageRequestDTO ManualMessage { get; set; } = new();
 
     public async Task<IActionResult> OnGetAsync(
         long id, long? beforeMessageId = null, CancellationToken cancellationToken = default)
@@ -29,15 +40,7 @@ public sealed class DetailsModel(IWhatsAppBotApiClient apiClient) : PageModel
 
         try
         {
-            var response = await apiClient.GetConversationAsync(id, beforeMessageId, cancellationToken);
-            if (response?.Success == true && response.Data is not null)
-            {
-                Conversation = response.Data;
-            }
-            else
-            {
-                ErrorMessage = response?.Error?.Message ?? "No se pudo cargar la conversación.";
-            }
+            await LoadConversationAsync(id, beforeMessageId, cancellationToken);
         }
         catch (AdminApiTimeoutException)
         {
@@ -46,6 +49,72 @@ public sealed class DetailsModel(IWhatsAppBotApiClient apiClient) : PageModel
         catch (HttpRequestException)
         {
             ErrorMessage = "No se pudo contactar la API. El historial no está disponible.";
+        }
+
+        return Page();
+    }
+
+    public async Task<IActionResult> OnPostActionAsync(
+        long id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await apiClient.ApplyConversationActionAsync(
+                id, ActionRequest, cancellationToken);
+            if (response?.Success == true && response.Data is not null)
+            {
+                Conversation = response.Data;
+                BeforeMessageId = null;
+                SetExpectedVersion();
+                SuccessMessage = "La acción de conversación se aplicó correctamente.";
+            }
+            else
+            {
+                ErrorMessage = response?.Error?.Message ?? "No se pudo aplicar la acción.";
+                await LoadConversationAsync(id, null, cancellationToken);
+            }
+        }
+        catch (AdminApiTimeoutException)
+        {
+            ErrorMessage = "La acción tardó más de lo esperado. Consulta el estado antes de reintentar.";
+            await LoadConversationAsync(id, null, cancellationToken);
+        }
+        catch (HttpRequestException)
+        {
+            ErrorMessage = "No se pudo contactar la API. La conversación no fue confirmada.";
+            await LoadConversationAsync(id, null, cancellationToken);
+        }
+
+        return Page();
+    }
+
+    public async Task<IActionResult> OnPostManualReplyAsync(
+        long id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await apiClient.SendManualConversationMessageAsync(
+                id, ManualMessage, cancellationToken);
+            if (response?.Success == true && response.Data is not null)
+            {
+                SuccessMessage = "La respuesta manual quedó pendiente de envío.";
+            }
+            else
+            {
+                ErrorMessage = response?.Error?.Message ?? "No se pudo aceptar la respuesta manual.";
+            }
+
+            await LoadConversationAsync(id, null, cancellationToken);
+        }
+        catch (AdminApiTimeoutException)
+        {
+            ErrorMessage = "La respuesta manual tardó más de lo esperado. Consulta el historial antes de reintentar.";
+            await LoadConversationAsync(id, null, cancellationToken);
+        }
+        catch (HttpRequestException)
+        {
+            ErrorMessage = "No se pudo contactar la API. La respuesta manual no fue confirmada.";
+            await LoadConversationAsync(id, null, cancellationToken);
         }
 
         return Page();
@@ -143,4 +212,36 @@ public sealed class DetailsModel(IWhatsAppBotApiClient apiClient) : PageModel
         "BlockingError" => "El procesamiento automático fue bloqueado",
         _ => null
     };
+
+    public string ActionLabel(ConversationAction action) => action switch
+    {
+        ConversationAction.Take => "Tomar conversación",
+        ConversationAction.Handoff => "Pasar a humano",
+        ConversationAction.ReturnToBot => "Devolver al bot",
+        ConversationAction.Close => "Cerrar",
+        ConversationAction.Reopen => "Reabrir",
+        _ => "Aplicar acción"
+    };
+
+    private async Task LoadConversationAsync(
+        long id, long? beforeMessageId, CancellationToken cancellationToken)
+    {
+        var response = await apiClient.GetConversationAsync(id, beforeMessageId, cancellationToken);
+        if (response?.Success == true && response.Data is not null)
+        {
+            Conversation = response.Data;
+            SetExpectedVersion();
+        }
+        else
+        {
+            ErrorMessage ??= response?.Error?.Message ?? "No se pudo cargar la conversación.";
+        }
+    }
+
+    private void SetExpectedVersion()
+    {
+        var version = Conversation?.Conversation.Version ?? string.Empty;
+        ActionRequest.ExpectedVersion = version;
+        ManualMessage.ExpectedVersion = version;
+    }
 }

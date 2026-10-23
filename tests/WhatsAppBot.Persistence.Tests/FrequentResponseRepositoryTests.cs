@@ -32,6 +32,8 @@ public sealed class FrequentResponseRepositoryTests(LocalDbFixture fixture)
     public async Task CreateUpdateToggleListAndDelete_PersistInLocalDb()
     {
         var configuration = await fixture.ConfigurationRepository.GetCurrentAsync(CancellationToken.None);
+        var initialTotal = (await fixture.FrequentResponseRepository.ListAsync(
+            configuration.IntegrationId, 1, 100, CancellationToken.None)).TotalCount;
         var unique = Guid.NewGuid().ToString("N");
         var command = new FrequentResponseCommand(
             $"Persistence test {unique}",
@@ -53,7 +55,7 @@ public sealed class FrequentResponseRepositoryTests(LocalDbFixture fixture)
                 item => item.Response.FrequentResponseId == created.Response.FrequentResponseId);
             var beyondEnd = await fixture.FrequentResponseRepository.ListAsync(
                 configuration.IntegrationId, 100, 25, CancellationToken.None);
-            Assert.Equal(1, beyondEnd.TotalCount);
+            Assert.Equal(initialTotal + 1, beyondEnd.TotalCount);
             Assert.Empty(beyondEnd.Items);
 
             var updatedCommand = command with

@@ -481,6 +481,9 @@ public sealed class WhatsAppIntegrationCompletionTests
             return Task.FromResult(Integration);
         }
 
+        public Task<WhatsAppIntegration> GetByPhoneNumberIdAsync(
+            string phoneNumberId, CancellationToken cancellationToken) => GetCurrentAsync(cancellationToken);
+
         public Task SaveSignupResultAsync(MetaSignupResult result, CancellationToken cancellationToken)
         {
             if (!SkipSignupPersistence)
@@ -549,6 +552,14 @@ public sealed class WhatsAppIntegrationCompletionTests
 
         public Task<ResponseE<ConversationDetailDTO>?> GetConversationAsync(
             long conversationId, long? beforeMessageId, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<ResponseE<ConversationDetailDTO>?> ApplyConversationActionAsync(
+            long conversationId, ConversationActionRequestDTO request, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<ResponseE<MessageDTO>?> SendManualConversationMessageAsync(
+            long conversationId, ManualMessageRequestDTO request, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
         public Task<ResponseE<WhatsAppIntegrationDTO>?> CompleteWhatsAppSignupAsync(

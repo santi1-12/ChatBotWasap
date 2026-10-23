@@ -54,6 +54,8 @@ public interface IMetaWebhookEventParser
 public interface IWhatsAppIntegrationRepository
 {
     Task<WhatsAppIntegration> GetCurrentAsync(CancellationToken cancellationToken);
+    Task<WhatsAppIntegration> GetByPhoneNumberIdAsync(
+        string phoneNumberId, CancellationToken cancellationToken);
     Task SaveSignupResultAsync(
         MetaSignupResult result, CancellationToken cancellationToken);
     Task SetConnectionStateAsync(

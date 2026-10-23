@@ -40,6 +40,8 @@ public interface IAdministratorBootstrapper
 public interface IBotConfigurationRepository
 {
     Task<BotConfiguration> GetCurrentAsync(CancellationToken cancellationToken);
+    Task<BotConfiguration> GetForIntegrationAsync(
+        Guid integrationId, CancellationToken cancellationToken);
     Task<BotConfiguration> UpdateAsync(
         Guid integrationId, bool isBotEnabled, BotReplyMode replyMode, CancellationToken cancellationToken);
 }
@@ -47,6 +49,8 @@ public interface IBotConfigurationRepository
 public interface IBotConfigurationService
 {
     Task<BotConfiguration> GetAsync(CancellationToken cancellationToken);
+    Task<BotConfiguration> GetForIntegrationAsync(
+        Guid integrationId, CancellationToken cancellationToken);
     Task<BotConfiguration> UpdateAsync(
         bool isBotEnabled, BotReplyMode replyMode, CancellationToken cancellationToken);
 }

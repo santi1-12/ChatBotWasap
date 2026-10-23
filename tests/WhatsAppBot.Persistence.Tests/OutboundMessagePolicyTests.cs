@@ -17,6 +17,7 @@ public sealed class OutboundMessagePolicyTests(LocalDbFixture fixture)
         var inboundMessageId = 0L;
         var phoneNumberId = $"test-{Guid.NewGuid():N}";
         var ownsIntegration = false;
+        var tenantId = Guid.Empty;
         await using var connection = new SqlConnection(fixture.ConnectionString);
         await connection.OpenAsync();
 
@@ -24,16 +25,16 @@ public sealed class OutboundMessagePolicyTests(LocalDbFixture fixture)
         {
             if (!await HasActiveIntegrationAsync(connection))
             {
-                await CreateConnectedTestIntegrationAsync(connection, integrationId, phoneNumberId);
+                tenantId = await CreateConnectedTestIntegrationAsync(connection, integrationId, phoneNumberId);
                 ownsIntegration = true;
             }
             else
             {
-                integrationId = await GetActiveIntegrationIdAsync(connection);
+                (integrationId, tenantId) = await GetActiveIntegrationAsync(connection);
             }
 
             (contactId, conversationId, inboundMessageId) =
-                await InsertExpiredInboundAsync(connection, integrationId);
+                await InsertExpiredInboundAsync(connection, integrationId, tenantId);
 
             var result = await fixture.OutboxRepository.CreatePendingAsync(
                 inboundMessageId, integrationId, conversationId, "Must not be sent",
@@ -59,57 +60,71 @@ public sealed class OutboundMessagePolicyTests(LocalDbFixture fixture)
         return (bool)(await command.ExecuteScalarAsync() ?? false);
     }
 
-    private static async Task<Guid> GetActiveIntegrationIdAsync(SqlConnection connection)
+    private static async Task<(Guid IntegrationId, Guid TenantId)> GetActiveIntegrationAsync(
+        SqlConnection connection)
     {
         await using var command = new SqlCommand(
-            "SELECT TOP (1) IntegrationId FROM dbo.WhatsAppIntegration WHERE IsActive = 1;",
+            "SELECT TOP (1) IntegrationId, TenantId FROM dbo.WhatsAppIntegration WHERE IsActive = 1;",
             connection);
-        return (Guid)(await command.ExecuteScalarAsync()
-            ?? throw new InvalidOperationException("The active integration is missing."));
+        await using var reader = await command.ExecuteReaderAsync();
+        if (!await reader.ReadAsync())
+        {
+            throw new InvalidOperationException("The active integration is missing.");
+        }
+
+        return (reader.GetGuid(0), reader.GetGuid(1));
     }
 
-    private static async Task CreateConnectedTestIntegrationAsync(
+    private static async Task<Guid> CreateConnectedTestIntegrationAsync(
         SqlConnection connection, Guid integrationId, string phoneNumberId)
     {
         await using var command = new SqlCommand(
             """
+            DECLARE @TenantId uniqueidentifier =
+                (SELECT TOP (1) TenantId FROM dbo.Tenant WHERE IsActive = 1 ORDER BY CreatedAtUtc, TenantId);
+            IF @TenantId IS NULL THROW 51040, 'A test Tenant is required.', 1;
             INSERT dbo.WhatsAppIntegration
-                (IntegrationId, WabaId, PhoneNumberId, BusinessPhoneNumber, ConnectionState, IsActive)
-            VALUES (@IntegrationId, N'test-waba', @PhoneNumberId, N'+15550000000', N'Connected', 1);
-            INSERT dbo.BotConfiguration (IntegrationId, IsBotEnabled, ReplyMode)
-            VALUES (@IntegrationId, 0, N'FaqThenAi');
+                (IntegrationId, TenantId, WabaId, PhoneNumberId, BusinessPhoneNumber, ConnectionState, IsActive)
+            VALUES (@IntegrationId, @TenantId, N'test-waba', @PhoneNumberId, N'+15550000000', N'Connected', 1);
+            INSERT dbo.BotConfiguration (IntegrationId, TenantId, IsBotEnabled, ReplyMode)
+            VALUES (@IntegrationId, @TenantId, 0, N'FaqThenAi');
+            SELECT @TenantId;
             """,
             connection);
         command.Parameters.Add(new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier)
             { Value = integrationId });
         command.Parameters.Add(new SqlParameter("@PhoneNumberId", SqlDbType.NVarChar, 64)
             { Value = phoneNumberId });
-        await command.ExecuteNonQueryAsync();
+        return (Guid)(await command.ExecuteScalarAsync()
+            ?? throw new InvalidOperationException("The test Tenant could not be created."));
     }
 
     private static async Task<(long ContactId, long ConversationId, long MessageId)> InsertExpiredInboundAsync(
-        SqlConnection connection, Guid integrationId)
+        SqlConnection connection, Guid integrationId, Guid tenantId)
     {
         await using var command = new SqlCommand(
             """
-            INSERT dbo.Contact (IntegrationId, WhatsAppUserId, DisplayName)
-            VALUES (@IntegrationId, @WhatsAppUserId, N'Outbox policy test');
+            INSERT dbo.Contact (IntegrationId, TenantId, WhatsAppUserId, DisplayName)
+            VALUES (@IntegrationId, @TenantId, @WhatsAppUserId, N'Outbox policy test');
             DECLARE @ContactId bigint = CONVERT(bigint, SCOPE_IDENTITY());
-            INSERT dbo.Conversation (IntegrationId, ContactId, BasicStatus)
-            VALUES (@IntegrationId, @ContactId, N'Open');
+            INSERT dbo.Conversation (IntegrationId, ContactId, TenantId, BasicStatus)
+            VALUES (@IntegrationId, @ContactId, @TenantId, N'Open');
             DECLARE @ConversationId bigint = CONVERT(bigint, SCOPE_IDENTITY());
             INSERT dbo.Message
                 (IntegrationId, ConversationId, ProviderMessageId, Direction, MessageType,
-                 ContentText, ProcessingState, ProviderTimestampUtc)
+                 ContentText, ProcessingState, ProviderTimestampUtc, TenantId, ActorType, Origin)
             VALUES
                 (@IntegrationId, @ConversationId, @ProviderMessageId, N'Inbound', N'Text',
-                 N'expired test', N'Received', DATEADD(hour, -25, SYSUTCDATETIME()));
+                  N'expired test', N'Received', DATEADD(hour, -25, SYSUTCDATETIME()),
+                  @TenantId, N'Customer', N'MetaCloudApi');
             SELECT @ContactId AS ContactId, @ConversationId AS ConversationId,
                    CONVERT(bigint, SCOPE_IDENTITY()) AS MessageId;
             """,
             connection);
         command.Parameters.Add(new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier)
             { Value = integrationId });
+        command.Parameters.Add(new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier)
+            { Value = tenantId });
         command.Parameters.Add(new SqlParameter("@WhatsAppUserId", SqlDbType.NVarChar, 64)
             { Value = $"test-{Guid.NewGuid():N}" });
         command.Parameters.Add(new SqlParameter("@ProviderMessageId", SqlDbType.NVarChar, 256)

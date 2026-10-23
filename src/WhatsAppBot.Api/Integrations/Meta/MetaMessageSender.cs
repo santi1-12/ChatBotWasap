@@ -16,7 +16,8 @@ public sealed class MetaMessageSender(
     {
         try
         {
-            var integration = await integrationRepository.GetCurrentAsync(cancellationToken);
+            var integration = await integrationRepository.GetByPhoneNumberIdAsync(
+                phoneNumberId, cancellationToken);
             if (!integration.IsActive ||
                 integration.ConnectionState != ConnectionState.Connected ||
                 !string.Equals(integration.PhoneNumberId, phoneNumberId, StringComparison.Ordinal) ||

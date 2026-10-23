@@ -128,6 +128,30 @@ public sealed class ConversationRepository(StoredProcedureExecutor executor)
                 ConversationVersion.Format((byte[])reader[reader.GetOrdinal("Version")])),
             cancellationToken);
 
+    public async Task<IReadOnlyList<ConversationAuditEventRecord>> ListAuditAsync(
+        Guid tenantId, long conversationId, CancellationToken cancellationToken) =>
+        (await executor.QueryAsync(
+            "dbo.sp_Conversation_GetAudit",
+            [
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId },
+                new SqlParameter("@ConversationId", SqlDbType.BigInt) { Value = conversationId }
+            ],
+            reader => new ConversationAuditEventRecord(
+                reader.GetString(reader.GetOrdinal("EventType")),
+                Enum.Parse<ActorType>(reader.GetString(reader.GetOrdinal("ActorType")), false),
+                Enum.Parse<Origin>(reader.GetString(reader.GetOrdinal("Origin")), false),
+                reader.IsDBNull(reader.GetOrdinal("ActorAdminId"))
+                    ? null
+                    : reader.GetInt64(reader.GetOrdinal("ActorAdminId")),
+                reader.IsDBNull(reader.GetOrdinal("ReasonCode"))
+                    ? null
+                    : reader.GetString(reader.GetOrdinal("ReasonCode")),
+                ToUtc(reader, "OccurredAtUtc"),
+                reader.IsDBNull(reader.GetOrdinal("ResultingVersion"))
+                    ? null
+                    : ConversationVersion.Format((byte[])reader[reader.GetOrdinal("ResultingVersion")])),
+            cancellationToken)).ToArray();
+
     public Task RecordAuditAsync(
         Guid tenantId,
         long conversationId,

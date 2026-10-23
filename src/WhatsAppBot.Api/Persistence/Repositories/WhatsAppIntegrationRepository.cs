@@ -14,15 +14,14 @@ public sealed class WhatsAppIntegrationRepository(
     : IWhatsAppIntegrationRepository
 {
     public async Task<WhatsAppIntegration> GetCurrentAsync(CancellationToken cancellationToken) =>
-        await executor.QuerySingleAsync(
-            "dbo.sp_WhatsAppIntegration_GetCurrent",
-            [new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier)
-            {
-                Value = (object?)await TryGetTenantIdAsync(cancellationToken) ?? DBNull.Value
-            }],
-            Map,
-            cancellationToken)
+        await QueryCurrentAsync(
+            null, (await tenantContext.GetRequiredAsync(cancellationToken)).TenantId, cancellationToken)
         ?? throw new InvalidOperationException("The initial WhatsApp integration slot has not been provisioned.");
+
+    public async Task<WhatsAppIntegration> GetByPhoneNumberIdAsync(
+        string phoneNumberId, CancellationToken cancellationToken) =>
+        await QueryCurrentAsync(phoneNumberId, null, cancellationToken)
+        ?? throw new InvalidOperationException("The webhook phone number is not connected to an integration.");
 
     public Task SaveSignupResultAsync(MetaSignupResult result, CancellationToken cancellationToken) =>
         executor.ExecuteAsync(
@@ -81,24 +80,22 @@ public sealed class WhatsAppIntegrationRepository(
             UpdatedAtUtc = GetUtcDateTime(reader, "UpdatedAtUtc")
         };
 
-    private async Task<Guid?> TryGetTenantIdAsync(CancellationToken cancellationToken)
-    {
-        if (tenantContext.Current is { } current)
-        {
-            return current.TenantId;
-        }
-
-        try
-        {
-            return (await tenantContext.GetRequiredAsync(cancellationToken)).TenantId;
-        }
-        catch (TenantContextUnavailableException)
-        {
-            // Webhook workers have no authenticated HTTP principal. Keep the existing
-            // single-active-integration fallback until provider phone lookup is expanded.
-            return null;
-        }
-    }
+    private Task<WhatsAppIntegration?> QueryCurrentAsync(
+        string? phoneNumberId, Guid? tenantId, CancellationToken cancellationToken) =>
+        executor.QuerySingleAsync(
+            "dbo.sp_WhatsAppIntegration_GetCurrent",
+            [
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier)
+                {
+                    Value = (object?)tenantId ?? DBNull.Value
+                },
+                new SqlParameter("@PhoneNumberId", SqlDbType.NVarChar, 64)
+                {
+                    Value = (object?)phoneNumberId ?? DBNull.Value
+                }
+            ],
+            Map,
+            cancellationToken);
 
     private static string? GetNullableString(SqlDataReader reader, string name)
     {

@@ -24,6 +24,10 @@ public interface IWhatsAppBotApiClient
         int page, int pageSize, CancellationToken cancellationToken);
     Task<ResponseE<ConversationDetailDTO>?> GetConversationAsync(
         long conversationId, long? beforeMessageId, CancellationToken cancellationToken);
+    Task<ResponseE<ConversationDetailDTO>?> ApplyConversationActionAsync(
+        long conversationId, ConversationActionRequestDTO request, CancellationToken cancellationToken);
+    Task<ResponseE<MessageDTO>?> SendManualConversationMessageAsync(
+        long conversationId, ManualMessageRequestDTO request, CancellationToken cancellationToken);
     Task<ResponseE<BotConfigurationDTO>?> GetBotConfigurationAsync(CancellationToken cancellationToken);
     Task<ResponseE<BotConfigurationDTO>?> UpdateBotConfigurationAsync(
         UpdateBotConfigurationRequestDTO request, CancellationToken cancellationToken);
@@ -125,6 +129,20 @@ public sealed class WhatsAppBotApiClient : IWhatsAppBotApiClient
 
         return GetAsync<ConversationDetailDTO>(path, cancellationToken);
     }
+
+    public Task<ResponseE<ConversationDetailDTO>?> ApplyConversationActionAsync(
+        long conversationId,
+        ConversationActionRequestDTO request,
+        CancellationToken cancellationToken) =>
+        SendAsync<ConversationDetailDTO>(
+            HttpMethod.Post, $"api/v1/admin/conversations/{conversationId}/actions", request, cancellationToken);
+
+    public Task<ResponseE<MessageDTO>?> SendManualConversationMessageAsync(
+        long conversationId,
+        ManualMessageRequestDTO request,
+        CancellationToken cancellationToken) =>
+        SendAsync<MessageDTO>(
+            HttpMethod.Post, $"api/v1/admin/conversations/{conversationId}/messages", request, cancellationToken);
 
     public Task<ResponseE<BotConfigurationDTO>?> UpdateBotConfigurationAsync(
         UpdateBotConfigurationRequestDTO request, CancellationToken cancellationToken) =>

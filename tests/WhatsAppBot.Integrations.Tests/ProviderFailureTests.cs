@@ -110,6 +110,9 @@ public sealed class ProviderFailureTests
                 AccessTokenSecretRef = "secret-reference"
             });
 
+        public Task<WhatsAppIntegration> GetByPhoneNumberIdAsync(
+            string phoneNumberId, CancellationToken cancellationToken) => GetCurrentAsync(cancellationToken);
+
         public Task SaveSignupResultAsync(MetaSignupResult result, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 

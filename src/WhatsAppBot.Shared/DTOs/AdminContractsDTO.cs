@@ -143,7 +143,7 @@ public sealed class ConversationActionRequestDTO
 {
     public required ConversationAction Action { get; init; }
     public string? ReasonCode { get; init; }
-    public required string ExpectedVersion { get; init; }
+    public required string ExpectedVersion { get; set; }
 }
 
 public sealed class ManualMessageRequestDTO
@@ -152,7 +152,7 @@ public sealed class ManualMessageRequestDTO
     public string Text { get; init; } = string.Empty;
 
     [Required, MaxLength(128)]
-    public string ExpectedVersion { get; init; } = string.Empty;
+    public string ExpectedVersion { get; set; } = string.Empty;
 }
 
 public sealed class ConversationAuditEventDTO

@@ -241,6 +241,8 @@ public sealed class MetaEmbeddedSignupTests
             Guid.NewGuid(), null, null, null, null, ConnectionState.NotConnected, null, false);
         public Task<WhatsAppIntegration> GetCurrentAsync(CancellationToken cancellationToken) =>
             Task.FromResult(integration);
+        public Task<WhatsAppIntegration> GetByPhoneNumberIdAsync(
+            string phoneNumberId, CancellationToken cancellationToken) => GetCurrentAsync(cancellationToken);
         public Task SaveSignupResultAsync(MetaSignupResult result, CancellationToken cancellationToken) =>
             throw new NotImplementedException();
         public Task SetConnectionStateAsync(

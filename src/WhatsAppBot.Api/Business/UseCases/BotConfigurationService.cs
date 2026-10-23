@@ -10,6 +10,10 @@ public sealed class BotConfigurationService(IBotConfigurationRepository reposito
     public Task<BotConfiguration> GetAsync(CancellationToken cancellationToken) =>
         repository.GetCurrentAsync(cancellationToken);
 
+    public Task<BotConfiguration> GetForIntegrationAsync(
+        Guid integrationId, CancellationToken cancellationToken) =>
+        repository.GetForIntegrationAsync(integrationId, cancellationToken);
+
     public async Task<BotConfiguration> UpdateAsync(
         bool isBotEnabled, BotReplyMode replyMode, CancellationToken cancellationToken)
     {

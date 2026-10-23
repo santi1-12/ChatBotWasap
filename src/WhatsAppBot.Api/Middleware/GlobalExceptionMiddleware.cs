@@ -27,6 +27,8 @@ public sealed class GlobalExceptionMiddleware(
                     StatusCodes.Status404NotFound, "NotFound", exception.Message),
                 ConversationConflictException => (
                     StatusCodes.Status409Conflict, "ConversationVersionConflict", exception.Message),
+                ManualReplyRejectedException manualReply => (
+                    StatusCodes.Status409Conflict, manualReply.SafeCode, manualReply.Message),
                 ExternalDependencyException => (
                     StatusCodes.Status502BadGateway,
                     "ExternalDependencyFailure",

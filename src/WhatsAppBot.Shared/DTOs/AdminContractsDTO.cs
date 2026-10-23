@@ -146,6 +146,15 @@ public sealed class ConversationActionRequestDTO
     public required string ExpectedVersion { get; init; }
 }
 
+public sealed class ManualMessageRequestDTO
+{
+    [Required, MaxLength(4096)]
+    public string Text { get; init; } = string.Empty;
+
+    [Required, MaxLength(128)]
+    public string ExpectedVersion { get; init; } = string.Empty;
+}
+
 public sealed class ConversationAuditEventDTO
 {
     public required string EventType { get; init; }

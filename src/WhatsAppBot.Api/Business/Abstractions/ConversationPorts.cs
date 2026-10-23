@@ -52,3 +52,12 @@ public interface IConversationStateRepository
     Task<ConversationStateRecord?> GetStateAsync(
         Guid tenantId, long conversationId, CancellationToken cancellationToken);
 }
+
+public interface ISendManualConversationMessage
+{
+    Task<ManualConversationMessageResult> ExecuteAsync(
+        long conversationId,
+        string text,
+        string expectedVersion,
+        CancellationToken cancellationToken);
+}

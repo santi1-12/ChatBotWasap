@@ -133,7 +133,15 @@ public interface IMessageOutboxRepository
 {
     Task<OutboundMessageInsertResult> CreatePendingAsync(
         long inboundMessageId, Guid integrationId, long conversationId, string text,
-        ReplySource source, long? frequentResponseId,
+         ReplySource source, long? frequentResponseId,
+         CancellationToken cancellationToken);
+
+    Task<ManualMessageInsertResult> CreateAdminPendingAsync(
+        Guid tenantId,
+        long conversationId,
+        long adminId,
+        string text,
+        string expectedVersion,
         CancellationToken cancellationToken);
 }
 

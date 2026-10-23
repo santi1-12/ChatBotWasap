@@ -18,7 +18,8 @@ BEGIN
         WHERE i.IsActive = 1 AND i.ConnectionState = N'Connected'
           AND o.TenantId = conv.TenantId
           AND o.ConversationVersion = conv.Version
-          AND conv.AttentionMode = N'Bot'
+          AND ((m.ReplySource = N'Admin' AND conv.AttentionMode = N'Humano')
+               OR (m.ReplySource <> N'Admin' AND conv.AttentionMode = N'Bot'))
           AND conv.LifecycleStatus = N'Abierta'
           AND (o.State = N'Pending' AND o.NextAttemptAtUtc <= SYSUTCDATETIME()
                OR o.State = N'Sending' AND o.UpdatedAtUtc < DATEADD(minute, -5, SYSUTCDATETIME()))

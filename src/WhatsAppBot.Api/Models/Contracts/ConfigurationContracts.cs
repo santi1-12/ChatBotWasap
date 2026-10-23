@@ -40,6 +40,12 @@ public sealed class BusinessNotFoundException(string resource) : Exception($"{re
 public sealed class ConversationConflictException(string message = "The conversation changed before the action could be applied.")
     : Exception(message);
 
+public sealed class ManualReplyRejectedException(string safeCode)
+    : Exception("The manual reply could not be accepted.")
+{
+    public string SafeCode { get; } = safeCode;
+}
+
 public sealed class ExternalDependencyException(string safeCode, bool isTransient = false)
     : Exception("An external service request could not be completed.")
 {

@@ -63,6 +63,14 @@ public sealed record OutboundMessageWorkItem(
 
 public sealed record OutboxRevalidationResult(bool IsAllowed, string? OutcomeCode);
 
+public sealed record ManualMessageInsertResult(
+    bool Inserted,
+    bool Found,
+    bool Conflict,
+    long? MessageId,
+    string? OutcomeCode,
+    DateTimeOffset? CreatedAtUtc);
+
 public static class MessageOutcomeCodes
 {
     public const string MessagingWindowClosed = "MessagingWindowClosed";

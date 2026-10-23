@@ -245,6 +245,11 @@ public sealed class InboundTextProcessingTests
             CreateCalls++;
             return Task.FromResult(new OutboundMessageInsertResult(true, 10, null));
         }
+
+        public Task<ManualMessageInsertResult> CreateAdminPendingAsync(
+            Guid tenantId, long conversationId, long adminId, string text,
+            string expectedVersion, CancellationToken cancellationToken) =>
+            throw new NotImplementedException();
     }
 
     private sealed class FakeBotConfigurationService(BotConfiguration configuration) : IBotConfigurationService

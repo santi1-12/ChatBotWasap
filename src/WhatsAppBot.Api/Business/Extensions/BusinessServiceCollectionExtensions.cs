@@ -25,6 +25,7 @@ public static class BusinessServiceCollectionExtensions
         services.AddScoped<IGetConversationDetail, GetConversationDetail>();
         services.AddScoped<IApplyConversationAction, ApplyConversationAction>();
         services.AddScoped<IConversationHandoffService, ConversationHandoffService>();
+        services.AddScoped<ISendManualConversationMessage, SendManualConversationMessage>();
         services.AddSingleton<FrequentResponseMatcher>();
         services.AddScoped<IBotReplyResolver, BotReplyResolver>();
         services.AddScoped<IWhatsAppIntegrationService, WhatsAppIntegrationService>();

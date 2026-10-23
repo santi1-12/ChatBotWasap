@@ -22,13 +22,15 @@ BEGIN
     DECLARE @CurrentVersion binary(8);
     DECLARE @AttentionMode nvarchar(16);
     DECLARE @LifecycleStatus nvarchar(16);
+    DECLARE @ReplySource nvarchar(32);
     DECLARE @LastCustomerMessageAtUtc datetime2(3);
 
     SELECT
         @State = outbox.State,
         @CurrentVersion = conversation.Version,
         @AttentionMode = conversation.AttentionMode,
-        @LifecycleStatus = conversation.LifecycleStatus
+        @LifecycleStatus = conversation.LifecycleStatus,
+        @ReplySource = message.ReplySource
     FROM dbo.MessageOutbox AS outbox WITH (UPDLOCK, HOLDLOCK)
     INNER JOIN dbo.Message AS message ON message.MessageId = outbox.MessageId
     INNER JOIN dbo.Conversation AS conversation WITH (UPDLOCK, HOLDLOCK)
@@ -53,7 +55,9 @@ BEGIN
         SET @OutcomeCode = N'ConversationVersionConflict';
     ELSE IF @CurrentVersion <> @ConversationVersion
         SET @OutcomeCode = N'ConversationVersionConflict';
-    ELSE IF @AttentionMode <> N'Bot'
+    ELSE IF @ReplySource = N'Admin' AND @AttentionMode <> N'Humano'
+        SET @OutcomeCode = N'ManualReplyRequiresHuman';
+    ELSE IF @ReplySource <> N'Admin' AND @AttentionMode <> N'Bot'
         SET @OutcomeCode = N'ConversationInHumanMode';
     ELSE IF @LifecycleStatus <> N'Abierta'
         SET @OutcomeCode = N'ConversationClosed';

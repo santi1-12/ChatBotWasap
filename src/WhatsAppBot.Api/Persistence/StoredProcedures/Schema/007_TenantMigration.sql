@@ -101,6 +101,13 @@ SET TenantId = @TenantId
 FROM dbo.WhatsAppIntegration AS integration
 WHERE integration.TenantId IS NULL;
 
+-- Connections created before modality persistence were Standard Embedded Signup connections.
+UPDATE integration
+SET OnboardingType = N'Standard'
+FROM dbo.WhatsAppIntegration AS integration
+WHERE integration.ConnectionState = N'Connected'
+  AND integration.OnboardingType IS NULL;
+
 UPDATE configuration
 SET TenantId = COALESCE(integration.TenantId, @TenantId)
 FROM dbo.BotConfiguration AS configuration
@@ -184,6 +191,64 @@ IF EXISTS (SELECT 1 FROM dbo.Administrator AS administrator
 
 IF EXISTS (SELECT 1 FROM dbo.WhatsAppIntegration WHERE TenantId IS NULL)
     THROW 51012, N'An integration was left without a Tenant during migration.', 1;
+
+IF EXISTS (
+    SELECT 1 FROM sys.indexes
+    WHERE object_id = OBJECT_ID(N'dbo.WhatsAppIntegration')
+      AND name = N'IX_WhatsAppIntegration_Tenant'
+)
+    DROP INDEX IX_WhatsAppIntegration_Tenant ON dbo.WhatsAppIntegration;
+IF EXISTS (
+    SELECT 1 FROM sys.indexes
+    WHERE object_id = OBJECT_ID(N'dbo.WhatsAppIntegration')
+      AND name = N'UX_WhatsAppIntegration_Tenant_ActiveSlot'
+)
+    DROP INDEX UX_WhatsAppIntegration_Tenant_ActiveSlot ON dbo.WhatsAppIntegration;
+IF EXISTS (
+    SELECT 1 FROM sys.indexes
+    WHERE object_id = OBJECT_ID(N'dbo.WhatsAppIntegration')
+      AND name = N'UX_WhatsAppIntegration_Tenant_PhoneNumberId_Active'
+)
+    DROP INDEX UX_WhatsAppIntegration_Tenant_PhoneNumberId_Active ON dbo.WhatsAppIntegration;
+IF EXISTS (
+    SELECT 1 FROM sys.key_constraints
+    WHERE parent_object_id = OBJECT_ID(N'dbo.WhatsAppIntegration')
+      AND name = N'UQ_WhatsAppIntegration_Tenant_Integration'
+)
+    ALTER TABLE dbo.WhatsAppIntegration DROP CONSTRAINT UQ_WhatsAppIntegration_Tenant_Integration;
+
+ALTER TABLE dbo.WhatsAppIntegration ALTER COLUMN TenantId uniqueidentifier NOT NULL;
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes
+    WHERE object_id = OBJECT_ID(N'dbo.WhatsAppIntegration')
+      AND name = N'IX_WhatsAppIntegration_Tenant'
+)
+    CREATE INDEX IX_WhatsAppIntegration_Tenant
+        ON dbo.WhatsAppIntegration(TenantId, IsActive, IntegrationId);
+IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes
+    WHERE object_id = OBJECT_ID(N'dbo.WhatsAppIntegration')
+      AND name = N'UX_WhatsAppIntegration_Tenant_ActiveSlot'
+)
+    CREATE UNIQUE INDEX UX_WhatsAppIntegration_Tenant_ActiveSlot
+        ON dbo.WhatsAppIntegration(TenantId, ActiveSlot)
+        WHERE IsActive = 1;
+IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes
+    WHERE object_id = OBJECT_ID(N'dbo.WhatsAppIntegration')
+      AND name = N'UX_WhatsAppIntegration_Tenant_PhoneNumberId_Active'
+)
+    CREATE UNIQUE INDEX UX_WhatsAppIntegration_Tenant_PhoneNumberId_Active
+        ON dbo.WhatsAppIntegration(TenantId, PhoneNumberId)
+        WHERE IsActive = 1 AND PhoneNumberId IS NOT NULL;
+IF NOT EXISTS (
+    SELECT 1 FROM sys.key_constraints
+    WHERE parent_object_id = OBJECT_ID(N'dbo.WhatsAppIntegration')
+      AND name = N'UQ_WhatsAppIntegration_Tenant_Integration'
+)
+    ALTER TABLE dbo.WhatsAppIntegration ADD CONSTRAINT UQ_WhatsAppIntegration_Tenant_Integration
+        UNIQUE (TenantId, IntegrationId);
 IF EXISTS (SELECT 1 FROM dbo.BotConfiguration WHERE TenantId IS NULL)
     THROW 51013, N'A bot configuration was left without a Tenant during migration.', 1;
 IF EXISTS (SELECT 1 FROM dbo.FrequentResponse WHERE TenantId IS NULL)

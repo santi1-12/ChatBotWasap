@@ -17,6 +17,8 @@ public sealed class WebhookInboxRepository(StoredProcedureExecutor executor) : I
                 new SqlParameter("@EventKey", SqlDbType.NVarChar, 256) { Value = webhookEvent.EventKey },
                 new SqlParameter("@EventType", SqlDbType.NVarChar, 80) { Value = webhookEvent.EventType },
                 new SqlParameter("@PhoneNumberId", SqlDbType.NVarChar, 64) { Value = webhookEvent.PhoneNumberId },
+                new SqlParameter("@WabaId", SqlDbType.NVarChar, 64)
+                    { Value = (object?)webhookEvent.WabaId ?? DBNull.Value },
                 new SqlParameter("@NormalizedEventJson", SqlDbType.NVarChar, -1)
                     { Value = JsonSerializer.Serialize(webhookEvent) }
             ],

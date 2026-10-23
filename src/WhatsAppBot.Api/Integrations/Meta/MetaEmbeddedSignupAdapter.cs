@@ -133,7 +133,13 @@ public sealed class MetaEmbeddedSignupAdapter(
                 phone.VerifiedName,
                 tokenReference,
                 "Meta:AppSecret",
-                "Meta:VerifyToken");
+                "Meta:VerifyToken")
+            {
+                TenantId = integration.TenantId
+                    ?? throw new InvalidOperationException("The WhatsApp integration is not assigned to a Tenant."),
+                OnboardingType = onboardingType,
+                EffectiveEmbeddedSignupConfigId = signupConfigId!
+            };
         }
         catch (MetaApiException exception)
         {

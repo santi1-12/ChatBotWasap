@@ -28,11 +28,15 @@ public sealed class WhatsAppIntegrationRepository(
             "dbo.sp_WhatsAppIntegration_SaveSignupResult",
             [
                 new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier) { Value = result.IntegrationId },
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = result.TenantId },
                 new SqlParameter("@WabaId", SqlDbType.NVarChar, 64) { Value = result.WabaId },
                 new SqlParameter("@PhoneNumberId", SqlDbType.NVarChar, 64) { Value = result.PhoneNumberId },
                 new SqlParameter("@BusinessPhoneNumber", SqlDbType.NVarChar, 32) { Value = result.BusinessPhoneNumber },
                 new SqlParameter("@DisplayName", SqlDbType.NVarChar, 256)
                     { Value = (object?)result.DisplayName ?? DBNull.Value },
+                new SqlParameter("@OnboardingType", SqlDbType.NVarChar, 16) { Value = result.OnboardingType.ToString() },
+                new SqlParameter("@EffectiveEmbeddedSignupConfigId", SqlDbType.NVarChar, 128)
+                    { Value = result.EffectiveEmbeddedSignupConfigId },
                 new SqlParameter("@AccessTokenSecretRef", SqlDbType.NVarChar, 512)
                     { Value = result.AccessTokenSecretRef },
                 new SqlParameter("@MetaAppSecretRef", SqlDbType.NVarChar, 512)
@@ -42,23 +46,33 @@ public sealed class WhatsAppIntegrationRepository(
             ],
             cancellationToken);
 
-    public Task SetConnectionStateAsync(
-        Guid integrationId, ConnectionState state, string? safeErrorCode, CancellationToken cancellationToken) =>
-        executor.ExecuteAsync(
+    public async Task SetConnectionStateAsync(
+        Guid integrationId, ConnectionState state, string? safeErrorCode, CancellationToken cancellationToken)
+    {
+        var tenantId = (await tenantContext.GetRequiredAsync(cancellationToken)).TenantId;
+        await executor.ExecuteAsync(
             "dbo.sp_WhatsAppIntegration_SetConnectionState",
             [
                 new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier) { Value = integrationId },
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId },
                 new SqlParameter("@ConnectionState", SqlDbType.NVarChar, 32) { Value = state.ToString() },
                 new SqlParameter("@SafeErrorCode", SqlDbType.NVarChar, 100)
                     { Value = (object?)safeErrorCode ?? DBNull.Value }
             ],
             cancellationToken);
+    }
 
-    public Task DisconnectAsync(Guid integrationId, CancellationToken cancellationToken) =>
-        executor.ExecuteAsync(
+    public async Task DisconnectAsync(Guid integrationId, CancellationToken cancellationToken)
+    {
+        var tenantId = (await tenantContext.GetRequiredAsync(cancellationToken)).TenantId;
+        await executor.ExecuteAsync(
             "dbo.sp_WhatsAppIntegration_Disconnect",
-            [new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier) { Value = integrationId }],
+            [
+                new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier) { Value = integrationId },
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId }
+            ],
             cancellationToken);
+    }
 
     private static WhatsAppIntegration Map(SqlDataReader reader) =>
         new(
@@ -72,6 +86,10 @@ public sealed class WhatsAppIntegrationRepository(
             reader.GetBoolean(reader.GetOrdinal("IsActive")))
         {
             TenantId = GetNullableGuid(reader, "TenantId"),
+            OnboardingType = GetNullableString(reader, "OnboardingType") is { } onboardingType
+                ? Enum.Parse<WhatsAppOnboardingType>(onboardingType, false)
+                : null,
+            EffectiveEmbeddedSignupConfigId = GetNullableString(reader, "EffectiveEmbeddedSignupConfigId"),
             LastConnectionErrorCode = GetNullableString(reader, "LastConnectionErrorCode"),
             AccessTokenSecretRef = GetNullableString(reader, "AccessTokenSecretRef"),
             MetaAppSecretRef = GetNullableString(reader, "MetaAppSecretRef"),

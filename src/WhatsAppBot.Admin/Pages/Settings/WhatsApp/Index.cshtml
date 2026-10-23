@@ -67,6 +67,10 @@
             <dd class="col-sm-8"><code>@integration.WabaId</code></dd>
             <dt class="col-sm-4">Phone Number ID</dt>
             <dd class="col-sm-8"><code>@integration.PhoneNumberId</code></dd>
+            <dt class="col-sm-4">Modalidad</dt>
+            <dd class="col-sm-8">@(integration.OnboardingType?.ToString() ?? "No confirmada")</dd>
+            <dt class="col-sm-4">Conectado desde</dt>
+            <dd class="col-sm-8">@(integration.ConnectedAtUtc?.ToLocalTime().ToString("g") ?? "No confirmado")</dd>
             <dt class="col-sm-4">Bot</dt>
             <dd class="col-sm-8">@(integration.BotEnabled ? "Activo" : "Inactivo")</dd>
         </dl>

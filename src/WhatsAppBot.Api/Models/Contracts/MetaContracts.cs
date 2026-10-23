@@ -28,7 +28,12 @@ public sealed record MetaSignupResult(
     string? DisplayName,
     string AccessTokenSecretRef,
     string MetaAppSecretRef,
-    string WebhookVerifyTokenRef);
+    string WebhookVerifyTokenRef)
+{
+    public Guid TenantId { get; init; }
+    public WhatsAppOnboardingType OnboardingType { get; init; }
+    public string EffectiveEmbeddedSignupConfigId { get; init; } = string.Empty;
+}
 
 public sealed record MetaPhoneNumberSummary(string PhoneNumberId);
 
@@ -80,6 +85,11 @@ public static class MessageOutcomeCodes
     public const string BotDisabled = "BotDisabled";
     public const string NoFrequentResponse = "NoFrequentResponse";
     public const string AiFallbackNotConfigured = "AiFallbackNotConfigured";
+    public const string AiConfigurationMissing = "AiConfigurationMissing";
+    public const string AiProviderTimeout = "AiProviderTimeout";
+    public const string AiProviderUnavailable = "AiProviderUnavailable";
+    public const string AiInvalidResponse = "AiInvalidResponse";
+    public const string AiUnableToResolve = "AiUnableToResolve";
     public const string UnsupportedMessageType = "UnsupportedMessageType";
     public const string MetaSendFailed = "MetaSendFailed";
     public const string ConversationInHumanMode = "ConversationInHumanMode";
@@ -91,6 +101,8 @@ public static class MessageOutcomeCodes
     public const string ManualReplyNotAuthorized = "ManualReplyNotAuthorized";
     public const string BlockingError = "BlockingError";
     public const string MetaDeliveryFailed = "MetaDeliveryFailed";
+    public const string MediaExpired = "MediaExpired";
+    public const string HandoffToHuman = "HandoffToHuman";
 }
 
 public static class MetaWebhookEventTypes

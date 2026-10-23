@@ -24,13 +24,15 @@ public sealed class MetaOptions
 public sealed class AiOptions
 {
     public const string SectionName = "OpenAI";
-    public string? ApiKey { get; init; }
+    public string ApiKeyReference { get; init; } = "OpenAI:ApiKey";
+    public string Endpoint { get; init; } = "https://api.openai.com/v1/chat/completions";
     public string? TextModel { get; init; }
     public string? ImageModel { get; init; }
     public string? TranscriptionModel { get; init; }
     public int RequestTimeoutSeconds { get; init; } = 60;
     public int MaxInputCharacters { get; init; } = 12000;
     public int MaxOutputTokens { get; init; } = 1000;
+    public int MaxOutputCharacters { get; init; } = 8000;
     public long MaxAudioBytes { get; init; } = 25_000_000;
     public long MaxImageBytes { get; init; } = 10_000_000;
 }

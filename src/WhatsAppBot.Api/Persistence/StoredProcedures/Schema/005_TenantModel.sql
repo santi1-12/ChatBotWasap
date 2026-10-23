@@ -97,6 +97,8 @@ IF COL_LENGTH(N'dbo.WhatsAppIntegration', N'TenantId') IS NULL
     ALTER TABLE dbo.WhatsAppIntegration ADD TenantId uniqueidentifier NULL;
 IF COL_LENGTH(N'dbo.WhatsAppIntegration', N'OnboardingType') IS NULL
     ALTER TABLE dbo.WhatsAppIntegration ADD OnboardingType nvarchar(16) NULL;
+IF COL_LENGTH(N'dbo.WhatsAppIntegration', N'EffectiveEmbeddedSignupConfigId') IS NULL
+    ALTER TABLE dbo.WhatsAppIntegration ADD EffectiveEmbeddedSignupConfigId nvarchar(128) NULL;
 IF COL_LENGTH(N'dbo.BotConfiguration', N'TenantId') IS NULL
     ALTER TABLE dbo.BotConfiguration ADD TenantId uniqueidentifier NULL;
 IF COL_LENGTH(N'dbo.FrequentResponse', N'TenantId') IS NULL

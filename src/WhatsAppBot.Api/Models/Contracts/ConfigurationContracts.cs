@@ -53,6 +53,16 @@ public sealed class ExternalDependencyException(string safeCode, bool isTransien
     public bool IsTransient { get; } = isTransient;
 }
 
+public sealed class AiGenerationException(
+    string safeCode,
+    bool isTransient,
+    string handoffReasonCode) : Exception("The AI provider could not generate a safe reply.")
+{
+    public string SafeCode { get; } = safeCode;
+    public bool IsTransient { get; } = isTransient;
+    public string HandoffReasonCode { get; } = handoffReasonCode;
+}
+
 public static class ReplyModeRules
 {
     public static bool IsSupported(BotReplyMode mode) => Enum.IsDefined(mode);

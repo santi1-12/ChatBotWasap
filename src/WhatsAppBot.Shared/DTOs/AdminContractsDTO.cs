@@ -20,6 +20,7 @@ public sealed class WhatsAppIntegrationDTO
     public string? MetaAppId { get; init; }
     public string? EmbeddedSignupConfigId { get; init; }
     public string? CoexistenceEmbeddedSignupConfigId { get; init; }
+    public string? EffectiveEmbeddedSignupConfigId { get; init; }
     public string? MetaGraphApiVersion { get; init; }
 }
 

@@ -12,6 +12,7 @@ public sealed class WebhookInboxIdempotencyTests(LocalDbFixture fixture)
     {
         var eventKey = $"test:{Guid.NewGuid():N}";
         var phoneNumberId = $"test-{Guid.NewGuid():N}";
+        var wabaId = "test-waba";
         var temporaryIntegrationId = Guid.NewGuid();
         var ownsIntegration = false;
         await using var connection = new SqlConnection(fixture.ConnectionString);
@@ -29,13 +30,15 @@ public sealed class WebhookInboxIdempotencyTests(LocalDbFixture fixture)
             {
                 phoneNumberId = activeIntegration.Value.PhoneNumberId
                     ?? throw new InvalidOperationException("The active test integration has no phone number ID.");
+                wabaId = activeIntegration.Value.WabaId
+                    ?? throw new InvalidOperationException("The active test integration has no WABA ID.");
             }
 
             var webhookEvent = new NormalizedMetaEvent(
                 eventKey,
                 MetaWebhookEventTypes.DeliveryStatus,
                 phoneNumberId,
-                "test-waba",
+                wabaId,
                 null,
                 null,
                 $"wamid.{Guid.NewGuid():N}",
@@ -52,15 +55,16 @@ public sealed class WebhookInboxIdempotencyTests(LocalDbFixture fixture)
         }
     }
 
-    private static async Task<(Guid IntegrationId, string? PhoneNumberId)?> FindActiveIntegrationAsync(
+    private static async Task<(Guid IntegrationId, string? PhoneNumberId, string? WabaId)?> FindActiveIntegrationAsync(
         SqlConnection connection)
     {
         await using var command = new SqlCommand(
-            "SELECT TOP (1) IntegrationId, PhoneNumberId FROM dbo.WhatsAppIntegration WHERE IsActive = 1;",
+            "SELECT TOP (1) IntegrationId, PhoneNumberId, WabaId FROM dbo.WhatsAppIntegration WHERE IsActive = 1;",
             connection);
         await using var reader = await command.ExecuteReaderAsync();
         return await reader.ReadAsync()
-            ? (reader.GetGuid(0), reader.IsDBNull(1) ? null : reader.GetString(1))
+            ? (reader.GetGuid(0), reader.IsDBNull(1) ? null : reader.GetString(1),
+                reader.IsDBNull(2) ? null : reader.GetString(2))
             : null;
     }
 
@@ -69,11 +73,13 @@ public sealed class WebhookInboxIdempotencyTests(LocalDbFixture fixture)
     {
         await using var command = new SqlCommand(
             """
+            DECLARE @TenantId uniqueidentifier =
+                (SELECT TOP (1) TenantId FROM dbo.Tenant WHERE IsActive = 1 ORDER BY CreatedAtUtc, TenantId);
             INSERT dbo.WhatsAppIntegration
-                (IntegrationId, WabaId, PhoneNumberId, BusinessPhoneNumber, ConnectionState, IsActive)
-            VALUES (@IntegrationId, N'test-waba', @PhoneNumberId, N'+15550000000', N'Connected', 1);
-            INSERT dbo.BotConfiguration (IntegrationId, IsBotEnabled, ReplyMode)
-            VALUES (@IntegrationId, 0, N'FaqThenAi');
+                (IntegrationId, TenantId, WabaId, PhoneNumberId, BusinessPhoneNumber, ConnectionState, IsActive)
+            VALUES (@IntegrationId, @TenantId, N'test-waba', @PhoneNumberId, N'+15550000000', N'Connected', 1);
+            INSERT dbo.BotConfiguration (IntegrationId, TenantId, IsBotEnabled, ReplyMode)
+            VALUES (@IntegrationId, @TenantId, 0, N'FaqThenAi');
             """,
             connection);
         command.Parameters.Add(new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier)

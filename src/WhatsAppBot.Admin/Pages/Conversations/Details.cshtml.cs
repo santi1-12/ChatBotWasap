@@ -199,6 +199,11 @@ public sealed class DetailsModel(IWhatsAppBotApiClient apiClient) : PageModel
         "BotDisabled" => "El bot estaba desactivado",
         "NoFrequentResponse" => "No hubo respuesta frecuente aplicable",
         "AiFallbackNotConfigured" => "La IA de fallback no está configurada",
+        "AiConfigurationMissing" => "La configuración de IA no está disponible",
+        "AiProviderTimeout" => "La IA tardó más de lo permitido",
+        "AiProviderUnavailable" => "La IA no está disponible",
+        "AiInvalidResponse" => "La IA devolvió una respuesta no válida",
+        "AiUnableToResolve" => "La IA no pudo resolver la consulta",
         "UnsupportedMessageType" => "Tipo de mensaje no compatible",
         "MetaSendFailed" => "Meta no confirmó el envío",
         "MetaDeliveryFailed" => "Meta reportó fallo de entrega",
@@ -210,6 +215,8 @@ public sealed class DetailsModel(IWhatsAppBotApiClient apiClient) : PageModel
         "ManualReplyRequiresHuman" => "La respuesta manual requiere atención humana",
         "ManualReplyNotAuthorized" => "El administrador no está autorizado para responder",
         "BlockingError" => "El procesamiento automático fue bloqueado",
+        "MediaExpired" => "El contenido multimedia expiró",
+        "HandoffToHuman" => "La conversación requiere atención humana",
         _ => null
     };
 

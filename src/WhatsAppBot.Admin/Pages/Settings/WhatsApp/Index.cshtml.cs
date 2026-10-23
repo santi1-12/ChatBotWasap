@@ -114,7 +114,9 @@ public sealed class IndexModel(IWhatsAppBotApiClient apiClient) : PageModel
     }
 
     public string ConnectionLabel(ConnectionState? state) =>
-        state == ConnectionState.Connected && !IsConnected
+        !ApiResponseAvailable
+            ? "Estado no disponible"
+            : state == ConnectionState.Connected && !IsConnected
             ? "Error"
             : state switch
     {
@@ -169,8 +171,11 @@ public sealed class IndexModel(IWhatsAppBotApiClient apiClient) : PageModel
         !string.IsNullOrWhiteSpace(integration.WabaId) &&
         !string.IsNullOrWhiteSpace(integration.PhoneNumberId) &&
         !string.IsNullOrWhiteSpace(integration.BusinessPhoneNumber) &&
+        integration.TenantId.HasValue &&
+        integration.OnboardingType.HasValue &&
         integration.HasCredentialReference &&
-        integration.ConnectedAtUtc.HasValue;
+        integration.ConnectedAtUtc.HasValue &&
+        string.IsNullOrWhiteSpace(integration.ConnectionErrorCode);
 
     private static string? ConnectionErrorMessage(string? errorCode) => errorCode switch
     {

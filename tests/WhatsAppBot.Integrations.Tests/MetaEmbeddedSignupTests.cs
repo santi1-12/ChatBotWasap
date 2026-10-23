@@ -27,6 +27,9 @@ public sealed class MetaEmbeddedSignupTests
         Assert.Equal("waba-1", result.WabaId);
         Assert.Equal("phone-1", result.PhoneNumberId);
         Assert.Equal("secret-ref-123", result.AccessTokenSecretRef);
+        Assert.Equal(WhatsAppOnboardingType.Standard, result.OnboardingType);
+        Assert.Equal("standard-config", result.EffectiveEmbeddedSignupConfigId);
+        Assert.NotEqual(Guid.Empty, result.TenantId);
         Assert.DoesNotContain("access-token-value", System.Text.Json.JsonSerializer.Serialize(result));
         Assert.Equal(["exchange", "verify-waba", "lookup-phone", "register-phone", "subscribe-waba"], cloud.Calls);
         Assert.Equal(1, secretStore.StoreCalls);
@@ -44,6 +47,8 @@ public sealed class MetaEmbeddedSignupTests
             WhatsAppOnboardingType.Coexistence, CancellationToken.None);
 
         Assert.Equal("phone-1", result.PhoneNumberId);
+        Assert.Equal(WhatsAppOnboardingType.Coexistence, result.OnboardingType);
+        Assert.Equal("coexistence-config", result.EffectiveEmbeddedSignupConfigId);
         Assert.Equal(
             ["exchange", "list-phone-numbers", "verify-waba", "lookup-phone", "subscribe-waba"],
             cloud.Calls);
@@ -239,8 +244,9 @@ public sealed class MetaEmbeddedSignupTests
     {
         private readonly WhatsAppIntegration integration = new(
             Guid.NewGuid(), null, null, null, null, ConnectionState.NotConnected, null, false);
+        private readonly Guid tenantId = Guid.NewGuid();
         public Task<WhatsAppIntegration> GetCurrentAsync(CancellationToken cancellationToken) =>
-            Task.FromResult(integration);
+            Task.FromResult(integration with { TenantId = tenantId });
         public Task<WhatsAppIntegration> GetByPhoneNumberIdAsync(
             string phoneNumberId, CancellationToken cancellationToken) => GetCurrentAsync(cancellationToken);
         public Task SaveSignupResultAsync(MetaSignupResult result, CancellationToken cancellationToken) =>

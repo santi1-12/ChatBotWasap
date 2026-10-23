@@ -225,6 +225,24 @@ public sealed class WhatsAppIntegrationCompletionTests
         Assert.Contains("no confirmó", page.ErrorMessage);
     }
 
+    [Theory]
+    [InlineData("CompletionCanceled")]
+    [InlineData("CompletionTimedOut")]
+    [InlineData("CompletionStateUnknown")]
+    public async Task Admin_DoesNotShowConnectedForUnconfirmedCompletionError(string errorCode)
+    {
+        var apiClient = new FakeAdminApiClient
+        {
+            CurrentResponse = Success(CreateIntegration(ConnectionState.Connected, errorCode))
+        };
+        var page = CreatePage(apiClient);
+
+        await page.OnGetAsync(CancellationToken.None);
+
+        Assert.False(page.IsConnected);
+        Assert.Equal("Error", page.ConnectionLabel(page.Integration?.ConnectionState));
+    }
+
     [Fact]
     public async Task Admin_ShowsSafeBackendFailureInsteadOfGenericSignupError()
     {
@@ -362,6 +380,9 @@ public sealed class WhatsAppIntegrationCompletionTests
         bool includeMetaConfiguration = true) =>
         new()
         {
+            TenantId = state == ConnectionState.Connected
+                ? Guid.Parse("11111111-1111-1111-1111-111111111111")
+                : null,
             WabaId = state == ConnectionState.Connected ? "waba-1" : null,
             PhoneNumberId = state == ConnectionState.Connected ? "phone-1" : null,
             BusinessPhoneNumber = state == ConnectionState.Connected ? "+15551234567" : null,
@@ -369,8 +390,10 @@ public sealed class WhatsAppIntegrationCompletionTests
             BotEnabled = false,
             ConnectedAtUtc = state == ConnectionState.Connected ? DateTimeOffset.UtcNow : null,
             HasCredentialReference = state == ConnectionState.Connected,
+            OnboardingType = state == ConnectionState.Connected ? WhatsAppOnboardingType.Standard : null,
             MetaAppId = includeMetaConfiguration ? "app-id" : null,
             EmbeddedSignupConfigId = includeMetaConfiguration ? "standard-config" : null,
+            EffectiveEmbeddedSignupConfigId = state == ConnectionState.Connected ? "standard-config" : null,
             MetaGraphApiVersion = includeMetaConfiguration ? "v24.0" : null,
             ConnectionErrorCode = connectionErrorCode
         };
@@ -463,6 +486,7 @@ public sealed class WhatsAppIntegrationCompletionTests
     {
         public WhatsAppIntegration Integration { get; private set; } = new(
             Guid.NewGuid(), null, null, null, null, ConnectionState.NotConnected, null, false);
+        private readonly Guid tenantId = Guid.NewGuid();
         public List<ConnectionState> StateChanges { get; } = [];
         public bool SkipSignupPersistence { get; init; }
         public bool StartUnknown { get; init; }
@@ -478,7 +502,7 @@ public sealed class WhatsAppIntegrationCompletionTests
                 });
             }
 
-            return Task.FromResult(Integration);
+            return Task.FromResult(Integration with { TenantId = tenantId });
         }
 
         public Task<WhatsAppIntegration> GetByPhoneNumberIdAsync(
@@ -497,6 +521,9 @@ public sealed class WhatsAppIntegrationCompletionTests
                     ConnectionState = ConnectionState.Connected,
                     ConnectedAtUtc = DateTimeOffset.UtcNow,
                     IsActive = true,
+                    TenantId = result.TenantId,
+                    OnboardingType = result.OnboardingType,
+                    EffectiveEmbeddedSignupConfigId = result.EffectiveEmbeddedSignupConfigId,
                     AccessTokenSecretRef = result.AccessTokenSecretRef,
                     MetaAppSecretRef = result.MetaAppSecretRef,
                     WebhookVerifyTokenRef = result.WebhookVerifyTokenRef

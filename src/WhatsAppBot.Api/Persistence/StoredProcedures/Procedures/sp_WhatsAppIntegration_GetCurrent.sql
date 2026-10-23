@@ -7,9 +7,17 @@ CREATE OR ALTER PROCEDURE dbo.sp_WhatsAppIntegration_GetCurrent
 AS
 BEGIN
     SET NOCOUNT ON;
+    -- A tenant-less lookup is used by webhook routing. Reject ambiguous provider
+    -- identity without turning this routing guard into a global uniqueness rule.
+    IF @PhoneNumberId IS NOT NULL AND
+       (SELECT COUNT(*) FROM dbo.WhatsAppIntegration
+        WHERE PhoneNumberId = @PhoneNumberId AND IsActive = 1 AND ConnectionState = N'Connected') > 1
+        THROW 51003, 'The webhook phone number is connected to multiple active integrations.', 1;
+
     SELECT TOP (1)
         IntegrationId, TenantId, WabaId, PhoneNumberId, BusinessPhoneNumber, DisplayName,
-        ConnectionState, ConnectedAtUtc, LastConnectionErrorCode,
+        ConnectionState, ConnectedAtUtc, LastConnectionErrorCode, OnboardingType,
+        EffectiveEmbeddedSignupConfigId,
         AccessTokenSecretRef, MetaAppSecretRef, WebhookVerifyTokenRef,
         CreatedAtUtc, UpdatedAtUtc, IsActive
     FROM dbo.WhatsAppIntegration

@@ -663,6 +663,9 @@ components:
         coexistenceEmbeddedSignupConfigId:
           type: [string, 'null']
           description: Optional public configuration ID dedicated to Coexistence; the Standard configuration ID is the fallback.
+        effectiveEmbeddedSignupConfigId:
+          type: [string, 'null']
+          description: Effective public Embedded Signup configuration selected for the persisted modality.
         metaGraphApiVersion:
           type: string
           description: Configured Graph API version used by the Meta SDK.
@@ -905,7 +908,7 @@ components:
         outcomeCode:
           type: [string, 'null']
           description: Safe non-secret reason for a no-reply or rejected transition, including messaging policy blocks.
-          enum: [MessagingWindowClosed, TemplateRequired, BotDisabled, NoFrequentResponse, AiFallbackNotConfigured, UnsupportedMessageType, MetaSendFailed, MetaDeliveryFailed, ConversationInHumanMode, ConversationClosed, ConversationVersionConflict, IntegrationUnavailable, ManualSendFailed, ManualReplyRequiresHuman, ManualReplyNotAuthorized, BlockingError, MediaExpired, HandoffToHuman, null]
+          enum: [MessagingWindowClosed, TemplateRequired, BotDisabled, NoFrequentResponse, AiFallbackNotConfigured, AiConfigurationMissing, AiProviderTimeout, AiProviderUnavailable, AiInvalidResponse, AiUnableToResolve, UnsupportedMessageType, MetaSendFailed, MetaDeliveryFailed, ConversationInHumanMode, ConversationClosed, ConversationVersionConflict, IntegrationUnavailable, ManualSendFailed, ManualReplyRequiresHuman, ManualReplyNotAuthorized, BlockingError, MediaExpired, HandoffToHuman, null]
         deliveryState:
           type: [string, 'null']
           enum: [Pending, Sent, Delivered, Read, Failed, null]

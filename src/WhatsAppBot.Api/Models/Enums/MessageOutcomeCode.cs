@@ -11,6 +11,11 @@ public static class MessageOutcomeCodeRules
         MessageOutcomeCodes.BotDisabled => true,
         MessageOutcomeCodes.NoFrequentResponse => true,
         MessageOutcomeCodes.AiFallbackNotConfigured => true,
+        MessageOutcomeCodes.AiConfigurationMissing => true,
+        MessageOutcomeCodes.AiProviderTimeout => true,
+        MessageOutcomeCodes.AiProviderUnavailable => true,
+        MessageOutcomeCodes.AiInvalidResponse => true,
+        MessageOutcomeCodes.AiUnableToResolve => true,
         MessageOutcomeCodes.UnsupportedMessageType => true,
         MessageOutcomeCodes.MetaSendFailed => true,
         MessageOutcomeCodes.MetaDeliveryFailed => true,
@@ -22,6 +27,8 @@ public static class MessageOutcomeCodeRules
         MessageOutcomeCodes.ManualReplyRequiresHuman => true,
         MessageOutcomeCodes.ManualReplyNotAuthorized => true,
         MessageOutcomeCodes.BlockingError => true,
+        MessageOutcomeCodes.MediaExpired => true,
+        MessageOutcomeCodes.HandoffToHuman => true,
         _ => false
     };
 }

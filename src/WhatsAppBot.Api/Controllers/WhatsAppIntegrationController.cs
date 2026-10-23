@@ -90,6 +90,7 @@ public sealed class WhatsAppIntegrationController(
             MetaAppId = metaOptions.Value.AppId,
             EmbeddedSignupConfigId = metaOptions.Value.EmbeddedSignupConfigId,
             CoexistenceEmbeddedSignupConfigId = metaOptions.Value.EffectiveCoexistenceEmbeddedSignupConfigId,
+            EffectiveEmbeddedSignupConfigId = integration.EffectiveEmbeddedSignupConfigId,
             MetaGraphApiVersion = metaOptions.Value.GraphApiVersion
         };
     }

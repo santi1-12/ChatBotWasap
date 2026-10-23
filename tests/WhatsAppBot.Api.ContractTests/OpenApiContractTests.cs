@@ -45,6 +45,7 @@ public sealed class OpenApiContractTests
         var integration = Schema(document, "WhatsAppIntegrationDTO");
         Assert.True(HasProperty(integration, "tenantId"));
         Assert.True(HasProperty(integration, "onboardingType"));
+        Assert.True(HasProperty(integration, "effectiveEmbeddedSignupConfigId"));
 
         var action = Schema(document, "ConversationActionRequestDTO");
         Assert.True(HasRequired(action, "action"));

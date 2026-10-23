@@ -2,7 +2,8 @@ SET ANSI_NULLS ON;
 SET QUOTED_IDENTIFIER ON;
 GO
 CREATE OR ALTER PROCEDURE dbo.sp_WhatsAppIntegration_Disconnect
-    @IntegrationId uniqueidentifier
+    @IntegrationId uniqueidentifier,
+    @TenantId uniqueidentifier
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -13,6 +14,8 @@ BEGIN
         PhoneNumberId = NULL,
         BusinessPhoneNumber = NULL,
         DisplayName = NULL,
+        OnboardingType = NULL,
+        EffectiveEmbeddedSignupConfigId = NULL,
         ConnectionState = N'NotConnected',
         ConnectedAtUtc = NULL,
         LastConnectionErrorCode = NULL,
@@ -21,7 +24,8 @@ BEGIN
         WebhookVerifyTokenRef = NULL,
         IsActive = 0,
         UpdatedAtUtc = SYSUTCDATETIME()
-    WHERE IntegrationId = @IntegrationId;
+    WHERE IntegrationId = @IntegrationId AND TenantId = @TenantId;
+    IF @@ROWCOUNT = 0 THROW 51004, 'WhatsApp integration slot was not found for the Tenant.', 1;
     UPDATE dbo.BotConfiguration
     SET IsBotEnabled = 0, UpdatedAtUtc = SYSUTCDATETIME()
     WHERE IntegrationId = @IntegrationId;

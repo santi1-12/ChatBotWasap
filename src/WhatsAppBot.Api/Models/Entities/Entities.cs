@@ -30,10 +30,14 @@ public sealed record WhatsAppIntegration(Guid IntegrationId, string? WabaId, str
 {
     public Guid? TenantId { get; init; }
     public WhatsAppOnboardingType? OnboardingType { get; init; }
+    public string? EffectiveEmbeddedSignupConfigId { get; init; }
     public bool HasCompleteConnection =>
         ConnectionState == ConnectionState.Connected &&
         IsActive &&
+        TenantId.HasValue &&
+        OnboardingType.HasValue &&
         ConnectedAtUtc.HasValue &&
+        string.IsNullOrWhiteSpace(LastConnectionErrorCode) &&
         !string.IsNullOrWhiteSpace(WabaId) &&
         !string.IsNullOrWhiteSpace(PhoneNumberId) &&
         !string.IsNullOrWhiteSpace(BusinessPhoneNumber) &&

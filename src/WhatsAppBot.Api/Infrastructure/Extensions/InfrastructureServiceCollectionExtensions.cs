@@ -54,6 +54,11 @@ public static class InfrastructureServiceCollectionExtensions
                 "OpenAI:MaxInputCharacters must be between 1 and 1000000.")
             .Validate(options => options.MaxOutputTokens is >= 1 and <= 100_000,
                 "OpenAI:MaxOutputTokens must be between 1 and 100000.")
+            .Validate(options => options.MaxOutputCharacters is >= 1 and <= 1_000_000,
+                "OpenAI:MaxOutputCharacters must be between 1 and 1000000.")
+            .Validate(options => Uri.TryCreate(options.Endpoint, UriKind.Absolute, out var endpoint)
+                                 && endpoint.Scheme == Uri.UriSchemeHttps,
+                "OpenAI:Endpoint must be an absolute HTTPS URL.")
             .Validate(options => options.MaxAudioBytes is >= 1_024 and <= 100_000_000,
                 "OpenAI:MaxAudioBytes must be between 1024 and 100000000.")
             .Validate(options => options.MaxImageBytes is >= 1_024 and <= 100_000_000,

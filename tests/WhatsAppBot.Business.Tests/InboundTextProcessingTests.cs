@@ -3,6 +3,8 @@ using WhatsAppBot.Api.Business.Services;
 using WhatsAppBot.Api.Business.UseCases;
 using WhatsAppBot.Api.Models.Contracts;
 using WhatsAppBot.Api.Models.Entities;
+using WhatsAppBot.Api.Infrastructure.Options;
+using Microsoft.Extensions.Options;
 using WhatsAppBot.Shared.Enums;
 
 namespace WhatsAppBot.Business.Tests;
@@ -48,7 +50,7 @@ public sealed class InboundTextProcessingTests
 
         Assert.Equal(1, fixture.Messages.InboundPersisted);
         Assert.Equal(0, fixture.Outbox.CreateCalls);
-        Assert.Equal(MessageOutcomeCodes.AiFallbackNotConfigured, fixture.Messages.OutcomeCode);
+        Assert.Equal(MessageOutcomeCodes.AiConfigurationMissing, fixture.Messages.OutcomeCode);
         Assert.Equal(mode == BotReplyMode.AiOnly ? 0 : 1, fixture.FaqRepository.CandidateQueries);
     }
 
@@ -61,7 +63,91 @@ public sealed class InboundTextProcessingTests
 
         Assert.Equal(0, fixture.FaqRepository.CandidateQueries);
         Assert.Equal(0, fixture.Outbox.CreateCalls);
-        Assert.Equal(MessageOutcomeCodes.AiFallbackNotConfigured, fixture.Messages.OutcomeCode);
+        Assert.Equal(MessageOutcomeCodes.AiConfigurationMissing, fixture.Messages.OutcomeCode);
+    }
+
+    [Fact]
+    public async Task FaqThenAiMiss_UsesProviderReplyAndPersistsAiCandidate()
+    {
+        var fixture = new Fixture(BotReplyMode.FaqThenAi, hasMatch: false, hoursAgo: 1, aiReply: "AI answer");
+
+        await fixture.Processor.ProcessAsync(fixture.Inbound, CancellationToken.None);
+
+        Assert.Equal(1, fixture.Ai.Calls);
+        Assert.Equal([ReplySource.AI], fixture.Outbox.Sources);
+        Assert.Equal(["AI answer"], fixture.Outbox.Texts);
+        Assert.Null(fixture.Messages.OutcomeCode);
+    }
+
+    [Fact]
+    public async Task HumanConversation_DoesNotEvaluateFaqOrAi()
+    {
+        var fixture = new Fixture(
+            BotReplyMode.FaqThenAi,
+            hasMatch: true,
+            hoursAgo: 1,
+            attentionMode: AttentionMode.Humano,
+            aiReply: "must not be used");
+
+        await fixture.Processor.ProcessAsync(fixture.Inbound, CancellationToken.None);
+
+        Assert.Equal(0, fixture.FaqRepository.CandidateQueries);
+        Assert.Equal(0, fixture.Ai.Calls);
+        Assert.Equal(0, fixture.Outbox.CreateCalls);
+        Assert.Equal(MessageOutcomeCodes.ConversationInHumanMode, fixture.Messages.OutcomeCode);
+    }
+
+    [Fact]
+    public async Task HumanTakeoverWhileAiIsProcessing_DoesNotCreateOutbox()
+    {
+        var fixture = new Fixture(
+            BotReplyMode.AiOnly,
+            hasMatch: false,
+            hoursAgo: 1,
+            aiReply: "must not be sent");
+        fixture.Ai.OnGenerate = () => fixture.Conversations.AttentionMode = AttentionMode.Humano;
+
+        await fixture.Processor.ProcessAsync(fixture.Inbound, CancellationToken.None);
+
+        Assert.Equal(1, fixture.Ai.Calls);
+        Assert.Equal(0, fixture.Outbox.CreateCalls);
+        Assert.Equal(MessageOutcomeCodes.ConversationInHumanMode, fixture.Messages.OutcomeCode);
+    }
+
+    [Fact]
+    public async Task AiTimeout_HandoffsWithoutFabricatingAnOutboundReply()
+    {
+        var fixture = new Fixture(
+            BotReplyMode.AiOnly,
+            hasMatch: false,
+            hoursAgo: 1,
+            aiFailure: new AiGenerationException(
+                MessageOutcomeCodes.AiProviderTimeout,
+                true,
+                ConversationHandoffReasonCodes.BlockingError));
+
+        await fixture.Processor.ProcessAsync(fixture.Inbound, CancellationToken.None);
+
+        Assert.Equal(0, fixture.Outbox.CreateCalls);
+        Assert.Equal(MessageOutcomeCodes.AiProviderTimeout, fixture.Messages.OutcomeCode);
+        Assert.Equal([ConversationHandoffReasonCodes.BlockingError], fixture.Handoff.Reasons);
+    }
+
+    [Fact]
+    public async Task DuplicateInboundEvent_DoesNotRepeatAiOrOutboxWork()
+    {
+        var fixture = new Fixture(
+            BotReplyMode.AiOnly,
+            hasMatch: false,
+            hoursAgo: 1,
+            aiReply: "must not be used",
+            inboundAlreadyPersisted: true);
+
+        await fixture.Processor.ProcessAsync(fixture.Inbound, CancellationToken.None);
+
+        Assert.Equal(0, fixture.Ai.Calls);
+        Assert.Equal(0, fixture.Outbox.CreateCalls);
+        Assert.Null(fixture.Messages.OutcomeCode);
     }
 
     [Fact]
@@ -112,7 +198,15 @@ public sealed class InboundTextProcessingTests
 
     private sealed class Fixture
     {
-        public Fixture(BotReplyMode mode, bool hasMatch, int hoursAgo, bool botEnabled = true)
+        public Fixture(
+            BotReplyMode mode,
+            bool hasMatch,
+            int hoursAgo,
+            bool botEnabled = true,
+            string? aiReply = null,
+            AttentionMode attentionMode = AttentionMode.Bot,
+            AiGenerationException? aiFailure = null,
+            bool inboundAlreadyPersisted = false)
         {
             var integrationId = Guid.NewGuid();
             Configuration = new FakeBotConfigurationService(new BotConfiguration(integrationId, botEnabled, mode));
@@ -124,8 +218,11 @@ public sealed class InboundTextProcessingTests
             });
             Contacts = new FakeContactRepository();
             Conversations = new FakeConversationRepository();
-            Messages = new FakeMessageRepository();
+            Conversations.AttentionMode = attentionMode;
+            Messages = new FakeMessageRepository { Inserted = !inboundAlreadyPersisted };
             Outbox = new FakeOutboxRepository();
+            Ai = new FakeAiReplyGenerator(aiReply, aiFailure);
+            Handoff = new FakeHandoffService();
             FaqRepository = new FakeFrequentResponseRepository(hasMatch
                 ? [new FrequentResponseRecord(
                     new FrequentResponse(7, integrationId, "hours", "We are open 9 to 5", 10, null, true),
@@ -133,8 +230,9 @@ public sealed class InboundTextProcessingTests
                 : []);
             var resolver = new BotReplyResolver(FaqRepository, new FrequentResponseMatcher());
             Processor = new ProcessInboundText(
-                Integration, Contacts, Conversations, Messages, Configuration, resolver, Outbox,
-                new WhatsAppMessagingPolicy(), new FakeClock(Now), new FakeHandoffService());
+                Integration, Contacts, Conversations, Messages, Conversations, Configuration, resolver,
+                Ai, new AiContextBuilder(), Options.Create(new AiOptions()), Outbox,
+                new WhatsAppMessagingPolicy(), new FakeClock(Now), Handoff);
             Inbound = InboundEvent(Now.AddHours(-hoursAgo));
         }
 
@@ -143,6 +241,8 @@ public sealed class InboundTextProcessingTests
         public FakeConversationRepository Conversations { get; }
         public FakeMessageRepository Messages { get; }
         public FakeOutboxRepository Outbox { get; }
+        public FakeAiReplyGenerator Ai { get; }
+        public FakeHandoffService Handoff { get; }
         public FakeFrequentResponseRepository FaqRepository { get; }
         public FakeBotConfigurationService Configuration { get; }
         public ProcessInboundText Processor { get; }
@@ -178,8 +278,10 @@ public sealed class InboundTextProcessingTests
             Task.FromResult(5L);
     }
 
-    private sealed class FakeConversationRepository : IConversationRepository
+    private sealed class FakeConversationRepository : IConversationRepository, IConversationStateRepository
     {
+        public AttentionMode AttentionMode { get; set; } = AttentionMode.Bot;
+
         public Task<long> GetOrCreateAsync(
             Guid integrationId, Guid tenantId, long contactId, DateTimeOffset lastMessageAtUtc,
             bool isBotEnabled,
@@ -188,19 +290,54 @@ public sealed class InboundTextProcessingTests
         public Task<ConversationPage> ListAsync(
             Guid integrationId, int page, int pageSize, CancellationToken cancellationToken) =>
             throw new NotImplementedException();
+
+        public Task<ConversationStateRecord?> GetStateAsync(
+            Guid tenantId, long conversationId, CancellationToken cancellationToken) =>
+            Task.FromResult<ConversationStateRecord?>(new ConversationStateRecord(
+                tenantId, conversationId, AttentionMode, LifecycleStatus.Abierta, null, "AQ=="));
+    }
+
+    private sealed class FakeAiReplyGenerator(string? reply, AiGenerationException? failure) : IAiReplyGenerator
+    {
+        public int Calls { get; private set; }
+        public Action? OnGenerate { get; set; }
+
+        public Task<string> GenerateReplyAsync(string prompt, CancellationToken cancellationToken)
+        {
+            Calls++;
+            OnGenerate?.Invoke();
+            if (failure is not null)
+            {
+                return Task.FromException<string>(failure);
+            }
+
+            return reply is not null
+                ? Task.FromResult(reply)
+                : Task.FromException<string>(new AiGenerationException(
+                    MessageOutcomeCodes.AiConfigurationMissing,
+                    false,
+                    ConversationHandoffReasonCodes.BlockingError));
+        }
     }
 
     private sealed class FakeHandoffService : IConversationHandoffService
     {
+        public List<string> Reasons { get; } = [];
+
         public Task<bool> TryHandoffAsync(
             Guid tenantId, long conversationId, string reasonCode,
-            CancellationToken cancellationToken) => Task.FromResult(true);
+            CancellationToken cancellationToken)
+        {
+            Reasons.Add(reasonCode);
+            return Task.FromResult(true);
+        }
     }
 
     private sealed class FakeMessageRepository : IMessageRepository
     {
         public int InboundPersisted { get; private set; }
         public string? OutcomeCode { get; private set; }
+        public bool Inserted { get; init; } = true;
 
         public Task<ConversationDetailRecord?> GetHistoryAsync(
             Guid integrationId,
@@ -208,14 +345,14 @@ public sealed class InboundTextProcessingTests
             long? beforeMessageId,
             int pageSize,
             CancellationToken cancellationToken) =>
-            throw new NotImplementedException();
+            Task.FromResult<ConversationDetailRecord?>(null);
 
         public Task<InboundMessageInsertResult> InsertInboundAsync(
             Guid integrationId, long conversationId, NormalizedMetaEvent inboundEvent,
             CancellationToken cancellationToken)
         {
             InboundPersisted++;
-            return Task.FromResult(new InboundMessageInsertResult(true, 9));
+            return Task.FromResult(new InboundMessageInsertResult(Inserted, 9));
         }
 
         public Task SetProcessingOutcomeAsync(
@@ -245,11 +382,16 @@ public sealed class InboundTextProcessingTests
     private sealed class FakeOutboxRepository : IMessageOutboxRepository
     {
         public int CreateCalls { get; private set; }
+        public List<ReplySource> Sources { get; } = [];
+        public List<string> Texts { get; } = [];
+
         public Task<OutboundMessageInsertResult> CreatePendingAsync(
             long inboundMessageId, Guid integrationId, long conversationId, string text,
             ReplySource source, long? frequentResponseId, CancellationToken cancellationToken)
         {
             CreateCalls++;
+            Sources.Add(source);
+            Texts.Add(text);
             return Task.FromResult(new OutboundMessageInsertResult(true, 10, null));
         }
 

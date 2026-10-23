@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using WhatsAppBot.Api.Business.Abstractions;
 using WhatsAppBot.Api.Infrastructure.Options;
 using WhatsAppBot.Api.Integrations.Meta;
+using WhatsAppBot.Api.Integrations.OpenAI;
 
 namespace WhatsAppBot.Api.Integrations.Extensions;
 
@@ -24,6 +25,7 @@ public static class IntegrationsServiceCollectionExtensions
         services.AddSingleton<IMetaWebhookSignatureValidator, MetaWebhookSignatureValidator>();
         services.AddSingleton<IMetaWebhookChallengeValidator, MetaWebhookChallengeValidator>();
         services.AddSingleton<IMetaWebhookEventParser, MetaWebhookEventParser>();
+        services.AddOpenAi();
         return services;
     }
 }

@@ -1,7 +1,9 @@
 using WhatsAppBot.Api.Business.Abstractions;
 using WhatsAppBot.Api.Models.Contracts;
 using WhatsAppBot.Api.Business.Services;
+using WhatsAppBot.Api.Infrastructure.Options;
 using WhatsAppBot.Shared.Enums;
+using Microsoft.Extensions.Options;
 
 namespace WhatsAppBot.Api.Business.UseCases;
 
@@ -10,8 +12,12 @@ public sealed class ProcessInboundText(
     IContactRepository contactRepository,
     IConversationRepository conversationRepository,
     IMessageRepository messageRepository,
+    IConversationStateRepository conversationStateRepository,
     IBotConfigurationService botConfigurationService,
     IBotReplyResolver replyResolver,
+    IAiReplyGenerator aiReplyGenerator,
+    AiContextBuilder aiContextBuilder,
+    IOptions<AiOptions> aiOptions,
     IMessageOutboxRepository outboxRepository,
     IWhatsAppMessagingPolicy messagingPolicy,
     IClock clock,
@@ -59,6 +65,35 @@ public sealed class ProcessInboundText(
 
         var inboundMessage = await messageRepository.InsertInboundAsync(
             integration.IntegrationId, conversationId, inboundEvent, cancellationToken);
+        if (!inboundMessage.Inserted)
+        {
+            return;
+        }
+
+        var state = await conversationStateRepository.GetStateAsync(
+            tenantId, conversationId, cancellationToken);
+        if (state is null)
+        {
+            await messageRepository.SetProcessingOutcomeAsync(
+                inboundMessage.MessageId, ProcessingState.NoReply, MessageOutcomeCodes.BlockingError, cancellationToken);
+            return;
+        }
+
+        if (state.AttentionMode == AttentionMode.Humano)
+        {
+            await messageRepository.SetProcessingOutcomeAsync(
+                inboundMessage.MessageId, ProcessingState.NoReply,
+                MessageOutcomeCodes.ConversationInHumanMode, cancellationToken);
+            return;
+        }
+
+        if (state.LifecycleStatus == LifecycleStatus.Cerrada)
+        {
+            await messageRepository.SetProcessingOutcomeAsync(
+                inboundMessage.MessageId, ProcessingState.NoReply,
+                MessageOutcomeCodes.ConversationClosed, cancellationToken);
+            return;
+        }
 
         if (!configuration.IsBotEnabled)
         {
@@ -113,14 +148,101 @@ public sealed class ProcessInboundText(
 
         if (resolution.Kind == BotReplyResolutionKind.AiFallbackRequired)
         {
-            await handoffService.TryHandoffAsync(
-                tenantId, conversationId,
-                ConversationHandoffReasonCodes.BotUnableToResolve, cancellationToken);
-            await messageRepository.SetProcessingOutcomeAsync(
+            string aiAnswer;
+            try
+            {
+                var history = await messageRepository.GetHistoryAsync(
+                    integration.IntegrationId, conversationId, inboundMessage.MessageId, 50, cancellationToken);
+                var prompt = aiContextBuilder.Build(
+                    inboundEvent.Text,
+                    history,
+                    aiOptions.Value.MaxInputCharacters);
+                aiAnswer = await aiReplyGenerator.GenerateReplyAsync(prompt, cancellationToken);
+            }
+            catch (AiGenerationException exception) when (!cancellationToken.IsCancellationRequested)
+            {
+                await handoffService.TryHandoffAsync(
+                    tenantId, conversationId, exception.HandoffReasonCode, cancellationToken);
+                await messageRepository.SetProcessingOutcomeAsync(
+                    inboundMessage.MessageId, ProcessingState.NoReply, exception.SafeCode, cancellationToken);
+                return;
+            }
+            catch (Exception) when (!cancellationToken.IsCancellationRequested)
+            {
+                await handoffService.TryHandoffAsync(
+                    tenantId, conversationId,
+                    ConversationHandoffReasonCodes.BlockingError, cancellationToken);
+                await messageRepository.SetProcessingOutcomeAsync(
+                    inboundMessage.MessageId, ProcessingState.NoReply,
+                    MessageOutcomeCodes.BlockingError, cancellationToken);
+                return;
+            }
+
+            var currentState = await conversationStateRepository.GetStateAsync(
+                tenantId, conversationId, cancellationToken);
+            if (currentState is null)
+            {
+                await messageRepository.SetProcessingOutcomeAsync(
+                    inboundMessage.MessageId, ProcessingState.NoReply,
+                    MessageOutcomeCodes.BlockingError, cancellationToken);
+                return;
+            }
+
+            if (currentState.AttentionMode == AttentionMode.Humano)
+            {
+                await messageRepository.SetProcessingOutcomeAsync(
+                    inboundMessage.MessageId, ProcessingState.NoReply,
+                    MessageOutcomeCodes.ConversationInHumanMode, cancellationToken);
+                return;
+            }
+
+            if (currentState.LifecycleStatus == LifecycleStatus.Cerrada)
+            {
+                await messageRepository.SetProcessingOutcomeAsync(
+                    inboundMessage.MessageId, ProcessingState.NoReply,
+                    MessageOutcomeCodes.ConversationClosed, cancellationToken);
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(aiAnswer))
+            {
+                await handoffService.TryHandoffAsync(
+                    tenantId, conversationId,
+                    ConversationHandoffReasonCodes.BotUnableToResolve, cancellationToken);
+                await messageRepository.SetProcessingOutcomeAsync(
+                    inboundMessage.MessageId, ProcessingState.NoReply,
+                    MessageOutcomeCodes.AiUnableToResolve, cancellationToken);
+                return;
+            }
+
+            var aiPolicy = messagingPolicy.Evaluate(inboundEvent.ProviderTimestampUtc.Value, clock.UtcNow);
+            if (!aiPolicy.IsAllowed)
+            {
+                await handoffService.TryHandoffAsync(
+                    tenantId, conversationId,
+                    ConversationHandoffReasonCodes.BusinessRule, cancellationToken);
+                await messageRepository.SetProcessingOutcomeAsync(
+                    inboundMessage.MessageId, ProcessingState.NoReply, aiPolicy.OutcomeCode, cancellationToken);
+                return;
+            }
+
+            var aiOutbound = await outboxRepository.CreatePendingAsync(
                 inboundMessage.MessageId,
-                ProcessingState.NoReply,
-                MessageOutcomeCodes.AiFallbackNotConfigured,
+                integration.IntegrationId,
+                conversationId,
+                aiAnswer,
+                ReplySource.AI,
+                null,
                 cancellationToken);
+            if (!aiOutbound.Inserted && aiOutbound.MessageId is null)
+            {
+                await messageRepository.SetProcessingOutcomeAsync(
+                    inboundMessage.MessageId,
+                    ProcessingState.NoReply,
+                    aiOutbound.OutcomeCode ?? MessageOutcomeCodes.MessagingWindowClosed,
+                    cancellationToken);
+            }
+
             return;
         }
 

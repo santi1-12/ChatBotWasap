@@ -191,10 +191,11 @@ ni el envío de mensajes del bot por WhatsApp real.
    responses are managed from the Configuration navigation.
 
 10. Use Configuración → Bot to activate/deactivate the bot and select `FaqOnly`, `FaqThenAi`,
-    or `AiOnly`. The default remains `FaqThenAi`; in the current local slice the OpenAI adapter
-    is not yet active and AI-required messages record a no-reply result rather than inventing
-    content. OpenAI is part of the approved POC target and requires the later live validation
-    gate described below.
+     or `AiOnly`. The default remains `FaqThenAi`; the OpenAI adapter is provider-neutral and
+     uses the configured secret reference only when AI is required. Without model/credential
+     configuration, AI-required messages record a safe outcome and hand off to Humano rather
+     than inventing content. Automated tests use a stub; real provider validation remains a
+     separate live gate.
 11. Use Configuración → WhatsApp Business and complete the official Embedded Signup flow. Select
     Standard or Coexistence explicitly. The backend exchanges the one-time code, validates a
     supplied Phone Number ID or discovers it only when the WABA match is unambiguous, stores the

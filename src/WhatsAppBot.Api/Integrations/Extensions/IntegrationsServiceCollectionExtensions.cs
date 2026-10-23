@@ -12,10 +12,10 @@ public static class IntegrationsServiceCollectionExtensions
     {
         services.AddSingleton<IRestClient>(provider =>
         {
-            var apiOptions = provider.GetRequiredService<IOptions<ApiOptions>>().Value;
+            var metaOptions = provider.GetRequiredService<IOptions<MetaOptions>>().Value;
             return new RestClient(new RestClientOptions("https://graph.facebook.com/")
             {
-                Timeout = TimeSpan.FromSeconds(apiOptions.RequestTimeoutSeconds)
+                Timeout = TimeSpan.FromSeconds(metaOptions.RequestTimeoutSeconds)
             });
         });
         services.AddScoped<IMetaCloudApiClient, MetaCloudApiClient>();

@@ -53,7 +53,7 @@ public sealed class MetaCloudApiClient(
         string accessToken, string wabaId, string phoneNumberId, CancellationToken cancellationToken)
     {
         string? after = null;
-        for (var page = 0; page < 10; page++)
+        for (var page = 0; page < options.Value.MaxPhoneNumberPages; page++)
         {
             var request = CreateRequest($"{Uri.EscapeDataString(wabaId)}/phone_numbers", Method.Get);
             request.AddQueryParameter("fields", "id");
@@ -99,7 +99,7 @@ public sealed class MetaCloudApiClient(
     {
         var numbers = new Dictionary<string, MetaPhoneNumberSummary>(StringComparer.Ordinal);
         string? after = null;
-        for (var page = 0; page < 10; page++)
+        for (var page = 0; page < options.Value.MaxPhoneNumberPages; page++)
         {
             var request = CreateRequest($"{Uri.EscapeDataString(wabaId)}/phone_numbers", Method.Get);
             request.AddQueryParameter("fields", "id");

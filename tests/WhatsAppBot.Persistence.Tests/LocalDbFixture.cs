@@ -1,6 +1,8 @@
 using Microsoft.Data.SqlClient;
 using WhatsAppBot.Api.Infrastructure.Database;
+using WhatsAppBot.Api.Infrastructure.Options;
 using WhatsAppBot.Api.Persistence.Repositories;
+using Microsoft.Extensions.Options;
 
 namespace WhatsAppBot.Persistence.Tests;
 
@@ -25,7 +27,8 @@ public sealed class LocalDbFixture
         }
 
         ConnectionString = connectionString;
-        Executor = new StoredProcedureExecutor(new SqlConnectionFactory(connectionString));
+        Executor = new StoredProcedureExecutor(
+            new SqlConnectionFactory(connectionString), Options.Create(new SqlOptions()));
         ConfigurationRepository = new BotConfigurationRepository(Executor);
         FrequentResponseRepository = new FrequentResponseRepository(Executor);
         WebhookInboxRepository = new WebhookInboxRepository(Executor);

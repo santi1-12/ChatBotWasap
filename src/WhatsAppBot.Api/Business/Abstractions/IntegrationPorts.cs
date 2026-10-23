@@ -135,6 +135,16 @@ public interface IProcessInboundText
     Task ProcessAsync(NormalizedMetaEvent inboundEvent, CancellationToken cancellationToken);
 }
 
+public interface IProcessInboundMedia
+{
+    Task ProcessAsync(NormalizedMetaEvent inboundEvent, CancellationToken cancellationToken);
+}
+
+public interface IProcessMetaDeliveryStatus
+{
+    Task ProcessAsync(NormalizedMetaEvent statusEvent, CancellationToken cancellationToken);
+}
+
 public interface IAcceptMetaWebhookEvent
 {
     Task AcceptAsync(IReadOnlyList<NormalizedMetaEvent> events, CancellationToken cancellationToken);

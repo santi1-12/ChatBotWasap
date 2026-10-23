@@ -9,6 +9,7 @@ using WhatsAppBot.Api.Infrastructure.Options;
 using WhatsAppBot.Api.Integrations.Meta;
 using WhatsAppBot.Api.Models.Contracts;
 using WhatsAppBot.Api.Webhooks;
+using WhatsAppBot.Shared.Enums;
 
 namespace WhatsAppBot.Api.ContractTests;
 
@@ -119,9 +120,10 @@ public sealed class MetaWebhookContractTests
         Assert.StartsWith("message:", text.EventKey);
         Assert.Equal(text.EventKey, Assert.Single(
             parser.Parse(Encoding.UTF8.GetBytes(body)), item => item.EventType == MetaWebhookEventTypes.InboundText).EventKey);
-        var unsupported = Assert.Single(parsed, item => item.EventType == "UnsupportedMessage");
-        Assert.Null(unsupported.Text);
-        Assert.DoesNotContain("media-secret", System.Text.Json.JsonSerializer.Serialize(unsupported));
+        var image = Assert.Single(parsed, item => item.EventType == MetaWebhookEventTypes.InboundImage);
+        Assert.Null(image.Text);
+        Assert.Equal("media-secret", image.MediaId);
+        Assert.Equal(MessageType.Image, image.MessageType);
         Assert.Contains(parsed, item => item.EventType == MetaWebhookEventTypes.DeliveryStatus);
     }
 
@@ -169,6 +171,37 @@ public sealed class MetaWebhookContractTests
         Assert.Equal(2, parsed.Count);
         Assert.Contains(parsed, item => item.EventType == MetaWebhookEventTypes.InboundText);
         Assert.Contains(parsed, item => item.EventType == MetaWebhookEventTypes.DeliveryStatus);
+    }
+
+    [Fact]
+    public void Parser_NormalizesAudioMetadataWithoutActivatingAudioProcessing()
+    {
+        var parser = new MetaWebhookEventParser();
+        const string body = """
+            {
+              "object":"whatsapp_business_account",
+              "entry":[{
+                "id":"waba-test",
+                "changes":[{
+                  "field":"messages",
+                  "value":{
+                    "metadata":{"phone_number_id":"phone-test"},
+                    "messages":[
+                      {"from":"15551234567","id":"wamid.audio-1","timestamp":"1790000000","type":"audio","audio":{"id":"media-audio","mime_type":"audio/ogg"}}
+                    ]
+                  }
+                }]
+              }]
+            }
+            """;
+
+        var audio = Assert.Single(parser.Parse(Encoding.UTF8.GetBytes(body)));
+
+        Assert.Equal(MetaWebhookEventTypes.InboundAudio, audio.EventType);
+        Assert.Equal(MessageType.Audio, audio.MessageType);
+        Assert.Equal("media-audio", audio.MediaId);
+        Assert.Equal("audio/ogg", audio.MediaMimeType);
+        Assert.Null(audio.Text);
     }
 
     private sealed class FakeSecretResolver : ISecretReferenceResolver

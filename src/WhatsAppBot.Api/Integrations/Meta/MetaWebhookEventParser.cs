@@ -4,11 +4,19 @@ using System.Text;
 using System.Text.Json;
 using WhatsAppBot.Api.Business.Abstractions;
 using WhatsAppBot.Api.Models.Contracts;
+using WhatsAppBot.Shared.Enums;
 
 namespace WhatsAppBot.Api.Integrations.Meta;
 
 public sealed class MetaWebhookEventParser : IMetaWebhookEventParser
 {
+    private static readonly HashSet<string> IgnoredFields = new(StringComparer.Ordinal)
+    {
+        "history",
+        "smb_app_state_sync",
+        "smb_message_echoes"
+    };
+
     public IReadOnlyList<NormalizedMetaEvent> Parse(ReadOnlyMemory<byte> payload)
     {
         using var document = JsonDocument.Parse(payload);
@@ -29,7 +37,9 @@ public sealed class MetaWebhookEventParser : IMetaWebhookEventParser
 
             foreach (var change in changes.EnumerateArray())
             {
-                if (!string.Equals(GetString(change, "field"), "messages", StringComparison.Ordinal))
+                var field = GetString(change, "field");
+                if (field is null || IgnoredFields.Contains(field) ||
+                    !string.Equals(field, "messages", StringComparison.Ordinal))
                 {
                     continue;
                 }
@@ -98,7 +108,51 @@ public sealed class MetaWebhookEventParser : IMetaWebhookEventParser
                                 providerMessageId,
                                 body,
                                 timestamp,
-                                null));
+                                null)
+                            {
+                                MessageType = MessageType.Text
+                            });
+                        }
+                        else if (string.Equals(type, "audio", StringComparison.Ordinal) ||
+                                 string.Equals(type, "image", StringComparison.Ordinal))
+                        {
+                            var media = message.TryGetProperty(type!, out var mediaObject) &&
+                                        mediaObject.ValueKind == JsonValueKind.Object
+                                ? mediaObject
+                                : throw new InvalidDataException("A Meta media message is missing its media object.");
+                            var mediaId = GetString(media, "id");
+                            var mimeType = GetString(media, "mime_type");
+                            var caption = GetString(media, "caption");
+                            if (string.IsNullOrWhiteSpace(mediaId) || mediaId.Length > 128 ||
+                                (mimeType is not null && mimeType.Length > 128) ||
+                                (caption is not null && caption.Length > 4096))
+                            {
+                                throw new InvalidDataException("A Meta media message contains invalid metadata.");
+                            }
+
+                            var messageType = string.Equals(type, "audio", StringComparison.Ordinal)
+                                ? MessageType.Audio
+                                : MessageType.Image;
+                            var eventType = messageType == MessageType.Audio
+                                ? MetaWebhookEventTypes.InboundAudio
+                                : MetaWebhookEventTypes.InboundImage;
+                            events.Add(new NormalizedMetaEvent(
+                                $"message:{BuildEventKey($"{phoneNumberId}:{providerMessageId}")}",
+                                eventType,
+                                phoneNumberId,
+                                wabaId,
+                                sender,
+                                contactName,
+                                providerMessageId,
+                                null,
+                                timestamp,
+                                null)
+                            {
+                                MessageType = messageType,
+                                MediaId = mediaId,
+                                MediaMimeType = mimeType,
+                                MediaCaption = caption
+                            });
                         }
                         else
                         {
@@ -112,7 +166,10 @@ public sealed class MetaWebhookEventParser : IMetaWebhookEventParser
                                 providerMessageId,
                                 null,
                                 timestamp,
-                                null));
+                                null)
+                            {
+                                MessageType = MessageType.Unsupported
+                            });
                         }
                     }
                 }
@@ -133,13 +190,18 @@ public sealed class MetaWebhookEventParser : IMetaWebhookEventParser
 
                         var rawTimestamp = GetString(status, "timestamp");
                         var timestamp = ParseTimestamp(rawTimestamp);
+                        var recipientId = GetString(status, "recipient_id");
+                        if (recipientId is { Length: > 64 })
+                        {
+                            throw new InvalidDataException("A Meta status event contains an invalid recipient identifier.");
+                        }
                         var unixTimestamp = timestamp.ToUnixTimeSeconds();
                         events.Add(new NormalizedMetaEvent(
                             $"status:{BuildEventKey($"{phoneNumberId}:{providerMessageId}:{statusValue}:{unixTimestamp}")}",
                             MetaWebhookEventTypes.DeliveryStatus,
                             phoneNumberId,
                             wabaId,
-                            null,
+                            recipientId,
                             null,
                             providerMessageId,
                             null,

@@ -12,7 +12,13 @@ public sealed record NormalizedMetaEvent(
     string? ProviderMessageId,
     string? Text,
     DateTimeOffset? ProviderTimestampUtc,
-    string? DeliveryStatus);
+    string? DeliveryStatus)
+{
+    public MessageType? MessageType { get; init; }
+    public string? MediaId { get; init; }
+    public string? MediaMimeType { get; init; }
+    public string? MediaCaption { get; init; }
+}
 
 public sealed record MetaSignupResult(
     Guid IntegrationId,
@@ -66,5 +72,8 @@ public static class MessageOutcomeCodes
 public static class MetaWebhookEventTypes
 {
     public const string InboundText = "InboundText";
+    public const string InboundAudio = "InboundAudio";
+    public const string InboundImage = "InboundImage";
     public const string DeliveryStatus = "DeliveryStatus";
+    public const string UnsupportedMessage = "UnsupportedMessage";
 }

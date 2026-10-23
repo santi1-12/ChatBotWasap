@@ -28,6 +28,8 @@ public static class BusinessServiceCollectionExtensions
         services.AddScoped<IWhatsAppIntegrationService, WhatsAppIntegrationService>();
         services.AddScoped<IAcceptMetaWebhookEvent, AcceptMetaWebhookEvent>();
         services.AddScoped<IProcessInboundText, ProcessInboundText>();
+        services.AddScoped<IProcessInboundMedia, PreserveInboundMedia>();
+        services.AddScoped<IProcessMetaDeliveryStatus, PreserveMetaDeliveryStatus>();
         services.AddScoped<MessageProcessingService>();
         services.AddHostedService<WebhookInboxWorker>();
         services.AddHostedService<MessageOutboxWorker>();

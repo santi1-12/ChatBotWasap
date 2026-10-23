@@ -59,8 +59,11 @@ public sealed class ProviderFailureTests
     {
         var repository = new RecordingWebhookInboxRepository();
         var services = new ServiceCollection();
+        services.AddLogging();
         services.AddScoped<IWebhookInboxRepository>(_ => repository);
         services.AddScoped<IProcessInboundText, FailingInboundTextProcessor>();
+        services.AddScoped<IProcessInboundMedia, PreserveInboundMedia>();
+        services.AddScoped<IProcessMetaDeliveryStatus, PreserveMetaDeliveryStatus>();
         services.AddScoped<MessageProcessingService>();
         await using var provider = services.BuildServiceProvider();
         var worker = new WebhookInboxWorker(

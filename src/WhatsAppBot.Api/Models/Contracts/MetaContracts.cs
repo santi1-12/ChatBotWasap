@@ -71,6 +71,8 @@ public sealed record ManualMessageInsertResult(
     string? OutcomeCode,
     DateTimeOffset? CreatedAtUtc);
 
+public sealed record DeliveryStatusApplyResult(bool Found, bool Applied, string? DeliveryState);
+
 public static class MessageOutcomeCodes
 {
     public const string MessagingWindowClosed = "MessagingWindowClosed";
@@ -86,6 +88,7 @@ public static class MessageOutcomeCodes
     public const string IntegrationUnavailable = "IntegrationUnavailable";
     public const string ManualSendFailed = "ManualSendFailed";
     public const string BlockingError = "BlockingError";
+    public const string MetaDeliveryFailed = "MetaDeliveryFailed";
 }
 
 public static class MetaWebhookEventTypes

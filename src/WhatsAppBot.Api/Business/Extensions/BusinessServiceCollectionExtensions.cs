@@ -32,7 +32,7 @@ public static class BusinessServiceCollectionExtensions
         services.AddScoped<IAcceptMetaWebhookEvent, AcceptMetaWebhookEvent>();
         services.AddScoped<IProcessInboundText, ProcessInboundText>();
         services.AddScoped<IProcessInboundMedia, PreserveInboundMedia>();
-        services.AddScoped<IProcessMetaDeliveryStatus, PreserveMetaDeliveryStatus>();
+        services.AddScoped<IProcessMetaDeliveryStatus, ApplyMessageStatus>();
         services.AddScoped<MessageProcessingService>();
         services.AddHostedService<WebhookInboxWorker>();
         services.AddHostedService<MessageOutboxWorker>();

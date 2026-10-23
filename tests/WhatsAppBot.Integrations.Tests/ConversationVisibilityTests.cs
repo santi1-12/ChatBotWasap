@@ -279,6 +279,9 @@ public sealed class ConversationVisibilityTests
         public Task SetProcessingOutcomeAsync(
             long messageId, ProcessingState state, string? safeOutcomeCode,
             CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<DeliveryStatusApplyResult> ApplyDeliveryStatusAsync(
+            NormalizedMetaEvent statusEvent, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
         public Task<IReadOnlyList<OutboundMessageWorkItem>> ClaimOutboxBatchAsync(
             int batchSize, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<OutboxRevalidationResult> RevalidateOutboxAsync(

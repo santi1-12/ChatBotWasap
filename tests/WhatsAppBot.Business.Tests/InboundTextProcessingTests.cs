@@ -222,6 +222,10 @@ public sealed class InboundTextProcessingTests
             return Task.CompletedTask;
         }
 
+        public Task<DeliveryStatusApplyResult> ApplyDeliveryStatusAsync(
+            NormalizedMetaEvent statusEvent, CancellationToken cancellationToken) =>
+            throw new NotImplementedException();
+
         public Task<IReadOnlyList<OutboundMessageWorkItem>> ClaimOutboxBatchAsync(
             int batchSize, CancellationToken cancellationToken) => throw new NotImplementedException();
         public Task<OutboxRevalidationResult> RevalidateOutboxAsync(

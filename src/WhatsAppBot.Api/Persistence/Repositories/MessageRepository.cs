@@ -152,6 +152,29 @@ public sealed class MessageRepository(StoredProcedureExecutor executor) : IMessa
             ],
             cancellationToken);
 
+    public async Task<DeliveryStatusApplyResult> ApplyDeliveryStatusAsync(
+        NormalizedMetaEvent statusEvent, CancellationToken cancellationToken) =>
+        await executor.QuerySingleAsync(
+            "dbo.sp_Message_ApplyDeliveryStatus",
+            [
+                new SqlParameter("@PhoneNumberId", SqlDbType.NVarChar, 64)
+                    { Value = statusEvent.PhoneNumberId },
+                new SqlParameter("@ProviderMessageId", SqlDbType.NVarChar, 256)
+                    { Value = statusEvent.ProviderMessageId! },
+                new SqlParameter("@DeliveryStatus", SqlDbType.NVarChar, 24)
+                    { Value = statusEvent.DeliveryStatus!.Trim().ToLowerInvariant() },
+                new SqlParameter("@ProviderTimestampUtc", SqlDbType.DateTime2)
+                    { Scale = 3, Value = statusEvent.ProviderTimestampUtc!.Value.UtcDateTime }
+            ],
+            reader => new DeliveryStatusApplyResult(
+                reader.GetBoolean(reader.GetOrdinal("Found")),
+                reader.GetBoolean(reader.GetOrdinal("Applied")),
+                reader.IsDBNull(reader.GetOrdinal("DeliveryState"))
+                    ? null
+                    : reader.GetString(reader.GetOrdinal("DeliveryState"))),
+            cancellationToken)
+        ?? throw new InvalidOperationException("The Meta delivery status did not return a result.");
+
     private static DetailRow MapDetailRow(SqlDataReader reader)
     {
         var summary = new ConversationSummaryRecord(

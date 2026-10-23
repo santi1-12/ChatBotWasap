@@ -137,6 +137,8 @@ IF COL_LENGTH(N'dbo.MessageOutbox', N'TenantId') IS NULL
     ALTER TABLE dbo.MessageOutbox ADD TenantId uniqueidentifier NULL;
 IF COL_LENGTH(N'dbo.MessageOutbox', N'ConversationVersion') IS NULL
     ALTER TABLE dbo.MessageOutbox ADD ConversationVersion binary(8) NULL;
+IF COL_LENGTH(N'dbo.Message', N'DeliveryStatusAtUtc') IS NULL
+    ALTER TABLE dbo.Message ADD DeliveryStatusAtUtc datetime2(3) NULL;
 GO
 
 UPDATE outbox

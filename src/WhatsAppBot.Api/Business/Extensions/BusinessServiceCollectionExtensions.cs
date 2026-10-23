@@ -23,6 +23,7 @@ public static class BusinessServiceCollectionExtensions
         services.AddScoped<IFrequentResponseService, FrequentResponseService>();
         services.AddScoped<IListConversations, ListConversations>();
         services.AddScoped<IGetConversationDetail, GetConversationDetail>();
+        services.AddScoped<IApplyConversationAction, ApplyConversationAction>();
         services.AddSingleton<FrequentResponseMatcher>();
         services.AddScoped<IBotReplyResolver, BotReplyResolver>();
         services.AddScoped<IWhatsAppIntegrationService, WhatsAppIntegrationService>();

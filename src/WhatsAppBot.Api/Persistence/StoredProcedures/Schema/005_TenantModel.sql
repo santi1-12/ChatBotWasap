@@ -52,6 +52,7 @@ BEGIN
         PreviousLifecycleStatus nvarchar(16) NULL,
         NewLifecycleStatus nvarchar(16) NULL,
         ActorType nvarchar(16) NOT NULL,
+        Origin nvarchar(32) NOT NULL,
         ActorAdminId bigint NULL,
         ReasonCode nvarchar(100) NULL,
         OccurredAtUtc datetime2(3) NOT NULL CONSTRAINT DF_ConversationAuditEvent_OccurredAt DEFAULT (SYSUTCDATETIME()),
@@ -73,8 +74,23 @@ BEGIN
         CONSTRAINT CK_ConversationAuditEvent_NewLifecycle CHECK
             (NewLifecycleStatus IS NULL OR NewLifecycleStatus IN (N'Abierta', N'Cerrada')),
         CONSTRAINT CK_ConversationAuditEvent_ActorType CHECK (ActorType IN (N'Admin', N'Bot', N'System'))
+        ,CONSTRAINT CK_ConversationAuditEvent_Origin CHECK
+            (Origin IN (N'MetaCloudApi', N'AdminPanel', N'System', N'FutureWhatsAppBusinessApp'))
     );
 END;
+GO
+
+IF COL_LENGTH(N'dbo.ConversationAuditEvent', N'Origin') IS NULL
+    ALTER TABLE dbo.ConversationAuditEvent ADD Origin nvarchar(32) NULL;
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.check_constraints
+    WHERE parent_object_id = OBJECT_ID(N'dbo.ConversationAuditEvent')
+      AND name = N'CK_ConversationAuditEvent_Origin'
+)
+    ALTER TABLE dbo.ConversationAuditEvent ADD CONSTRAINT CK_ConversationAuditEvent_Origin
+        CHECK (Origin IS NULL OR Origin IN (N'MetaCloudApi', N'AdminPanel', N'System', N'FutureWhatsAppBusinessApp'));
 GO
 
 IF COL_LENGTH(N'dbo.WhatsAppIntegration', N'TenantId') IS NULL

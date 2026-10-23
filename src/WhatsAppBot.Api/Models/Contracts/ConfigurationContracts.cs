@@ -37,6 +37,9 @@ public sealed class BusinessValidationException(string message) : Exception(mess
 
 public sealed class BusinessNotFoundException(string resource) : Exception($"{resource} was not found.");
 
+public sealed class ConversationConflictException(string message = "The conversation changed before the action could be applied.")
+    : Exception(message);
+
 public sealed class ExternalDependencyException(string safeCode, bool isTransient = false)
     : Exception("An external service request could not be completed.")
 {

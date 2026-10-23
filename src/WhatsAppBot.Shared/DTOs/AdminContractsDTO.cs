@@ -139,10 +139,18 @@ public sealed class ConversationDetailDTO
     public IReadOnlyList<ConversationAuditEventDTO> AuditEvents { get; init; } = [];
 }
 
+public sealed class ConversationActionRequestDTO
+{
+    public required ConversationAction Action { get; init; }
+    public string? ReasonCode { get; init; }
+    public required string ExpectedVersion { get; init; }
+}
+
 public sealed class ConversationAuditEventDTO
 {
     public required string EventType { get; init; }
     public required ActorType ActorType { get; init; }
+    public Origin Origin { get; init; } = Origin.System;
     public long? ActorAdminId { get; init; }
     public string? ReasonCode { get; init; }
     public DateTimeOffset OccurredAtUtc { get; init; }

@@ -25,6 +25,8 @@ public sealed class GlobalExceptionMiddleware(
                     StatusCodes.Status400BadRequest, "ValidationFailed", exception.Message),
                 BusinessNotFoundException => (
                     StatusCodes.Status404NotFound, "NotFound", exception.Message),
+                ConversationConflictException => (
+                    StatusCodes.Status409Conflict, "ConversationVersionConflict", exception.Message),
                 ExternalDependencyException => (
                     StatusCodes.Status502BadGateway,
                     "ExternalDependencyFailure",

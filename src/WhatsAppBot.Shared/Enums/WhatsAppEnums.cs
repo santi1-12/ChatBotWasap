@@ -16,5 +16,6 @@ public enum MessageOutboxState { Pending, Sending, Sent, Failed }
 public enum WhatsAppOnboardingType { Standard, Coexistence }
 public enum AttentionMode { Bot, Humano }
 public enum LifecycleStatus { Abierta, Cerrada }
+public enum ConversationAction { Take, Handoff, ReturnToBot, Close, Reopen }
 public enum ActorType { Customer, Bot, Admin, System }
 public enum Origin { MetaCloudApi, AdminPanel, System, FutureWhatsAppBusinessApp }

@@ -149,6 +149,7 @@ public sealed record ConversationAuditEvent(
     LifecycleStatus? PreviousLifecycleStatus,
     LifecycleStatus? NewLifecycleStatus,
     ActorType ActorType,
+    Origin Origin,
     long? ActorAdminId,
     string? ReasonCode,
     DateTimeOffset OccurredAtUtc,

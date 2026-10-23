@@ -2,11 +2,13 @@ using System.Data;
 using Microsoft.Data.SqlClient;
 using WhatsAppBot.Api.Business.Abstractions;
 using WhatsAppBot.Api.Models.Contracts;
+using WhatsAppBot.Api.Models.Requests;
 using WhatsAppBot.Shared.Enums;
 
 namespace WhatsAppBot.Api.Persistence.Repositories;
 
-public sealed class ConversationRepository(StoredProcedureExecutor executor) : IConversationRepository
+public sealed class ConversationRepository(StoredProcedureExecutor executor)
+    : IConversationRepository, IConversationActionRepository
 {
     private sealed record ListRow(ConversationSummaryRecord? Record, long TotalCount);
 
@@ -55,6 +57,89 @@ public sealed class ConversationRepository(StoredProcedureExecutor executor) : I
             rows.Count == 0 ? 0 : checked((int)rows[0].TotalCount));
     }
 
+    public async Task<ConversationActionApplyResult> ApplyAsync(
+        Guid tenantId,
+        long conversationId,
+        ConversationActionCommand command,
+        long actorAdminId,
+        CancellationToken cancellationToken)
+    {
+        var result = await executor.QuerySingleAsync(
+            "dbo.sp_Conversation_ApplyAction",
+            [
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId },
+                new SqlParameter("@ConversationId", SqlDbType.BigInt) { Value = conversationId },
+                new SqlParameter("@Action", SqlDbType.NVarChar, 32) { Value = command.Action.ToString() },
+                new SqlParameter("@ExpectedVersion", SqlDbType.Binary, 8)
+                    { Value = ConversationVersion.Parse(command.ExpectedVersion) },
+                new SqlParameter("@ActorType", SqlDbType.NVarChar, 16) { Value = command.ActorType.ToString() },
+                new SqlParameter("@Origin", SqlDbType.NVarChar, 32) { Value = command.Origin.ToString() },
+                new SqlParameter("@ActorAdminId", SqlDbType.BigInt) { Value = actorAdminId },
+                new SqlParameter("@ReasonCode", SqlDbType.NVarChar, 100)
+                    { Value = (object?)command.ReasonCode ?? DBNull.Value }
+            ],
+            MapActionResult,
+            cancellationToken);
+        return result ?? throw new InvalidOperationException("The conversation action did not return a result.");
+    }
+
+    public async Task<bool> SetAssignmentAsync(
+        Guid tenantId,
+        long conversationId,
+        long? assignedAdminId,
+        string expectedVersion,
+        long actorAdminId,
+        CancellationToken cancellationToken)
+    {
+        var result = await executor.QuerySingleAsync(
+            "dbo.sp_Conversation_SetAssignment",
+            [
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId },
+                new SqlParameter("@ConversationId", SqlDbType.BigInt) { Value = conversationId },
+                new SqlParameter("@AssignedAdminId", SqlDbType.BigInt)
+                    { Value = (object?)assignedAdminId ?? DBNull.Value },
+                new SqlParameter("@ExpectedVersion", SqlDbType.Binary, 8)
+                    { Value = ConversationVersion.Parse(expectedVersion) },
+                new SqlParameter("@ActorAdminId", SqlDbType.BigInt) { Value = actorAdminId },
+                new SqlParameter("@Origin", SqlDbType.NVarChar, 32) { Value = Origin.AdminPanel.ToString() }
+            ],
+            MapActionResult,
+            cancellationToken);
+        return result?.Applied == true;
+    }
+
+    public Task RecordAuditAsync(
+        Guid tenantId,
+        long conversationId,
+        ConversationAuditEventCommand command,
+        CancellationToken cancellationToken) =>
+        executor.ExecuteAsync(
+            "dbo.sp_Conversation_RecordAuditEvent",
+            [
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId },
+                new SqlParameter("@ConversationId", SqlDbType.BigInt) { Value = conversationId },
+                new SqlParameter("@EventType", SqlDbType.NVarChar, 32) { Value = command.EventType },
+                new SqlParameter("@PreviousAttentionMode", SqlDbType.NVarChar, 16)
+                    { Value = (object?)command.PreviousAttentionMode?.ToString() ?? DBNull.Value },
+                new SqlParameter("@NewAttentionMode", SqlDbType.NVarChar, 16)
+                    { Value = (object?)command.NewAttentionMode?.ToString() ?? DBNull.Value },
+                new SqlParameter("@PreviousLifecycleStatus", SqlDbType.NVarChar, 16)
+                    { Value = (object?)command.PreviousLifecycleStatus?.ToString() ?? DBNull.Value },
+                new SqlParameter("@NewLifecycleStatus", SqlDbType.NVarChar, 16)
+                    { Value = (object?)command.NewLifecycleStatus?.ToString() ?? DBNull.Value },
+                new SqlParameter("@ActorType", SqlDbType.NVarChar, 16) { Value = command.ActorType.ToString() },
+                new SqlParameter("@Origin", SqlDbType.NVarChar, 32) { Value = command.Origin.ToString() },
+                new SqlParameter("@ActorAdminId", SqlDbType.BigInt)
+                    { Value = (object?)command.ActorAdminId ?? DBNull.Value },
+                new SqlParameter("@ReasonCode", SqlDbType.NVarChar, 100)
+                    { Value = (object?)command.ReasonCode ?? DBNull.Value },
+                new SqlParameter("@ExpectedVersion", SqlDbType.Binary, 8)
+                    { Value = (object?)ConversationVersion.TryParse(command.ExpectedVersion) ?? DBNull.Value },
+                new SqlParameter("@ResultingVersion", SqlDbType.Binary, 8)
+                    { Value = (object?)ConversationVersion.TryParse(command.ResultingVersion) ?? DBNull.Value }
+            ],
+            cancellationToken);
+
     private static ListRow MapListRow(SqlDataReader reader)
     {
         var conversationIdOrdinal = reader.GetOrdinal("ConversationId");
@@ -74,6 +159,53 @@ public sealed class ConversationRepository(StoredProcedureExecutor executor) : I
         return new ListRow(summary, reader.GetInt64(reader.GetOrdinal("TotalCount")));
     }
 
+    private static ConversationActionApplyResult MapActionResult(SqlDataReader reader) =>
+        new(
+            reader.GetBoolean(reader.GetOrdinal("Applied")),
+            reader.GetBoolean(reader.GetOrdinal("Found")),
+            reader.GetBoolean(reader.GetOrdinal("Conflict")),
+            reader.IsDBNull(reader.GetOrdinal("ResultingVersion"))
+                ? null
+                : ConversationVersion.Format((byte[])reader[reader.GetOrdinal("ResultingVersion")]));
+
     private static DateTimeOffset ToUtc(SqlDataReader reader, string columnName) =>
         new(DateTime.SpecifyKind(reader.GetDateTime(reader.GetOrdinal(columnName)), DateTimeKind.Utc));
+}
+
+internal static class ConversationVersion
+{
+    public static byte[] Parse(string value)
+    {
+        var parsed = TryParse(value)
+            ?? throw new BusinessValidationException("ExpectedVersion must be an opaque 8-byte conversation version.");
+        return parsed;
+    }
+
+    public static byte[]? TryParse(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        try
+        {
+            var base64 = Convert.FromBase64String(value);
+            return base64.Length == 8 ? base64 : null;
+        }
+        catch (FormatException)
+        {
+            try
+            {
+                var hex = Convert.FromHexString(value);
+                return hex.Length == 8 ? hex : null;
+            }
+            catch (FormatException)
+            {
+                return null;
+            }
+        }
+    }
+
+    public static string Format(byte[] value) => Convert.ToBase64String(value);
 }

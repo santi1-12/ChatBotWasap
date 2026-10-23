@@ -44,4 +44,16 @@ public sealed record ConversationMessageRecord(
 
 public sealed record ConversationDetailRecord(
     ConversationSummaryRecord Conversation,
-    IReadOnlyList<ConversationMessageRecord> Messages);
+    IReadOnlyList<ConversationMessageRecord> Messages)
+{
+    public IReadOnlyList<ConversationAuditEventRecord> AuditEvents { get; init; } = [];
+}
+
+public sealed record ConversationAuditEventRecord(
+    string EventType,
+    ActorType ActorType,
+    Origin Origin,
+    long? ActorAdminId,
+    string? ReasonCode,
+    DateTimeOffset OccurredAtUtc,
+    string? ResultingVersion);

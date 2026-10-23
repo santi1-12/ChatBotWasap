@@ -7,6 +7,97 @@ namespace WhatsAppBot.Persistence.Tests;
 public sealed class DeliveryStatusReconciliationTests(LocalDbFixture fixture)
 {
     [Fact]
+    public Task SentFailedDeliveredRead_ReconcilesInProviderTimestampOrder() =>
+        AssertSequenceAsync(
+            "Sent",
+            null,
+            [
+                ("failed", 1, true),
+                ("delivered", 2, true),
+                ("read", 3, true)
+            ],
+            "Read",
+            "MetaDeliveryFailed");
+
+    [Fact]
+    public Task DeliveredThenSent_DoesNotRegress() =>
+        AssertSequenceAsync(
+            "Delivered",
+            null,
+            [("sent", 1, false)],
+            "Delivered",
+            null);
+
+    [Fact]
+    public Task ReadThenDelivered_DoesNotRegress() =>
+        AssertSequenceAsync(
+            "Read",
+            null,
+            [("delivered", 1, false)],
+            "Read",
+            null);
+
+    [Fact]
+    public Task FailedThenSent_DoesNotRegressOrEraseFailure() =>
+        AssertSequenceAsync(
+            "Failed",
+            "MetaDeliveryFailed",
+            [("sent", 1, false)],
+            "Failed",
+            "MetaDeliveryFailed");
+
+    [Fact]
+    public Task FailedThenDelivered_RecoversAndPreservesFailure() =>
+        AssertSequenceAsync(
+            "Failed",
+            "MetaDeliveryFailed",
+            [("delivered", 1, true)],
+            "Delivered",
+            "MetaDeliveryFailed");
+
+    [Fact]
+    public Task FailedThenRead_RecoversAndPreservesFailure() =>
+        AssertSequenceAsync(
+            "Failed",
+            "MetaDeliveryFailed",
+            [("read", 1, true)],
+            "Read",
+            "MetaDeliveryFailed");
+
+    [Fact]
+    public Task DuplicateDeliveryStatus_IsIdempotent() =>
+        AssertSequenceAsync(
+            "Sent",
+            null,
+            [
+                ("delivered", 1, true),
+                ("delivered", 1, false)
+            ],
+            "Delivered",
+            null);
+
+    [Fact]
+    public Task OlderDeliveryStatus_IsIgnored() =>
+        AssertSequenceAsync(
+            "Sent",
+            null,
+            [
+                ("delivered", 2, true),
+                ("failed", 1, false)
+            ],
+            "Delivered",
+            null);
+
+    [Fact]
+    public Task FailureCode_IsPreservedAcrossRecovery() =>
+        AssertSequenceAsync(
+            "Failed",
+            "MetaSendFailed",
+            [("delivered", 1, true)],
+            "Delivered",
+            "MetaSendFailed");
+
+    [Fact]
     public async Task FailedThenLaterConfirmedDeliveryPreservesFailureEvidence()
     {
         var tenantId = Guid.NewGuid();
@@ -87,7 +178,8 @@ public sealed class DeliveryStatusReconciliationTests(LocalDbFixture fixture)
         string phoneNumberId,
         string providerMessageId,
         string deliveryState = "Pending",
-        DateTimeOffset? statusAtUtc = null)
+        DateTimeOffset? statusAtUtc = null,
+        string? failureCode = null)
     {
         await using var command = new SqlCommand(
             """
@@ -107,11 +199,13 @@ public sealed class DeliveryStatusReconciliationTests(LocalDbFixture fixture)
             DECLARE @ConversationId bigint = CONVERT(bigint, SCOPE_IDENTITY());
             INSERT dbo.Message
                 (IntegrationId, ConversationId, ProviderMessageId, Direction, MessageType,
-                 ContentText, ReplySource, ProcessingState, DeliveryState,
+                 ContentText, ReplySource, ProcessingState, DeliveryState, FailureCode,
                  ProviderTimestampUtc, DeliveryStatusAtUtc, TenantId, ActorType, Origin)
             VALUES
                 (@IntegrationId, @ConversationId, @ProviderMessageId, N'Outbound', N'Text',
-                 N'Delivery status test', N'AI', N'Completed', @DeliveryState,
+                 N'Delivery status test', N'AI',
+                 CASE WHEN @DeliveryState = N'Failed' THEN N'Failed' ELSE N'Completed' END,
+                 @DeliveryState, @FailureCode,
                  @StatusAtUtc, @StatusAtUtc, @TenantId, N'Bot', N'MetaCloudApi');
             """,
             connection);
@@ -124,9 +218,59 @@ public sealed class DeliveryStatusReconciliationTests(LocalDbFixture fixture)
             { Value = providerMessageId });
         command.Parameters.Add(new SqlParameter("@DeliveryState", SqlDbType.NVarChar, 24)
             { Value = deliveryState });
+        command.Parameters.Add(new SqlParameter("@FailureCode", SqlDbType.NVarChar, 100)
+            { Value = (object?)failureCode ?? DBNull.Value });
         command.Parameters.Add(new SqlParameter("@StatusAtUtc", SqlDbType.DateTime2)
             { Scale = 3, Value = (object?)statusAtUtc?.UtcDateTime ?? DBNull.Value });
         await command.ExecuteNonQueryAsync();
+    }
+
+    private async Task AssertSequenceAsync(
+        string initialState,
+        string? initialFailureCode,
+        IReadOnlyList<(string Status, int OffsetSeconds, bool Applied)> events,
+        string expectedFinalState,
+        string? expectedFailureCode)
+    {
+        var tenantId = Guid.NewGuid();
+        var integrationId = Guid.NewGuid();
+        var phoneNumberId = $"delivery-{Guid.NewGuid():N}";
+        var providerMessageId = $"wamid.delivery-{Guid.NewGuid():N}";
+        var statusBase = DateTimeOffset.UtcNow.AddMinutes(-5);
+        await using var connection = new SqlConnection(fixture.ConnectionString);
+        await connection.OpenAsync();
+
+        try
+        {
+            await CreateOutboundMessageAsync(
+                connection,
+                tenantId,
+                integrationId,
+                phoneNumberId,
+                providerMessageId,
+                initialState,
+                statusBase,
+                initialFailureCode);
+
+            foreach (var deliveryEvent in events)
+            {
+                var result = await ApplyStatusAsync(
+                    connection,
+                    phoneNumberId,
+                    providerMessageId,
+                    deliveryEvent.Status,
+                    statusBase.AddSeconds(deliveryEvent.OffsetSeconds));
+                Assert.Equal(deliveryEvent.Applied, result.Applied);
+            }
+
+            var finalState = await ReadMessageStateAsync(connection, providerMessageId);
+            Assert.Equal(expectedFinalState, finalState.DeliveryState);
+            Assert.Equal(expectedFailureCode, finalState.FailureCode);
+        }
+        finally
+        {
+            await DeleteTestDataAsync(connection, tenantId, integrationId, providerMessageId);
+        }
     }
 
     private static async Task<(bool Applied, string? DeliveryState)> ApplyStatusAsync(

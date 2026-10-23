@@ -7,7 +7,14 @@ public sealed record ConversationSummaryRecord(
     string Contact,
     DateTimeOffset LastMessageAtUtc,
     ConversationStatus Status,
-    string? LastMessagePreview);
+    string? LastMessagePreview)
+{
+    public Guid? TenantId { get; init; }
+    public AttentionMode AttentionMode { get; init; } = AttentionMode.Bot;
+    public LifecycleStatus LifecycleStatus { get; init; } = LifecycleStatus.Abierta;
+    public long? AssignedAdminId { get; init; }
+    public string? Version { get; init; }
+}
 
 public sealed record ConversationPage(
     IReadOnlyList<ConversationSummaryRecord> Items,
@@ -26,7 +33,14 @@ public sealed record ConversationMessageRecord(
     ProcessingState ProcessingState,
     DeliveryState? DeliveryState,
     string? OutcomeCode,
-    DateTimeOffset CreatedAtUtc);
+    DateTimeOffset CreatedAtUtc)
+{
+    public Guid? TenantId { get; init; }
+    public ActorType? ActorType { get; init; }
+    public Origin? Origin { get; init; }
+    public long? CreatedByAdminId { get; init; }
+    public long? SourceInboundMessageId { get; init; }
+}
 
 public sealed record ConversationDetailRecord(
     ConversationSummaryRecord Conversation,

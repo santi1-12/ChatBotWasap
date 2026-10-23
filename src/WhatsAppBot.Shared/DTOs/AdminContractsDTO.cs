@@ -6,11 +6,13 @@ namespace WhatsAppBot.Shared.DTOs;
 
 public sealed class WhatsAppIntegrationDTO
 {
+    public Guid? TenantId { get; init; }
     public string? WabaId { get; init; }
     public string? PhoneNumberId { get; init; }
     public string? BusinessPhoneNumber { get; init; }
     public string? DisplayName { get; init; }
     public required ConnectionState ConnectionState { get; init; }
+    public WhatsAppOnboardingType? OnboardingType { get; init; }
     public required bool BotEnabled { get; init; }
     public DateTimeOffset? ConnectedAtUtc { get; init; }
     public string? ConnectionErrorCode { get; init; }
@@ -97,9 +99,14 @@ public sealed class FrequentResponseDTO
 
 public sealed class MessageDTO
 {
+    public Guid? TenantId { get; init; }
     public long MessageId { get; init; }
     public required MessageDirection Direction { get; init; }
     public required MessageType MessageType { get; init; }
+    public ActorType? ActorType { get; init; }
+    public Origin? Origin { get; init; }
+    public long? CreatedByAdminId { get; init; }
+    public long? SourceInboundMessageId { get; init; }
     public string? Text { get; init; }
     public string? Transcription { get; init; }
     public bool MediaAvailable { get; init; }
@@ -113,10 +120,15 @@ public sealed class MessageDTO
 
 public sealed class ConversationSummaryDTO
 {
+    public Guid? TenantId { get; init; }
     public long ConversationId { get; init; }
     public required string Contact { get; init; }
     public DateTimeOffset LastMessageAtUtc { get; init; }
     public required ConversationStatus Status { get; init; }
+    public AttentionMode AttentionMode { get; init; } = AttentionMode.Bot;
+    public LifecycleStatus LifecycleStatus { get; init; } = LifecycleStatus.Abierta;
+    public long? AssignedAdminId { get; init; }
+    public string? Version { get; init; }
     public string? LastMessagePreview { get; init; }
 }
 

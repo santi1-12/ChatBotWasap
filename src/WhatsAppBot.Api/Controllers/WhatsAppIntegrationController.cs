@@ -59,10 +59,12 @@ public sealed class WhatsAppIntegrationController(
     private WhatsAppIntegrationDTO Map(WhatsAppIntegration integration, bool botEnabled) =>
         new()
         {
+            TenantId = integration.TenantId,
             WabaId = integration.WabaId,
             PhoneNumberId = integration.PhoneNumberId,
             BusinessPhoneNumber = integration.BusinessPhoneNumber,
             DisplayName = integration.DisplayName,
+            OnboardingType = integration.OnboardingType,
             ConnectionState = integration.ConnectionState == ConnectionState.Connected &&
                               !integration.HasCompleteConnection
                 ? ConnectionState.Error

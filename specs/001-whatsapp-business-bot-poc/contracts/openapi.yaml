@@ -627,7 +627,7 @@ components:
       required: [connectionState, botEnabled]
       properties:
         tenantId:
-          type: string
+          type: [string, 'null']
           format: uuid
         wabaId:
           type: [string, 'null']
@@ -781,7 +781,7 @@ components:
           description: Opaque conversation version used to revalidate Humano attention before enqueueing.
     ConversationSummaryDTO:
       type: object
-      required: [conversationId, tenantId, contact, lastMessageAtUtc, lifecycleStatus, attentionMode]
+      required: [conversationId, tenantId, contact, lastMessageAtUtc, status, lifecycleStatus, attentionMode]
       properties:
         conversationId:
           type: integer
@@ -794,6 +794,9 @@ components:
         lastMessageAtUtc:
           type: string
           format: date-time
+        status:
+          type: string
+          enum: [Open, Closed]
         lifecycleStatus:
           type: string
           enum: [Abierta, Cerrada]
@@ -869,6 +872,9 @@ components:
           type: string
           enum: [MetaCloudApi, AdminPanel, System, FutureWhatsAppBusinessApp]
         createdByAdminId:
+          type: [integer, 'null']
+          format: int64
+        sourceInboundMessageId:
           type: [integer, 'null']
           format: int64
         text:

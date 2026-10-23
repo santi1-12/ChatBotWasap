@@ -47,24 +47,35 @@ public sealed class ConversationsController(
 
     private static ConversationSummaryDTO Map(ConversationSummaryRecord record) => new()
     {
+        TenantId = record.TenantId,
         ConversationId = record.ConversationId,
         Contact = record.Contact,
         LastMessageAtUtc = record.LastMessageAtUtc,
         Status = record.Status,
+        AttentionMode = record.AttentionMode,
+        LifecycleStatus = record.LifecycleStatus,
+        AssignedAdminId = record.AssignedAdminId,
+        Version = record.Version,
         LastMessagePreview = record.LastMessagePreview
     };
 
     private static ConversationDetailDTO Map(ConversationDetailRecord record) => new()
     {
         Conversation = Map(record.Conversation),
-        Messages = record.Messages.Select(Map).ToArray()
+        Messages = record.Messages.Select(Map).ToArray(),
+        AuditEvents = []
     };
 
     private static MessageDTO Map(ConversationMessageRecord record) => new()
     {
+        TenantId = record.TenantId,
         MessageId = record.MessageId,
         Direction = record.Direction,
         MessageType = record.MessageType,
+        ActorType = record.ActorType,
+        Origin = record.Origin,
+        CreatedByAdminId = record.CreatedByAdminId,
+        SourceInboundMessageId = record.SourceInboundMessageId,
         Text = record.Text,
         Transcription = record.Transcription,
         MediaAvailable = record.MediaAvailable,

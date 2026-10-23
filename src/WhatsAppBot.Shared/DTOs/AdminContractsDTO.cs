@@ -136,6 +136,17 @@ public sealed class ConversationDetailDTO
 {
     public required ConversationSummaryDTO Conversation { get; init; }
     public IReadOnlyList<MessageDTO> Messages { get; init; } = [];
+    public IReadOnlyList<ConversationAuditEventDTO> AuditEvents { get; init; } = [];
+}
+
+public sealed class ConversationAuditEventDTO
+{
+    public required string EventType { get; init; }
+    public required ActorType ActorType { get; init; }
+    public long? ActorAdminId { get; init; }
+    public string? ReasonCode { get; init; }
+    public DateTimeOffset OccurredAtUtc { get; init; }
+    public string? ResultingVersion { get; init; }
 }
 
 public sealed class PagedResultDTO<T>

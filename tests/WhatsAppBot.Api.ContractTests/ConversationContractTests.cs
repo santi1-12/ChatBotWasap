@@ -66,11 +66,22 @@ public sealed class ConversationContractTests : IClassFixture<ConversationApiFac
 
         Assert.True(detail?.Success);
         Assert.Equal(42, detail!.Data!.Conversation.ConversationId);
+        Assert.Equal(ConversationContractTestData.TenantId, detail.Data.Conversation.TenantId);
+        Assert.Equal(AttentionMode.Humano, detail.Data.Conversation.AttentionMode);
+        Assert.Equal(LifecycleStatus.Cerrada, detail.Data.Conversation.LifecycleStatus);
+        Assert.Equal(99, detail.Data.Conversation.AssignedAdminId);
+        Assert.Equal("conversation-version-2", detail.Data.Conversation.Version);
+        Assert.Empty(detail.Data.AuditEvents);
         var message = Assert.Single(detail.Data.Messages);
         Assert.Equal(MessageType.Audio, message.MessageType);
         Assert.True(message.MediaAvailable);
         Assert.Null(message.MediaUrl);
         Assert.Equal("BotDisabled", message.OutcomeCode);
+        Assert.Equal(ConversationContractTestData.TenantId, message.TenantId);
+        Assert.Equal(ActorType.Admin, message.ActorType);
+        Assert.Equal(Origin.AdminPanel, message.Origin);
+        Assert.Equal(99, message.CreatedByAdminId);
+        Assert.Equal(6, message.SourceInboundMessageId);
     }
 
     private static JsonSerializerOptions CreateJsonOptions()
@@ -125,8 +136,15 @@ internal sealed class FakeListConversations : IListConversations
                 42,
                 "Customer",
                 DateTimeOffset.Parse("2026-10-22T12:00:00Z"),
-                ConversationStatus.Open,
-                "Hello")],
+                ConversationStatus.Closed,
+                "Hello")
+            {
+                TenantId = ConversationContractTestData.TenantId,
+                AttentionMode = AttentionMode.Humano,
+                LifecycleStatus = LifecycleStatus.Cerrada,
+                AssignedAdminId = 99,
+                Version = "conversation-version-2"
+            }],
             page,
             pageSize,
             1));
@@ -141,8 +159,15 @@ internal sealed class FakeConversationDetail : IGetConversationDetail
                 conversationId,
                 "Customer",
                 DateTimeOffset.Parse("2026-10-22T12:00:00Z"),
-                ConversationStatus.Open,
-                "Hello"),
+                ConversationStatus.Closed,
+                "Hello")
+            {
+                TenantId = ConversationContractTestData.TenantId,
+                AttentionMode = AttentionMode.Humano,
+                LifecycleStatus = LifecycleStatus.Cerrada,
+                AssignedAdminId = 99,
+                Version = "conversation-version-2"
+            },
             [new ConversationMessageRecord(
                 7,
                 MessageDirection.Inbound,
@@ -154,5 +179,17 @@ internal sealed class FakeConversationDetail : IGetConversationDetail
                 ProcessingState.NoReply,
                 null,
                 "BotDisabled",
-                DateTimeOffset.Parse("2026-10-22T11:59:00Z"))]));
+                DateTimeOffset.Parse("2026-10-22T11:59:00Z"))
+            {
+                TenantId = ConversationContractTestData.TenantId,
+                ActorType = ActorType.Admin,
+                Origin = Origin.AdminPanel,
+                CreatedByAdminId = 99,
+                SourceInboundMessageId = 6
+            }]));
+}
+
+internal static class ConversationContractTestData
+{
+    public static readonly Guid TenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
 }

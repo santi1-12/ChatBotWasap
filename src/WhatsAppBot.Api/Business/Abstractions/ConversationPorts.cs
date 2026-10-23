@@ -29,7 +29,7 @@ public interface IConversationActionRepository
         Guid tenantId,
         long conversationId,
         ConversationActionCommand command,
-        long actorAdminId,
+        long? actorAdminId,
         CancellationToken cancellationToken);
 
     Task<bool> SetAssignmentAsync(
@@ -45,4 +45,10 @@ public interface IConversationActionRepository
         long conversationId,
         ConversationAuditEventCommand command,
         CancellationToken cancellationToken);
+}
+
+public interface IConversationStateRepository
+{
+    Task<ConversationStateRecord?> GetStateAsync(
+        Guid tenantId, long conversationId, CancellationToken cancellationToken);
 }

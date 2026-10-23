@@ -134,7 +134,7 @@ public sealed class InboundTextProcessingTests
             var resolver = new BotReplyResolver(FaqRepository, new FrequentResponseMatcher());
             Processor = new ProcessInboundText(
                 Integration, Contacts, Conversations, Messages, Configuration, resolver, Outbox,
-                new WhatsAppMessagingPolicy(), new FakeClock(Now));
+                new WhatsAppMessagingPolicy(), new FakeClock(Now), new FakeHandoffService());
             Inbound = InboundEvent(Now.AddHours(-hoursAgo));
         }
 
@@ -185,6 +185,13 @@ public sealed class InboundTextProcessingTests
         public Task<ConversationPage> ListAsync(
             Guid integrationId, int page, int pageSize, CancellationToken cancellationToken) =>
             throw new NotImplementedException();
+    }
+
+    private sealed class FakeHandoffService : IConversationHandoffService
+    {
+        public Task<bool> TryHandoffAsync(
+            Guid tenantId, long conversationId, string reasonCode,
+            CancellationToken cancellationToken) => Task.FromResult(true);
     }
 
     private sealed class FakeMessageRepository : IMessageRepository

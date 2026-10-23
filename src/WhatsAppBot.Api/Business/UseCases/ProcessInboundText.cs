@@ -1,5 +1,6 @@
 using WhatsAppBot.Api.Business.Abstractions;
 using WhatsAppBot.Api.Models.Contracts;
+using WhatsAppBot.Api.Business.Services;
 using WhatsAppBot.Shared.Enums;
 
 namespace WhatsAppBot.Api.Business.UseCases;
@@ -13,7 +14,8 @@ public sealed class ProcessInboundText(
     IBotReplyResolver replyResolver,
     IMessageOutboxRepository outboxRepository,
     IWhatsAppMessagingPolicy messagingPolicy,
-    IClock clock) : IProcessInboundText
+    IClock clock,
+    IConversationHandoffService handoffService) : IProcessInboundText
 {
     public async Task ProcessAsync(
         NormalizedMetaEvent inboundEvent, CancellationToken cancellationToken)
@@ -56,15 +58,47 @@ public sealed class ProcessInboundText(
 
         if (!configuration.IsBotEnabled)
         {
+            await handoffService.TryHandoffAsync(
+                integration.TenantId.Value, conversationId,
+                ConversationHandoffReasonCodes.BusinessRule, cancellationToken);
             await messageRepository.SetProcessingOutcomeAsync(
                 inboundMessage.MessageId, ProcessingState.NoReply, MessageOutcomeCodes.BotDisabled, cancellationToken);
             return;
         }
 
-        var resolution = await replyResolver.ResolveAsync(
-            configuration, inboundEvent.Text, cancellationToken);
+        if (IsCustomerRequestingHuman(inboundEvent.Text))
+        {
+            await handoffService.TryHandoffAsync(
+                integration.TenantId.Value, conversationId,
+                ConversationHandoffReasonCodes.CustomerRequestedHuman, cancellationToken);
+            await messageRepository.SetProcessingOutcomeAsync(
+                inboundMessage.MessageId, ProcessingState.NoReply,
+                MessageOutcomeCodes.ConversationInHumanMode, cancellationToken);
+            return;
+        }
+
+        BotReplyResolution resolution;
+        try
+        {
+            resolution = await replyResolver.ResolveAsync(
+                configuration, inboundEvent.Text, cancellationToken);
+        }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            await handoffService.TryHandoffAsync(
+                integration.TenantId.Value, conversationId,
+                ConversationHandoffReasonCodes.BlockingError, cancellationToken);
+            await messageRepository.SetProcessingOutcomeAsync(
+                inboundMessage.MessageId, ProcessingState.NoReply,
+                MessageOutcomeCodes.BlockingError, cancellationToken);
+            return;
+        }
+
         if (resolution.Kind == BotReplyResolutionKind.NoReply)
         {
+            await handoffService.TryHandoffAsync(
+                integration.TenantId.Value, conversationId,
+                ConversationHandoffReasonCodes.BotUnableToResolve, cancellationToken);
             await messageRepository.SetProcessingOutcomeAsync(
                 inboundMessage.MessageId,
                 ProcessingState.NoReply,
@@ -75,6 +109,9 @@ public sealed class ProcessInboundText(
 
         if (resolution.Kind == BotReplyResolutionKind.AiFallbackRequired)
         {
+            await handoffService.TryHandoffAsync(
+                integration.TenantId.Value, conversationId,
+                ConversationHandoffReasonCodes.BotUnableToResolve, cancellationToken);
             await messageRepository.SetProcessingOutcomeAsync(
                 inboundMessage.MessageId,
                 ProcessingState.NoReply,
@@ -94,6 +131,9 @@ public sealed class ProcessInboundText(
         var policy = messagingPolicy.Evaluate(inboundEvent.ProviderTimestampUtc.Value, clock.UtcNow);
         if (!policy.IsAllowed)
         {
+            await handoffService.TryHandoffAsync(
+                integration.TenantId.Value, conversationId,
+                ConversationHandoffReasonCodes.BusinessRule, cancellationToken);
             await messageRepository.SetProcessingOutcomeAsync(
                 inboundMessage.MessageId, ProcessingState.NoReply, policy.OutcomeCode, cancellationToken);
             return;
@@ -115,5 +155,16 @@ public sealed class ProcessInboundText(
                 outbound.OutcomeCode ?? MessageOutcomeCodes.MessagingWindowClosed,
                 cancellationToken);
         }
+    }
+
+    private static bool IsCustomerRequestingHuman(string text)
+    {
+        var normalized = text.Trim().ToUpperInvariant();
+        return normalized.Contains("HUMANO", StringComparison.Ordinal) ||
+               normalized.Contains("AGENTE", StringComparison.Ordinal) ||
+               normalized.Contains("ASESOR", StringComparison.Ordinal) ||
+               normalized.Contains("PERSONA", StringComparison.Ordinal) ||
+               normalized.Contains("REPRESENTANTE", StringComparison.Ordinal) ||
+               normalized.Contains("SOPORTE", StringComparison.Ordinal);
     }
 }

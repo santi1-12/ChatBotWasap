@@ -77,6 +77,7 @@ public static class MessageOutcomeCodes
     public const string ConversationVersionConflict = "ConversationVersionConflict";
     public const string IntegrationUnavailable = "IntegrationUnavailable";
     public const string ManualSendFailed = "ManualSendFailed";
+    public const string BlockingError = "BlockingError";
 }
 
 public static class MetaWebhookEventTypes

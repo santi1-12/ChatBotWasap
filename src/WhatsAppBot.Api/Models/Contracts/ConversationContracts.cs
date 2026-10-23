@@ -22,6 +22,14 @@ public sealed record ConversationPage(
     int PageSize,
     int TotalCount);
 
+public sealed record ConversationStateRecord(
+    Guid TenantId,
+    long ConversationId,
+    AttentionMode AttentionMode,
+    LifecycleStatus LifecycleStatus,
+    long? AssignedAdminId,
+    string Version);
+
 public sealed record ConversationMessageRecord(
     long MessageId,
     MessageDirection Direction,

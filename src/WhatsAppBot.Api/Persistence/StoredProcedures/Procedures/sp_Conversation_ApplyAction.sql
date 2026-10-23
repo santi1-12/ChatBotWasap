@@ -87,7 +87,11 @@ BEGIN
         SET @NewLifecycleStatus = N'Abierta';
         SET @NewBasicStatus = N'Open';
         SET @NewAssignedAdminId = @ActorAdminId;
-        SET @EventType = N'Take';
+        SET @EventType = CASE
+            WHEN @Action = N'Handoff' AND @ActorType = N'System'
+                THEN N'AutomaticHandoff'
+            ELSE N'Take'
+        END;
     END
     ELSE IF @Action = N'ReturnToBot'
     BEGIN

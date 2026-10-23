@@ -8,7 +8,7 @@ using WhatsAppBot.Shared.Enums;
 namespace WhatsAppBot.Api.Persistence.Repositories;
 
 public sealed class ConversationRepository(StoredProcedureExecutor executor)
-    : IConversationRepository, IConversationActionRepository
+    : IConversationRepository, IConversationActionRepository, IConversationStateRepository
 {
     private sealed record ListRow(ConversationSummaryRecord? Record, long TotalCount);
 
@@ -61,7 +61,7 @@ public sealed class ConversationRepository(StoredProcedureExecutor executor)
         Guid tenantId,
         long conversationId,
         ConversationActionCommand command,
-        long actorAdminId,
+        long? actorAdminId,
         CancellationToken cancellationToken)
     {
         var result = await executor.QuerySingleAsync(
@@ -74,7 +74,8 @@ public sealed class ConversationRepository(StoredProcedureExecutor executor)
                     { Value = ConversationVersion.Parse(command.ExpectedVersion) },
                 new SqlParameter("@ActorType", SqlDbType.NVarChar, 16) { Value = command.ActorType.ToString() },
                 new SqlParameter("@Origin", SqlDbType.NVarChar, 32) { Value = command.Origin.ToString() },
-                new SqlParameter("@ActorAdminId", SqlDbType.BigInt) { Value = actorAdminId },
+                new SqlParameter("@ActorAdminId", SqlDbType.BigInt)
+                    { Value = (object?)actorAdminId ?? DBNull.Value },
                 new SqlParameter("@ReasonCode", SqlDbType.NVarChar, 100)
                     { Value = (object?)command.ReasonCode ?? DBNull.Value }
             ],
@@ -107,6 +108,25 @@ public sealed class ConversationRepository(StoredProcedureExecutor executor)
             cancellationToken);
         return result?.Applied == true;
     }
+
+    public async Task<ConversationStateRecord?> GetStateAsync(
+        Guid tenantId, long conversationId, CancellationToken cancellationToken) =>
+        await executor.QuerySingleAsync(
+            "dbo.sp_Conversation_GetState",
+            [
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId },
+                new SqlParameter("@ConversationId", SqlDbType.BigInt) { Value = conversationId }
+            ],
+            reader => new ConversationStateRecord(
+                reader.GetGuid(reader.GetOrdinal("TenantId")),
+                reader.GetInt64(reader.GetOrdinal("ConversationId")),
+                Enum.Parse<AttentionMode>(reader.GetString(reader.GetOrdinal("AttentionMode")), false),
+                Enum.Parse<LifecycleStatus>(reader.GetString(reader.GetOrdinal("LifecycleStatus")), false),
+                reader.IsDBNull(reader.GetOrdinal("AssignedAdminId"))
+                    ? null
+                    : reader.GetInt64(reader.GetOrdinal("AssignedAdminId")),
+                ConversationVersion.Format((byte[])reader[reader.GetOrdinal("Version")])),
+            cancellationToken);
 
     public Task RecordAuditAsync(
         Guid tenantId,

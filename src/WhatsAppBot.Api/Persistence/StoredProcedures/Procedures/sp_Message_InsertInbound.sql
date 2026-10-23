@@ -26,10 +26,13 @@ BEGIN
 
     INSERT dbo.Message
         (IntegrationId, ConversationId, ProviderMessageId, Direction, MessageType, ContentText,
-         ProcessingState, ProviderTimestampUtc)
-    VALUES
-        (@IntegrationId, @ConversationId, @ProviderMessageId, N'Inbound', @MessageType, @ContentText,
-         N'Received', @ProviderTimestampUtc);
+         ProcessingState, ProviderTimestampUtc, TenantId, ActorType, Origin)
+    SELECT
+        @IntegrationId, @ConversationId, @ProviderMessageId, N'Inbound', @MessageType, @ContentText,
+        N'Received', @ProviderTimestampUtc, conversation.TenantId, N'Customer', N'MetaCloudApi'
+    FROM dbo.Conversation AS conversation
+    WHERE conversation.ConversationId = @ConversationId
+      AND conversation.IntegrationId = @IntegrationId;
     SET @MessageId = CONVERT(bigint, SCOPE_IDENTITY());
     UPDATE dbo.Conversation
     SET LastMessageAtUtc = CASE WHEN LastMessageAtUtc < @ProviderTimestampUtc

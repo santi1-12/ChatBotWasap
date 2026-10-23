@@ -250,7 +250,8 @@ public sealed class ConversationVisibilityTests
         }
 
         public Task<long> GetOrCreateAsync(
-            Guid integrationId, long contactId, DateTimeOffset lastMessageAtUtc,
+            Guid integrationId, Guid tenantId, long contactId, DateTimeOffset lastMessageAtUtc,
+            bool isBotEnabled,
             CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 

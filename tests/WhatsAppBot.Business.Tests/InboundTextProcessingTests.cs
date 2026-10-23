@@ -10,6 +10,7 @@ namespace WhatsAppBot.Business.Tests;
 public sealed class InboundTextProcessingTests
 {
     private static readonly DateTimeOffset Now = DateTimeOffset.Parse("2026-09-29T12:00:00Z");
+    private static readonly Guid TenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
 
     [Fact]
     public async Task FaqOnlyMatch_PersistsInboundThenCreatesOutboxCandidate()
@@ -117,7 +118,10 @@ public sealed class InboundTextProcessingTests
             Configuration = new FakeBotConfigurationService(new BotConfiguration(integrationId, botEnabled, mode));
             Integration = new FakeIntegrationRepository(new WhatsAppIntegration(
                 integrationId, "waba-1", "phone-1", "+15551234567", "Test", ConnectionState.Connected,
-                DateTimeOffset.UtcNow, true));
+                DateTimeOffset.UtcNow, true)
+            {
+                TenantId = TenantId
+            });
             Contacts = new FakeContactRepository();
             Conversations = new FakeConversationRepository();
             Messages = new FakeMessageRepository();
@@ -174,7 +178,8 @@ public sealed class InboundTextProcessingTests
     private sealed class FakeConversationRepository : IConversationRepository
     {
         public Task<long> GetOrCreateAsync(
-            Guid integrationId, long contactId, DateTimeOffset lastMessageAtUtc,
+            Guid integrationId, Guid tenantId, long contactId, DateTimeOffset lastMessageAtUtc,
+            bool isBotEnabled,
             CancellationToken cancellationToken) => Task.FromResult(6L);
 
         public Task<ConversationPage> ListAsync(

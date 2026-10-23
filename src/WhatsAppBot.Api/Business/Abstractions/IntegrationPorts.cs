@@ -91,7 +91,12 @@ public interface IContactRepository
 public interface IConversationRepository
 {
     Task<long> GetOrCreateAsync(
-        Guid integrationId, long contactId, DateTimeOffset lastMessageAtUtc, CancellationToken cancellationToken);
+        Guid integrationId,
+        Guid tenantId,
+        long contactId,
+        DateTimeOffset lastMessageAtUtc,
+        bool isBotEnabled,
+        CancellationToken cancellationToken);
     Task<ConversationPage> ListAsync(
         Guid integrationId, int page, int pageSize, CancellationToken cancellationToken);
 }

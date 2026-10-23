@@ -12,17 +12,21 @@ public sealed class ConversationRepository(StoredProcedureExecutor executor) : I
 
     public async Task<long> GetOrCreateAsync(
         Guid integrationId,
+        Guid tenantId,
         long contactId,
         DateTimeOffset lastMessageAtUtc,
+        bool isBotEnabled,
         CancellationToken cancellationToken)
     {
         var conversationId = await executor.QuerySingleAsync(
             "dbo.sp_Conversation_GetOrCreate",
             [
                 new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier) { Value = integrationId },
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId },
                 new SqlParameter("@ContactId", SqlDbType.BigInt) { Value = contactId },
                 new SqlParameter("@LastMessageAtUtc", SqlDbType.DateTime2)
-                    { Scale = 3, Value = lastMessageAtUtc.UtcDateTime }
+                    { Scale = 3, Value = lastMessageAtUtc.UtcDateTime },
+                new SqlParameter("@IsBotEnabled", SqlDbType.Bit) { Value = isBotEnabled }
             ],
             reader => reader.GetInt64(reader.GetOrdinal("ConversationId")),
             cancellationToken);

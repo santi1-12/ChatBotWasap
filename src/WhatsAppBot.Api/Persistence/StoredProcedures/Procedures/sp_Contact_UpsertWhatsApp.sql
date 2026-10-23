@@ -16,8 +16,10 @@ BEGIN
     WHERE IntegrationId = @IntegrationId AND WhatsAppUserId = @WhatsAppUserId;
     IF @ContactId IS NULL
     BEGIN
-        INSERT dbo.Contact (IntegrationId, WhatsAppUserId, DisplayName)
-        VALUES (@IntegrationId, @WhatsAppUserId, @DisplayName);
+        INSERT dbo.Contact (TenantId, IntegrationId, WhatsAppUserId, DisplayName)
+        SELECT integration.TenantId, @IntegrationId, @WhatsAppUserId, @DisplayName
+        FROM dbo.WhatsAppIntegration AS integration
+        WHERE integration.IntegrationId = @IntegrationId;
         SET @ContactId = CONVERT(bigint, SCOPE_IDENTITY());
     END
     ELSE

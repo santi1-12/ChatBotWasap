@@ -41,16 +41,19 @@ public sealed class ProcessInboundText(
             inboundEvent.WhatsAppUserId,
             inboundEvent.ContactDisplayName,
             cancellationToken);
+        var configuration = await botConfigurationService.GetAsync(cancellationToken);
         var conversationId = await conversationRepository.GetOrCreateAsync(
             integration.IntegrationId,
+            integration.TenantId
+                ?? throw new InvalidOperationException("The WhatsApp integration is not assigned to a Tenant."),
             contactId,
             inboundEvent.ProviderTimestampUtc.Value,
+            configuration.IsBotEnabled,
             cancellationToken);
 
         var inboundMessage = await messageRepository.InsertInboundAsync(
             integration.IntegrationId, conversationId, inboundEvent, cancellationToken);
 
-        var configuration = await botConfigurationService.GetAsync(cancellationToken);
         if (!configuration.IsBotEnabled)
         {
             await messageRepository.SetProcessingOutcomeAsync(

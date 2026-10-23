@@ -8,13 +8,18 @@ using ConnectionState = WhatsAppBot.Shared.Enums.ConnectionState;
 
 namespace WhatsAppBot.Api.Persistence.Repositories;
 
-public sealed class WhatsAppIntegrationRepository(StoredProcedureExecutor executor)
+public sealed class WhatsAppIntegrationRepository(
+    StoredProcedureExecutor executor,
+    ITenantContext tenantContext)
     : IWhatsAppIntegrationRepository
 {
     public async Task<WhatsAppIntegration> GetCurrentAsync(CancellationToken cancellationToken) =>
         await executor.QuerySingleAsync(
             "dbo.sp_WhatsAppIntegration_GetCurrent",
-            [],
+            [new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier)
+            {
+                Value = (object?)await TryGetTenantIdAsync(cancellationToken) ?? DBNull.Value
+            }],
             Map,
             cancellationToken)
         ?? throw new InvalidOperationException("The initial WhatsApp integration slot has not been provisioned.");
@@ -67,6 +72,7 @@ public sealed class WhatsAppIntegrationRepository(StoredProcedureExecutor execut
             GetNullableDateTime(reader, "ConnectedAtUtc"),
             reader.GetBoolean(reader.GetOrdinal("IsActive")))
         {
+            TenantId = GetNullableGuid(reader, "TenantId"),
             LastConnectionErrorCode = GetNullableString(reader, "LastConnectionErrorCode"),
             AccessTokenSecretRef = GetNullableString(reader, "AccessTokenSecretRef"),
             MetaAppSecretRef = GetNullableString(reader, "MetaAppSecretRef"),
@@ -75,10 +81,35 @@ public sealed class WhatsAppIntegrationRepository(StoredProcedureExecutor execut
             UpdatedAtUtc = GetUtcDateTime(reader, "UpdatedAtUtc")
         };
 
+    private async Task<Guid?> TryGetTenantIdAsync(CancellationToken cancellationToken)
+    {
+        if (tenantContext.Current is { } current)
+        {
+            return current.TenantId;
+        }
+
+        try
+        {
+            return (await tenantContext.GetRequiredAsync(cancellationToken)).TenantId;
+        }
+        catch (TenantContextUnavailableException)
+        {
+            // Webhook workers have no authenticated HTTP principal. Keep the existing
+            // single-active-integration fallback until provider phone lookup is expanded.
+            return null;
+        }
+    }
+
     private static string? GetNullableString(SqlDataReader reader, string name)
     {
         var ordinal = reader.GetOrdinal(name);
         return reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
+    }
+
+    private static Guid? GetNullableGuid(SqlDataReader reader, string name)
+    {
+        var ordinal = reader.GetOrdinal(name);
+        return reader.IsDBNull(ordinal) ? null : reader.GetGuid(ordinal);
     }
 
     private static DateTimeOffset? GetNullableDateTime(SqlDataReader reader, string name)

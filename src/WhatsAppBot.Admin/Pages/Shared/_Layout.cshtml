@@ -14,7 +14,7 @@
         <div class="sidebar-label">ESPACIO DE TRABAJO</div>
         <nav class="side-nav">
             <a class="side-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Index" ? "active" : "")" asp-page="/Index"><span>▦</span> Dashboard</a>
-            <span class="side-link disabled"><span>◉</span> Conversaciones</span>
+            <a class="side-link @(ViewContext.RouteData.Values["page"]?.ToString()?.StartsWith("/Conversations", StringComparison.Ordinal) == true ? "active" : "")" asp-page="/Conversations/Index"><span>◉</span> Conversaciones</a>
             <div class="sidebar-label mt-4">CONFIGURACIÓN</div>
             <a class="side-link @(ViewContext.RouteData.Values["page"]?.ToString()?.StartsWith("/Settings/WhatsApp", StringComparison.Ordinal) == true ? "active" : "")" asp-page="/Settings/WhatsApp/Index"><span>◎</span> WhatsApp Business</a>
             <a class="side-link @(ViewContext.RouteData.Values["page"]?.ToString()?.StartsWith("/Settings/Bot", StringComparison.Ordinal) == true ? "active" : "")" asp-page="/Settings/Bot/Index"><span>⚙</span> Bot</a>

@@ -94,6 +94,56 @@ public sealed class MetaCloudApiClient(
         return false;
     }
 
+    public async Task<IReadOnlyList<MetaPhoneNumberSummary>> GetPhoneNumbersAsync(
+        string accessToken, string wabaId, CancellationToken cancellationToken)
+    {
+        var numbers = new Dictionary<string, MetaPhoneNumberSummary>(StringComparer.Ordinal);
+        string? after = null;
+        for (var page = 0; page < 10; page++)
+        {
+            var request = CreateRequest($"{Uri.EscapeDataString(wabaId)}/phone_numbers", Method.Get);
+            request.AddQueryParameter("fields", "id");
+            request.AddQueryParameter("limit", "100");
+            if (after is not null)
+            {
+                request.AddQueryParameter("after", after);
+            }
+
+            request.AddHeader("Authorization", "Bearer " + accessToken);
+            var response = await ExecuteAsync(request, cancellationToken);
+            using var document = JsonDocument.Parse(response.Content!);
+            if (!document.RootElement.TryGetProperty("data", out var data) ||
+                data.ValueKind != JsonValueKind.Array)
+            {
+                throw new MetaApiException("MetaInvalidResponse", false);
+            }
+
+            foreach (var item in data.EnumerateArray())
+            {
+                var id = GetRequiredString(item, "id");
+                if (id.Length > 64)
+                {
+                    throw new MetaApiException("MetaInvalidResponse", false);
+                }
+
+                numbers.TryAdd(id, new MetaPhoneNumberSummary(id));
+            }
+
+            after = document.RootElement.TryGetProperty("paging", out var paging) &&
+                    paging.TryGetProperty("cursors", out var cursors) &&
+                    cursors.TryGetProperty("after", out var cursor) &&
+                    cursor.ValueKind == JsonValueKind.String
+                ? cursor.GetString()
+                : null;
+            if (string.IsNullOrWhiteSpace(after))
+            {
+                return numbers.Values.ToArray();
+            }
+        }
+
+        throw new MetaApiException("MetaPhoneNumberListTooLarge", false);
+    }
+
     public async Task RegisterPhoneNumberAsync(
         string accessToken, string phoneNumberId, CancellationToken cancellationToken)
     {
@@ -168,7 +218,9 @@ public sealed class MetaCloudApiClient(
         {
             throw new MetaApiException(
                 MapSafeFailureCode(response.StatusCode),
-                IsTransient(response.StatusCode));
+                IsTransient(response.StatusCode),
+                response.StatusCode,
+                GetSafeMetaRequestId(response));
         }
         if (string.IsNullOrWhiteSpace(response.Content))
         {
@@ -222,13 +274,33 @@ public sealed class MetaCloudApiClient(
 
     private static bool IsTransient(HttpStatusCode statusCode) =>
         statusCode == HttpStatusCode.TooManyRequests || (int)statusCode >= 500;
+
+    private static string? GetSafeMetaRequestId(RestResponse response)
+    {
+        var header = response.Headers?.FirstOrDefault(item =>
+            string.Equals(item.Name, "x-fb-trace-id", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(item.Name, "x-fb-request-id", StringComparison.OrdinalIgnoreCase));
+        var value = header?.Value?.ToString();
+        return value is not null &&
+               value.Length <= 128 &&
+               value.All(character =>
+                   char.IsAsciiLetterOrDigit(character) || character is '-' or '_' or ':' or '.')
+            ? value
+            : null;
+    }
 }
 
-public sealed class MetaApiException(string safeCode, bool isTransient)
+public sealed class MetaApiException(
+    string safeCode,
+    bool isTransient,
+    HttpStatusCode? statusCode = null,
+    string? metaRequestId = null)
     : Exception(safeCode)
 {
     public string SafeCode { get; } = safeCode;
     public bool IsTransient { get; } = isTransient;
+    public HttpStatusCode? StatusCode { get; } = statusCode;
+    public string? MetaRequestId { get; } = metaRequestId;
 }
 
 public sealed class MetaConfigurationException(string message) : Exception(message);

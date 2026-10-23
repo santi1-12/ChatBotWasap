@@ -29,6 +29,11 @@ public sealed class MetaWebhookEventParser : IMetaWebhookEventParser
 
             foreach (var change in changes.EnumerateArray())
             {
+                if (!string.Equals(GetString(change, "field"), "messages", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
                 if (!change.TryGetProperty("value", out var value) ||
                     value.ValueKind != JsonValueKind.Object)
                 {

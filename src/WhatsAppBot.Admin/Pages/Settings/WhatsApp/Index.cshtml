@@ -4,10 +4,13 @@
 @{
     ViewData["Title"] = "WhatsApp Business";
     var integration = Model.Integration;
+    var hasStandardSignup = !string.IsNullOrWhiteSpace(integration?.EmbeddedSignupConfigId);
+    var hasCoexistenceSignup = hasStandardSignup
+        || !string.IsNullOrWhiteSpace(integration?.CoexistenceEmbeddedSignupConfigId);
     var canStartSignup = !string.IsNullOrWhiteSpace(integration?.MetaAppId)
-        && !string.IsNullOrWhiteSpace(integration.EmbeddedSignupConfigId)
+        && (hasStandardSignup || hasCoexistenceSignup)
         && !string.IsNullOrWhiteSpace(integration.MetaGraphApiVersion)
-        && integration.ConnectionState != ConnectionState.Connected;
+        && !Model.IsConnected;
 }
 
 <div class="page-heading">
@@ -22,6 +25,10 @@
 {
     <div class="alert alert-danger" role="alert">@Model.ErrorMessage</div>
 }
+@if (!string.IsNullOrWhiteSpace(Model.PendingMessage))
+{
+    <div class="alert alert-warning" role="status">@Model.PendingMessage</div>
+}
 @if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
 {
     <div class="alert alert-success" role="status">@Model.SuccessMessage</div>
@@ -33,9 +40,9 @@
             <span class="eyebrow">ESTADO DE LA CONEXIÓN</span>
             <h2 class="h4 mt-2">@Model.ConnectionLabel(integration?.ConnectionState)</h2>
             <p class="text-muted mb-0">
-                @if (integration?.ConnectionState == ConnectionState.Connected)
+                @if (Model.IsConnected && integration is not null)
                 {
-                    <span>El número se autorizó y registró a través de Meta Embedded Signup.</span>
+                    <span>El número se autorizó y vinculó mediante Meta Embedded Signup.</span>
                 }
                 else
                 {
@@ -43,12 +50,12 @@
                 }
             </p>
         </div>
-        <span class="badge @(integration?.ConnectionState == ConnectionState.Connected ? "text-bg-success" : "text-bg-secondary")">
+        <span class="badge @(Model.IsConnected ? "text-bg-success" : "text-bg-secondary")">
             @Model.ConnectionLabel(integration?.ConnectionState)
         </span>
     </div>
 
-    @if (integration?.ConnectionState == ConnectionState.Connected)
+    @if (Model.IsConnected && integration is not null)
     {
         <hr />
         <dl class="row mb-3">
@@ -72,7 +79,24 @@
         <hr />
         @if (canStartSignup)
         {
-            <p>Autoriza la cuenta empresarial, elige o registra un número y completa la verificación solicitada por Meta.</p>
+            <p>Selecciona cómo está usando el número la empresa. La autorización y la verificación siempre se completan en Meta.</p>
+            <div class="mb-3">
+                <label class="form-label" for="onboardingTypeSelector">Tipo de conexión</label>
+                <select id="onboardingTypeSelector" class="form-select">
+                    @if (hasStandardSignup)
+                    {
+                        <option value="@WhatsAppOnboardingType.Standard">Standard Cloud API</option>
+                    }
+                    @if (hasCoexistenceSignup)
+                    {
+                        <option value="@WhatsAppOnboardingType.Coexistence">WhatsApp Business App Coexistence</option>
+                    }
+                </select>
+                <div class="form-text">
+                    Coexistence permite vincular un número que continúa activo en WhatsApp Business App,
+                    cuando Meta habilita esta opción para la empresa.
+                </div>
+            </div>
             <button id="connectMeta" type="button" class="btn btn-primary">Conectar WhatsApp Business</button>
             <p id="signupStatus" class="small text-muted mt-3" role="status"></p>
             <form id="completeSignup" method="post" asp-page-handler="CompleteSignup" class="d-none">
@@ -80,13 +104,14 @@
                 <input type="hidden" asp-for="AuthorizationCode" />
                 <input type="hidden" asp-for="WabaId" />
                 <input type="hidden" asp-for="PhoneNumberId" />
+                <input type="hidden" asp-for="OnboardingType" />
             </form>
         }
-        else
+        else if (Model.ShowConfigurationMissing)
         {
             <div class="alert alert-warning mb-0">
-                El Embedded Signup no está configurado. Configura Meta:AppId, Meta:EmbeddedSignupConfigId
-                y Meta:GraphApiVersion en los User Secrets del API.
+                El Embedded Signup no está configurado. Configura Meta:AppId, Meta:GraphApiVersion
+                y al menos una configuración autorizada para Standard o Coexistence en el API.
             </div>
         }
     }
@@ -94,12 +119,18 @@
 
 @if (canStartSignup)
 {
+    <script src="~/js/meta-embedded-signup-events.js" asp-append-version="true"></script>
     <script>
         const metaAppId = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(integration!.MetaAppId));
-        const signupConfigId = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(integration.EmbeddedSignupConfigId));
+        const standardConfigId = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(integration.EmbeddedSignupConfigId));
+        const coexistenceConfigId = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(integration.CoexistenceEmbeddedSignupConfigId));
         const graphVersion = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(integration.MetaGraphApiVersion));
+        const signupTypeSelector = document.getElementById("onboardingTypeSelector");
+        const connectButton = document.getElementById("connectMeta");
         let authorizationCode = null;
         let selectedAssets = null;
+        let activeOnboardingType = null;
+        let completionSubmitted = false;
 
         window.fbAsyncInit = function () {
             FB.init({ appId: metaAppId, cookie: true, xfbml: false, version: graphVersion });
@@ -114,42 +145,52 @@
         })(document, "script", "facebook-jssdk");
 
         function finishSignupWhenReady() {
-            if (!authorizationCode || !selectedAssets) return;
+            if (!authorizationCode || !selectedAssets || !selectedAssets.wabaId || completionSubmitted) return;
             document.getElementById("AuthorizationCode").value = authorizationCode;
             document.getElementById("WabaId").value = selectedAssets.wabaId;
-            document.getElementById("PhoneNumberId").value = selectedAssets.phoneNumberId;
+            document.getElementById("PhoneNumberId").value = selectedAssets.phoneNumberId || "";
+            document.getElementById("OnboardingType").value = activeOnboardingType;
             document.getElementById("signupStatus").textContent = "Finalizando conexión segura con Meta…";
+            completionSubmitted = true;
             document.getElementById("completeSignup").requestSubmit();
         }
 
+        function resetSignupAttempt() {
+            activeOnboardingType = null;
+            authorizationCode = null;
+            selectedAssets = null;
+            completionSubmitted = false;
+            signupTypeSelector.disabled = false;
+            connectButton.disabled = false;
+        }
+
         window.addEventListener("message", function (event) {
-            let origin;
-            try {
-                origin = new URL(event.origin);
-            } catch {
-                return;
-            }
-            if (origin.protocol !== "https:" ||
-                !(origin.hostname === "facebook.com" || origin.hostname.endsWith(".facebook.com"))) return;
-            let message;
-            try {
-                message = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
-            } catch {
-                return;
-            }
-            if (message?.type !== "WA_EMBEDDED_SIGNUP") return;
-            if (message.event === "CANCEL" || message.event === "ERROR") {
+            if (!MetaEmbeddedSignupEvents.isTrustedMetaOrigin(event.origin)) return;
+            const signupEvent = MetaEmbeddedSignupEvents.classifyMessage(event.data);
+            if (!signupEvent) return;
+            if (signupEvent === "CANCEL" || signupEvent === "ERROR") {
                 document.getElementById("signupStatus").textContent = "El proceso de Meta se canceló o no se completó.";
+                resetSignupAttempt();
                 return;
             }
-            if (message.event === "FINISH") {
-                const data = message.data || {};
-                selectedAssets = {
-                    wabaId: data.waba_id || data.wabaId,
-                    phoneNumberId: data.phone_number_id || data.phoneNumberId
-                };
-                finishSignupWhenReady();
+            if (!MetaEmbeddedSignupEvents.matchesOnboardingType(signupEvent, activeOnboardingType)) {
+                document.getElementById("signupStatus").textContent =
+                    "Meta finalizó un flujo distinto al seleccionado. No se procesó la conexión.";
+                resetSignupAttempt();
+                return;
             }
+            const message = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+            const data = message.data || {};
+            selectedAssets = {
+                wabaId: data.waba_id || data.wabaId,
+                phoneNumberId: data.phone_number_id || data.phoneNumberId
+            };
+            if (!selectedAssets.wabaId) {
+                document.getElementById("signupStatus").textContent =
+                    "Meta no devolvió el WABA ID requerido para validar la conexión.";
+                return;
+            }
+            finishSignupWhenReady();
         });
 
         document.getElementById("connectMeta").addEventListener("click", function () {
@@ -157,19 +198,27 @@
                 document.getElementById("signupStatus").textContent = "No se pudo cargar el SDK de Meta.";
                 return;
             }
+            activeOnboardingType = signupTypeSelector.value;
+            signupTypeSelector.disabled = true;
+            connectButton.disabled = true;
             document.getElementById("signupStatus").textContent = "Esperando autorización y selección de activos en Meta…";
             FB.login(function (response) {
                 authorizationCode = response?.authResponse?.code || null;
                 if (!authorizationCode) {
                     document.getElementById("signupStatus").textContent = "Meta no devolvió un código de autorización.";
+                    resetSignupAttempt();
                     return;
                 }
                 finishSignupWhenReady();
             }, {
-                config_id: signupConfigId,
+                config_id: activeOnboardingType === "@WhatsAppOnboardingType.Coexistence"
+                    ? coexistenceConfigId
+                    : standardConfigId,
                 response_type: "code",
                 override_default_response_type: true,
-                extras: { setup: {} }
+                extras: activeOnboardingType === "@WhatsAppOnboardingType.Coexistence"
+                    ? { setup: {}, featureType: "whatsapp_business_app_onboarding" }
+                    : { setup: {} }
             });
         });
     </script>

@@ -1,0 +1,120 @@
+@page
+@model WhatsAppBot.Admin.Pages.Conversations.DetailsModel
+@using WhatsAppBot.Shared.Enums
+@{
+    ViewData["Title"] = "Detalle de conversación";
+    var detail = Model.Conversation;
+}
+
+<section class="page-heading">
+    <div>
+        <p class="eyebrow">CONVERSACIONES</p>
+        <h1>Detalle de conversación</h1>
+        @if (detail is not null)
+        {
+            <p class="muted">@detail.Conversation.Contact · última actividad @detail.Conversation.LastMessageAtUtc.ToLocalTime().ToString("g")</p>
+        }
+    </div>
+    <a class="btn btn-outline-secondary" asp-page="./Index">Volver a conversaciones</a>
+</section>
+
+@if (Model.ErrorMessage is not null)
+{
+    <div class="alert alert-danger" role="alert">@Model.ErrorMessage</div>
+}
+
+@if (detail is not null)
+{
+    <section class="content-card conversation-summary-card">
+        <div>
+            <span class="eyebrow">CONTACTO</span>
+            <h2>@detail.Conversation.Contact</h2>
+        </div>
+        <div class="conversation-summary-meta">
+            <span class="state-pill @(detail.Conversation.Status == ConversationStatus.Open ? "ready" : "neutral")">@Model.StatusLabel(detail.Conversation.Status)</span>
+            <span class="muted">@(detail.Conversation.LastMessagePreview ?? "Sin vista previa")</span>
+        </div>
+    </section>
+
+    @if (detail.Messages.Count == 0)
+    {
+        <section class="content-card empty-state conversation-empty-history">
+            <span class="card-icon blue">◌</span>
+            <h2>Historial vacío</h2>
+            <p class="muted">La conversación existe, pero todavía no tiene mensajes consultables.</p>
+        </section>
+    }
+    else
+    {
+        @if (Model.HasOlderMessages)
+        {
+            <div class="conversation-load-older">
+                <a class="btn btn-sm btn-outline-secondary" asp-page="./Details" asp-route-id="@detail.Conversation.ConversationId" asp-route-beforeMessageId="@detail.Messages.First().MessageId">Cargar mensajes anteriores</a>
+            </div>
+        }
+
+        <section class="conversation-timeline" aria-label="Historial de mensajes">
+            @foreach (var message in detail.Messages)
+            {
+                var inbound = message.Direction == MessageDirection.Inbound;
+                <article class="message-row @(inbound ? "message-inbound" : "message-outbound")">
+                    <div class="message-bubble">
+                        <header class="message-header">
+                            <strong>@Model.DirectionLabel(message.Direction)</strong>
+                            <span>@message.CreatedAtUtc.ToLocalTime().ToString("g")</span>
+                        </header>
+
+                        <div class="message-kind">@Model.MessageTypeLabel(message.MessageType)</div>
+                        @if (message.MessageType == MessageType.Text)
+                        {
+                            <p class="message-content">@(message.Text ?? "Sin texto")</p>
+                        }
+                        else if (message.MessageType == MessageType.Audio)
+                        {
+                            @if (!string.IsNullOrWhiteSpace(message.MediaUrl))
+                            {
+                                <audio controls preload="none" src="@message.MediaUrl">El navegador no puede reproducir este audio.</audio>
+                            }
+                            else
+                            {
+                                <p class="media-placeholder">@(message.MediaAvailable ? "Audio conservado; el acceso seguro todavía no está habilitado." : "Audio recibido; el contenido multimedia no está disponible.")</p>
+                            }
+                            <p class="message-transcription"><strong>Transcripción:</strong> @(message.Transcription ?? "No disponible")</p>
+                        }
+                        else if (message.MessageType == MessageType.Image)
+                        {
+                            @if (!string.IsNullOrWhiteSpace(message.MediaUrl))
+                            {
+                                <img class="message-image" src="@message.MediaUrl" alt="Imagen recibida" loading="lazy" />
+                            }
+                            else
+                            {
+                                <p class="media-placeholder">@(message.MediaAvailable ? "Imagen conservada; el acceso seguro todavía no está habilitado." : "Imagen recibida; el contenido multimedia no está disponible.")</p>
+                            }
+                        }
+                        else
+                        {
+                            <p class="media-placeholder">Mensaje no compatible para visualización.</p>
+                        }
+
+                        <footer class="message-footer">
+                            <span>@Model.ProcessingLabel(message.ProcessingState)</span>
+                            @if (Model.DeliveryLabel(message.DeliveryState) is { } deliveryLabel)
+                            {
+                                <span>@deliveryLabel</span>
+                            }
+                            @if (Model.ReplySourceLabel(message.ReplySource) is { } sourceLabel)
+                            {
+                                <span>@sourceLabel</span>
+                            }
+                            @if (Model.OutcomeLabel(message.OutcomeCode) is { } outcomeLabel)
+                            {
+                                <span>@outcomeLabel</span>
+                            }
+                        </footer>
+                    </div>
+                </article>
+            }
+        </section>
+    }
+}

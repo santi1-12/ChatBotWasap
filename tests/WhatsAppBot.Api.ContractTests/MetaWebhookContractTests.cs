@@ -125,6 +125,52 @@ public sealed class MetaWebhookContractTests
         Assert.Contains(parsed, item => item.EventType == MetaWebhookEventTypes.DeliveryStatus);
     }
 
+    [Fact]
+    public void Parser_IgnoresAdditionalCoexistenceFieldsAndStillProcessesMessagesAndStatuses()
+    {
+        var parser = new MetaWebhookEventParser();
+        const string body = """
+            {
+              "object":"whatsapp_business_account",
+              "entry":[{
+                "id":"waba-test",
+                "changes":[
+                  {
+                    "field":"history",
+                    "value":{"messages":[{"unexpected":"historical payload"}]}
+                  },
+                  {
+                    "field":"smb_message_echoes",
+                    "value":{"events":[{"unexpected":"echo payload"}]}
+                  },
+                  {
+                    "field":"smb_app_state_sync",
+                    "value":{"contacts":[{"unexpected":"contact sync payload"}]}
+                  },
+                  {
+                    "field":"messages",
+                    "value":{
+                      "metadata":{"phone_number_id":"phone-test"},
+                      "messages":[
+                        {"from":"15551234567","id":"wamid.coexist-text","timestamp":"1790000000","type":"text","text":{"body":"Hello"}}
+                      ],
+                      "statuses":[
+                        {"id":"wamid.coexist-text","status":"delivered","timestamp":"1790000001"}
+                      ]
+                    }
+                  }
+                ]
+              }]
+            }
+            """;
+
+        var parsed = parser.Parse(Encoding.UTF8.GetBytes(body));
+
+        Assert.Equal(2, parsed.Count);
+        Assert.Contains(parsed, item => item.EventType == MetaWebhookEventTypes.InboundText);
+        Assert.Contains(parsed, item => item.EventType == MetaWebhookEventTypes.DeliveryStatus);
+    }
+
     private sealed class FakeSecretResolver : ISecretReferenceResolver
     {
         public ValueTask<string?> ResolveAsync(string secretReference, CancellationToken cancellationToken) =>

@@ -1,0 +1,82 @@
+@page
+@model WhatsAppBot.Admin.Pages.Conversations.IndexModel
+@{
+    ViewData["Title"] = "Conversaciones";
+}
+
+<section class="page-heading">
+    <div>
+        <p class="eyebrow">VISIBILIDAD</p>
+        <h1>Conversaciones</h1>
+        <p class="muted">Consulta el historial recibido y las respuestas registradas por el bot.</p>
+    </div>
+    @if (Model.TotalCount > 0)
+    {
+        <span class="date-chip">@Model.TotalCount conversación@(Model.TotalCount == 1 ? "" : "es")</span>
+    }
+</section>
+
+@if (Model.ErrorMessage is not null)
+{
+    <div class="alert alert-danger" role="alert">@Model.ErrorMessage</div>
+}
+
+<section class="content-card table-card">
+    @if (Model.Conversations.Count == 0 && Model.ErrorMessage is null)
+    {
+        <div class="empty-state">
+            <span class="card-icon green">◉</span>
+            <h2>Aún no hay conversaciones</h2>
+            <p class="muted">Las interacciones recibidas aparecerán aquí cuando exista historial persistido.</p>
+        </div>
+    }
+    else if (Model.Conversations.Count > 0)
+    {
+        <div class="table-responsive">
+            <table class="table conversation-table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Contacto</th>
+                        <th>Último mensaje</th>
+                        <th>Actividad</th>
+                        <th>Estado</th>
+                        <th><span class="visually-hidden">Acciones</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var conversation in Model.Conversations)
+                {
+                    <tr>
+                        <td>
+                            <a class="conversation-contact" asp-page="./Details" asp-route-id="@conversation.ConversationId">
+                                @conversation.Contact
+                            </a>
+                        </td>
+                        <td class="conversation-preview">@(conversation.LastMessagePreview ?? "Sin contenido de texto")</td>
+                        <td>@conversation.LastMessageAtUtc.ToLocalTime().ToString("g")</td>
+                        <td><span class="state-pill @(conversation.Status == WhatsAppBot.Shared.Enums.ConversationStatus.Open ? "ready" : "neutral")">@Model.StatusLabel(conversation.Status)</span></td>
+                        <td class="text-end">
+                            <a class="btn btn-sm btn-outline-secondary" asp-page="./Details" asp-route-id="@conversation.ConversationId">Ver historial</a>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@if (Model.TotalPages > 1)
+{
+    <nav class="conversation-pagination" aria-label="Paginación de conversaciones">
+        @if (Model.CurrentPage > 1)
+        {
+            <a class="btn btn-sm btn-outline-secondary" asp-page="./Index" asp-route-page="@(Model.CurrentPage - 1)" asp-route-pageSize="@Model.PageSize">Anterior</a>
+        }
+        <span>Página @Model.CurrentPage de @Model.TotalPages</span>
+        @if (Model.CurrentPage < Model.TotalPages)
+        {
+            <a class="btn btn-sm btn-outline-secondary" asp-page="./Index" asp-route-page="@(Model.CurrentPage + 1)" asp-route-pageSize="@Model.PageSize">Siguiente</a>
+        }
+    </nav>
+}

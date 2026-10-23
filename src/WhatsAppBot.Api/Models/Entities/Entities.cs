@@ -12,6 +12,17 @@ public sealed record WhatsAppIntegration(Guid IntegrationId, string? WabaId, str
     string? BusinessPhoneNumber, string? DisplayName, ConnectionState ConnectionState,
     DateTimeOffset? ConnectedAtUtc, bool IsActive)
 {
+    public bool HasCompleteConnection =>
+        ConnectionState == ConnectionState.Connected &&
+        IsActive &&
+        ConnectedAtUtc.HasValue &&
+        !string.IsNullOrWhiteSpace(WabaId) &&
+        !string.IsNullOrWhiteSpace(PhoneNumberId) &&
+        !string.IsNullOrWhiteSpace(BusinessPhoneNumber) &&
+        !string.IsNullOrWhiteSpace(AccessTokenSecretRef) &&
+        !string.IsNullOrWhiteSpace(MetaAppSecretRef) &&
+        !string.IsNullOrWhiteSpace(WebhookVerifyTokenRef);
+
     public string? LastConnectionErrorCode { get; init; }
     public string? AccessTokenSecretRef { get; init; }
     public string? MetaAppSecretRef { get; init; }

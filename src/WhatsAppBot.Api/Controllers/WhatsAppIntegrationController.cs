@@ -38,7 +38,11 @@ public sealed class WhatsAppIntegrationController(
         CancellationToken cancellationToken)
     {
         var integration = await integrationService.CompleteSignupAsync(
-            request.AuthorizationCode, request.WabaId, request.PhoneNumberId, cancellationToken);
+            request.AuthorizationCode,
+            request.WabaId,
+            string.IsNullOrWhiteSpace(request.PhoneNumberId) ? null : request.PhoneNumberId,
+            request.OnboardingType!.Value,
+            cancellationToken);
         var configuration = await botConfigurationService.GetAsync(cancellationToken);
         return Ok(ResponseE<WhatsAppIntegrationDTO>.Ok(
             Map(integration, configuration.IsBotEnabled), HttpContext.TraceIdentifier));
@@ -59,12 +63,17 @@ public sealed class WhatsAppIntegrationController(
             PhoneNumberId = integration.PhoneNumberId,
             BusinessPhoneNumber = integration.BusinessPhoneNumber,
             DisplayName = integration.DisplayName,
-            ConnectionState = integration.ConnectionState,
+            ConnectionState = integration.ConnectionState == ConnectionState.Connected &&
+                              !integration.HasCompleteConnection
+                ? ConnectionState.Error
+                : integration.ConnectionState,
+            ConnectionErrorCode = integration.LastConnectionErrorCode,
             BotEnabled = botEnabled,
             ConnectedAtUtc = integration.ConnectedAtUtc,
             HasCredentialReference = !string.IsNullOrWhiteSpace(integration.AccessTokenSecretRef),
             MetaAppId = metaOptions.Value.AppId,
             EmbeddedSignupConfigId = metaOptions.Value.EmbeddedSignupConfigId,
+            CoexistenceEmbeddedSignupConfigId = metaOptions.Value.EffectiveCoexistenceEmbeddedSignupConfigId,
             MetaGraphApiVersion = metaOptions.Value.GraphApiVersion
         };
 }

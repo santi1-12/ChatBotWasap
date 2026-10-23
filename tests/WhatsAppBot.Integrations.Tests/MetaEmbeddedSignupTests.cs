@@ -1,5 +1,8 @@
 using Microsoft.Extensions.Options;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging.Abstractions;
 using WhatsAppBot.Api.Business.Abstractions;
+using WhatsAppBot.Api.Helpers;
 using WhatsAppBot.Api.Infrastructure.Options;
 using WhatsAppBot.Api.Integrations.Meta;
 using WhatsAppBot.Api.Models.Contracts;
@@ -18,13 +21,33 @@ public sealed class MetaEmbeddedSignupTests
         var adapter = CreateAdapter(cloud, secretStore);
 
         var result = await adapter.CompleteAsync(
-            "single-use-code", "waba-1", "phone-1", CancellationToken.None);
+            "single-use-code", "waba-1", "phone-1",
+            WhatsAppOnboardingType.Standard, CancellationToken.None);
 
         Assert.Equal("waba-1", result.WabaId);
         Assert.Equal("phone-1", result.PhoneNumberId);
         Assert.Equal("secret-ref-123", result.AccessTokenSecretRef);
         Assert.DoesNotContain("access-token-value", System.Text.Json.JsonSerializer.Serialize(result));
         Assert.Equal(["exchange", "verify-waba", "lookup-phone", "register-phone", "subscribe-waba"], cloud.Calls);
+        Assert.Equal(1, secretStore.StoreCalls);
+    }
+
+    [Fact]
+    public async Task CompleteSignup_CoexistenceDiscoversSinglePhoneAndSkipsStandardRegistration()
+    {
+        var cloud = new FakeMetaCloudApiClient();
+        var secretStore = new FakeSecretStore();
+        var adapter = CreateAdapter(cloud, secretStore);
+
+        var result = await adapter.CompleteAsync(
+            "single-use-code", "waba-1", null,
+            WhatsAppOnboardingType.Coexistence, CancellationToken.None);
+
+        Assert.Equal("phone-1", result.PhoneNumberId);
+        Assert.Equal(
+            ["exchange", "list-phone-numbers", "verify-waba", "lookup-phone", "subscribe-waba"],
+            cloud.Calls);
+        Assert.DoesNotContain("register-phone", cloud.Calls);
         Assert.Equal(1, secretStore.StoreCalls);
     }
 
@@ -36,9 +59,10 @@ public sealed class MetaEmbeddedSignupTests
         var adapter = CreateAdapter(cloud, secretStore);
 
         var error = await Assert.ThrowsAsync<ExternalDependencyException>(() =>
-            adapter.CompleteAsync("single-use-code", "other-waba", "phone-1", CancellationToken.None));
+            adapter.CompleteAsync("single-use-code", "other-waba", "phone-1",
+                WhatsAppOnboardingType.Standard, CancellationToken.None));
 
-        Assert.Equal("MetaConfigurationMissing", error.SafeCode);
+        Assert.Equal("MetaPhoneNumberNotInWaba", error.SafeCode);
         Assert.DoesNotContain("register-phone", cloud.Calls);
         Assert.DoesNotContain("subscribe-waba", cloud.Calls);
         Assert.Equal(0, secretStore.StoreCalls);
@@ -51,13 +75,78 @@ public sealed class MetaEmbeddedSignupTests
         var adapter = CreateAdapter(cloud, new FakeSecretStore());
 
         var error = await Assert.ThrowsAsync<ExternalDependencyException>(() =>
-            adapter.CompleteAsync("single-use-code", "waba-1", "phone-1", CancellationToken.None));
+            adapter.CompleteAsync("single-use-code", "waba-1", "phone-1",
+                WhatsAppOnboardingType.Standard, CancellationToken.None));
 
         Assert.Equal("MetaAuthorizationFailed", error.SafeCode);
     }
 
+    [Fact]
+    public async Task CompleteSignup_RejectsCoexistenceWhenWabaHasNoPhoneNumbers()
+    {
+        var cloud = new FakeMetaCloudApiClient { PhoneNumbers = [] };
+        var secretStore = new FakeSecretStore();
+        var adapter = CreateAdapter(cloud, secretStore);
+
+        var error = await Assert.ThrowsAsync<ExternalDependencyException>(() =>
+            adapter.CompleteAsync("single-use-code", "waba-1", null,
+                WhatsAppOnboardingType.Coexistence, CancellationToken.None));
+
+        Assert.Equal("MetaPhoneNumberNotFound", error.SafeCode);
+        Assert.DoesNotContain("lookup-phone", cloud.Calls);
+        Assert.DoesNotContain("register-phone", cloud.Calls);
+        Assert.DoesNotContain("subscribe-waba", cloud.Calls);
+        Assert.Equal(0, secretStore.StoreCalls);
+    }
+
+    [Fact]
+    public async Task CompleteSignup_RejectsCoexistenceWhenWabaPhoneSelectionIsAmbiguous()
+    {
+        var cloud = new FakeMetaCloudApiClient
+        {
+            PhoneNumbers =
+            [
+                new MetaPhoneNumberSummary("phone-1"),
+                new MetaPhoneNumberSummary("phone-2")
+            ]
+        };
+        var secretStore = new FakeSecretStore();
+        var adapter = CreateAdapter(cloud, secretStore);
+
+        var error = await Assert.ThrowsAsync<ExternalDependencyException>(() =>
+            adapter.CompleteAsync("single-use-code", "waba-1", null,
+                WhatsAppOnboardingType.Coexistence, CancellationToken.None));
+
+        Assert.Equal("MetaPhoneNumberSelectionAmbiguous", error.SafeCode);
+        Assert.DoesNotContain("lookup-phone", cloud.Calls);
+        Assert.DoesNotContain("register-phone", cloud.Calls);
+        Assert.DoesNotContain("subscribe-waba", cloud.Calls);
+        Assert.Equal(0, secretStore.StoreCalls);
+    }
+
+    [Fact]
+    public async Task CompleteSignup_CoexistenceValidatesPhoneIdSuppliedByBrowserAgainstWaba()
+    {
+        var cloud = new FakeMetaCloudApiClient { PhoneBelongsToWaba = false };
+        var adapter = CreateAdapter(cloud, new FakeSecretStore());
+
+        var error = await Assert.ThrowsAsync<ExternalDependencyException>(() =>
+            adapter.CompleteAsync("single-use-code", "waba-1", "untrusted-phone",
+                WhatsAppOnboardingType.Coexistence, CancellationToken.None));
+
+        Assert.Equal("MetaPhoneNumberNotInWaba", error.SafeCode);
+        Assert.DoesNotContain("lookup-phone", cloud.Calls);
+        Assert.DoesNotContain("register-phone", cloud.Calls);
+    }
+
     private static MetaEmbeddedSignupAdapter CreateAdapter(
         FakeMetaCloudApiClient cloud, FakeSecretStore secretStore) =>
+        CreateAdapter(cloud, secretStore, new CompletionExecutionContext());
+
+    private static MetaEmbeddedSignupAdapter CreateAdapter(
+        FakeMetaCloudApiClient cloud,
+        FakeSecretStore secretStore,
+        CompletionExecutionContext executionContext) =>
         new(
             cloud,
             secretStore,
@@ -67,14 +156,22 @@ public sealed class MetaEmbeddedSignupTests
                 AppId = "public-app",
                 AppSecret = "secret",
                 VerifyToken = "verify-secret",
-                EmbeddedSignupConfigId = "config"
-            }));
+                EmbeddedSignupConfigId = "standard-config",
+                CoexistenceEmbeddedSignupConfigId = "coexistence-config"
+            }),
+            new CompletionPhaseLogger(
+                NullLogger<CompletionPhaseLogger>.Instance,
+                new HttpContextAccessor(),
+                executionContext),
+            executionContext);
 
     private sealed class FakeMetaCloudApiClient : IMetaCloudApiClient
     {
         public List<string> Calls { get; } = [];
         public bool PhoneBelongsToWaba { get; init; } = true;
         public bool FailExchange { get; init; }
+        public IReadOnlyList<MetaPhoneNumberSummary> PhoneNumbers { get; init; } =
+            [new MetaPhoneNumberSummary("phone-1")];
 
         public Task<string> ExchangeAuthorizationCodeAsync(string code, CancellationToken cancellationToken)
         {
@@ -96,6 +193,13 @@ public sealed class MetaEmbeddedSignupTests
         {
             Calls.Add("verify-waba");
             return Task.FromResult(PhoneBelongsToWaba);
+        }
+
+        public Task<IReadOnlyList<MetaPhoneNumberSummary>> GetPhoneNumbersAsync(
+            string accessToken, string wabaId, CancellationToken cancellationToken)
+        {
+            Calls.Add("list-phone-numbers");
+            return Task.FromResult(PhoneNumbers);
         }
 
         public Task RegisterPhoneNumberAsync(

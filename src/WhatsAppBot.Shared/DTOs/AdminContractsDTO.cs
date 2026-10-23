@@ -13,9 +13,11 @@ public sealed class WhatsAppIntegrationDTO
     public required ConnectionState ConnectionState { get; init; }
     public required bool BotEnabled { get; init; }
     public DateTimeOffset? ConnectedAtUtc { get; init; }
+    public string? ConnectionErrorCode { get; init; }
     public bool HasCredentialReference { get; init; }
     public string? MetaAppId { get; init; }
     public string? EmbeddedSignupConfigId { get; init; }
+    public string? CoexistenceEmbeddedSignupConfigId { get; init; }
     public string? MetaGraphApiVersion { get; init; }
 }
 
@@ -27,8 +29,11 @@ public sealed class EmbeddedSignupCompletionRequestDTO
     [Required, MaxLength(64)]
     public string WabaId { get; init; } = string.Empty;
 
-    [Required, MaxLength(64)]
-    public string PhoneNumberId { get; init; } = string.Empty;
+    [MaxLength(64)]
+    public string? PhoneNumberId { get; init; }
+
+    [Required, EnumDataType(typeof(WhatsAppOnboardingType))]
+    public WhatsAppOnboardingType? OnboardingType { get; init; }
 }
 
 public sealed class BotConfigurationDTO

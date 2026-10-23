@@ -13,3 +13,4 @@ public enum MediaAvailabilityState { Pending, Available, Expired, Failed, Delete
 public enum TranscriptState { Pending, Completed, Failed }
 public enum WebhookInboxState { Received, Processing, Completed, Failed }
 public enum MessageOutboxState { Pending, Sending, Sent, Failed }
+public enum WhatsAppOnboardingType { Standard, Coexistence }

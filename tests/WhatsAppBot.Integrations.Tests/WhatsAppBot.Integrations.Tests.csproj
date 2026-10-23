@@ -19,6 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\WhatsAppBot.Admin\WhatsAppBot.Admin.csproj" />
     <ProjectReference Include="..\..\src\WhatsAppBot.Api\WhatsAppBot.Api.csproj" />
     <ProjectReference Include="..\..\src\WhatsAppBot.Shared\WhatsAppBot.Shared.csproj" />
   </ItemGroup>

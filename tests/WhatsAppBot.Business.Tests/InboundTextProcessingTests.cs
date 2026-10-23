@@ -176,12 +176,24 @@ public sealed class InboundTextProcessingTests
         public Task<long> GetOrCreateAsync(
             Guid integrationId, long contactId, DateTimeOffset lastMessageAtUtc,
             CancellationToken cancellationToken) => Task.FromResult(6L);
+
+        public Task<ConversationPage> ListAsync(
+            Guid integrationId, int page, int pageSize, CancellationToken cancellationToken) =>
+            throw new NotImplementedException();
     }
 
     private sealed class FakeMessageRepository : IMessageRepository
     {
         public int InboundPersisted { get; private set; }
         public string? OutcomeCode { get; private set; }
+
+        public Task<ConversationDetailRecord?> GetHistoryAsync(
+            Guid integrationId,
+            long conversationId,
+            long? beforeMessageId,
+            int pageSize,
+            CancellationToken cancellationToken) =>
+            throw new NotImplementedException();
 
         public Task<InboundMessageInsertResult> InsertInboundAsync(
             Guid integrationId, long conversationId, NormalizedMetaEvent inboundEvent,

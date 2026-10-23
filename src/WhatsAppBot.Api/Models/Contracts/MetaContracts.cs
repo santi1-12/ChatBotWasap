@@ -24,6 +24,8 @@ public sealed record MetaSignupResult(
     string MetaAppSecretRef,
     string WebhookVerifyTokenRef);
 
+public sealed record MetaPhoneNumberSummary(string PhoneNumberId);
+
 public sealed record MetaPhoneNumberDetails(string DisplayPhoneNumber, string? VerifiedName);
 
 public sealed record MetaMessageSendResult(

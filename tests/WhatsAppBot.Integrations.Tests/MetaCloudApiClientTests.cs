@@ -66,6 +66,51 @@ public sealed class MetaCloudApiClientTests
         Assert.Empty(handler.Body);
     }
 
+    [Fact]
+    public async Task GetPhoneNumbers_ListsWabaNumbersWithBearerAuthorization()
+    {
+        var handler = new RecordingHandler(request => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(request.RequestUri!.Query.Contains("after=cursor-1", StringComparison.Ordinal)
+                ? "{\"data\":[{\"id\":\"phone-2\"}]}"
+                : "{\"data\":[{\"id\":\"phone-1\"}],\"paging\":{\"cursors\":{\"after\":\"cursor-1\"}}}")
+        });
+        var client = CreateClient(handler);
+
+        var numbers = await client.GetPhoneNumbersAsync(
+            "business-token", "waba-123", CancellationToken.None);
+
+        Assert.Equal(["phone-1", "phone-2"], numbers.Select(number => number.PhoneNumberId));
+        Assert.Equal("Bearer business-token", handler.Authorization);
+        Assert.Equal(HttpMethod.Get, handler.Method);
+        Assert.Equal("/v24.0/waba-123/phone_numbers", handler.RequestUri!.AbsolutePath);
+        Assert.Contains("limit=100", handler.RequestUri.Query);
+        Assert.Equal(2, handler.RequestCount);
+    }
+
+    [Fact]
+    public async Task GraphFailurePreservesOnlySafeStatusAndMetaRequestIdentifier()
+    {
+        var handler = new RecordingHandler(_ =>
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.BadRequest)
+            {
+                Content = new StringContent("{\"error\":{\"message\":\"private detail\"}}")
+            };
+            response.Headers.Add("x-fb-trace-id", "trace-123");
+            return response;
+        });
+        var client = CreateClient(handler);
+
+        var exception = await Assert.ThrowsAsync<MetaApiException>(() =>
+            client.GetPhoneNumberAsync("business-token", "phone-123", CancellationToken.None));
+
+        Assert.Equal("MetaRequestRejected", exception.SafeCode);
+        Assert.Equal(HttpStatusCode.BadRequest, exception.StatusCode);
+        Assert.Equal("trace-123", exception.MetaRequestId);
+        Assert.DoesNotContain("private detail", exception.Message);
+    }
+
     private static MetaCloudApiClient CreateClient(RecordingHandler handler)
     {
         var httpClient = new HttpClient(handler);
@@ -85,10 +130,12 @@ public sealed class MetaCloudApiClientTests
         public Uri? RequestUri { get; private set; }
         public string? Authorization { get; private set; }
         public string Body { get; private set; } = string.Empty;
+        public int RequestCount { get; private set; }
 
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            RequestCount++;
             Method = request.Method;
             RequestUri = request.RequestUri;
             Authorization = request.Headers.Authorization?.ToString();

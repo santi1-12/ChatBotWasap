@@ -29,7 +29,11 @@ public interface ISecretStore : ISecretReferenceResolver
 public interface IMetaEmbeddedSignupAdapter
 {
     Task<MetaSignupResult> CompleteAsync(
-        string authorizationCode, string wabaId, string phoneNumberId, CancellationToken cancellationToken);
+        string authorizationCode,
+        string wabaId,
+        string? phoneNumberId,
+        WhatsAppOnboardingType onboardingType,
+        CancellationToken cancellationToken);
 }
 
 public interface IMetaWebhookSignatureValidator
@@ -61,7 +65,11 @@ public interface IWhatsAppIntegrationService
 {
     Task<WhatsAppIntegration> GetCurrentAsync(CancellationToken cancellationToken);
     Task<WhatsAppIntegration> CompleteSignupAsync(
-        string authorizationCode, string wabaId, string phoneNumberId, CancellationToken cancellationToken);
+        string authorizationCode,
+        string wabaId,
+        string? phoneNumberId,
+        WhatsAppOnboardingType onboardingType,
+        CancellationToken cancellationToken);
     Task DisconnectAsync(CancellationToken cancellationToken);
 }
 
@@ -84,10 +92,18 @@ public interface IConversationRepository
 {
     Task<long> GetOrCreateAsync(
         Guid integrationId, long contactId, DateTimeOffset lastMessageAtUtc, CancellationToken cancellationToken);
+    Task<ConversationPage> ListAsync(
+        Guid integrationId, int page, int pageSize, CancellationToken cancellationToken);
 }
 
 public interface IMessageRepository
 {
+    Task<ConversationDetailRecord?> GetHistoryAsync(
+        Guid integrationId,
+        long conversationId,
+        long? beforeMessageId,
+        int pageSize,
+        CancellationToken cancellationToken);
     Task<InboundMessageInsertResult> InsertInboundAsync(
         Guid integrationId, long conversationId, NormalizedMetaEvent inboundEvent,
         CancellationToken cancellationToken);
@@ -131,6 +147,8 @@ public interface IMetaCloudApiClient
         string accessToken, string phoneNumberId, CancellationToken cancellationToken);
     Task<bool> PhoneNumberBelongsToWabaAsync(
         string accessToken, string wabaId, string phoneNumberId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<MetaPhoneNumberSummary>> GetPhoneNumbersAsync(
+        string accessToken, string wabaId, CancellationToken cancellationToken);
     Task RegisterPhoneNumberAsync(
         string accessToken, string phoneNumberId, CancellationToken cancellationToken);
     Task SubscribeWabaAsync(string accessToken, string wabaId, CancellationToken cancellationToken);

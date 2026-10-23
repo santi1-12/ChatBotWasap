@@ -11,6 +11,7 @@ BEGIN
     UPDATE dbo.WhatsAppIntegration
     SET ConnectionState = @ConnectionState,
         LastConnectionErrorCode = @SafeErrorCode,
+        IsActive = CASE WHEN @ConnectionState = N'Connected' THEN IsActive ELSE 0 END,
         UpdatedAtUtc = SYSUTCDATETIME()
     WHERE IntegrationId = @IntegrationId;
     IF @@ROWCOUNT = 0 THROW 51001, 'WhatsApp integration slot was not found.', 1;

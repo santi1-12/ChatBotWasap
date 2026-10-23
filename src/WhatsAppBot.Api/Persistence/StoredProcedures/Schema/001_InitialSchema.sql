@@ -45,7 +45,7 @@ BEGIN
         IsActive bit NOT NULL CONSTRAINT DF_WhatsAppIntegration_IsActive DEFAULT (0),
         ActiveSlot AS (CASE WHEN IsActive = 1 THEN 1 ELSE NULL END) PERSISTED,
         CONSTRAINT CK_WhatsAppIntegration_ConnectionState
-            CHECK (ConnectionState IN (N'NotConnected', N'Configuring', N'Connected', N'Error'))
+            CHECK (ConnectionState IN (N'NotConnected', N'Configuring', N'Connected', N'Error', N'Unknown'))
     );
 END;
 GO

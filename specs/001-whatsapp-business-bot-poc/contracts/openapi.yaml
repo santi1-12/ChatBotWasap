@@ -642,7 +642,7 @@ components:
           enum: [Standard, Coexistence, null]
         connectionState:
           type: string
-          enum: [NotConnected, Configuring, Connected, Error]
+          enum: [NotConnected, Configuring, Connected, Error, Unknown]
         connectionErrorCode:
           type: [string, 'null']
           description: Safe backend error classification; never contains provider response details or credentials.

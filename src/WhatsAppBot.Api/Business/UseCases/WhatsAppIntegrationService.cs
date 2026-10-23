@@ -1,8 +1,10 @@
 using WhatsAppBot.Api.Business.Abstractions;
 using WhatsAppBot.Api.Helpers;
+using WhatsAppBot.Api.Infrastructure.Options;
 using WhatsAppBot.Api.Models.Contracts;
 using WhatsAppBot.Api.Models.Entities;
 using WhatsAppBot.Shared.Enums;
+using Microsoft.Extensions.Options;
 using System.IO;
 
 namespace WhatsAppBot.Api.Business.UseCases;
@@ -12,7 +14,8 @@ public sealed class WhatsAppIntegrationService(
     IMetaEmbeddedSignupAdapter signupAdapter,
     ISecretStore secretStore,
     CompletionPhaseLogger phaseLogger,
-    CompletionExecutionContext executionContext) : IWhatsAppIntegrationService
+    CompletionExecutionContext executionContext,
+    IOptions<ApiOptions> apiOptions) : IWhatsAppIntegrationService
 {
     public Task<WhatsAppIntegration> GetCurrentAsync(CancellationToken cancellationToken) =>
         repository.GetCurrentAsync(cancellationToken);
@@ -33,6 +36,12 @@ public sealed class WhatsAppIntegrationService(
         }
 
         var integration = await repository.GetCurrentAsync(cancellationToken);
+        if (integration.ConnectionState == ConnectionState.Unknown ||
+            string.Equals(integration.LastConnectionErrorCode, "CompletionStateUnknown", StringComparison.Ordinal))
+        {
+            throw new BusinessValidationException(
+                "The previous Meta completion has an indeterminate state. Reconcile or disconnect it before retrying.");
+        }
         if (integration.HasCompleteConnection)
         {
             throw new BusinessValidationException("Disconnect the current WhatsApp number before connecting another.");
@@ -69,7 +78,10 @@ public sealed class WhatsAppIntegrationService(
         }
         catch (ExternalDependencyException exception)
         {
-            await TryPersistFailureStateAsync(integration.IntegrationId, exception.SafeCode);
+            var safeCode = executionContext.ExternalMutationMayHaveOccurred
+                ? "CompletionStateUnknown"
+                : exception.SafeCode;
+            await TryPersistFailureStateAsync(integration.IntegrationId, safeCode);
             throw;
         }
         catch (OperationCanceledException)
@@ -85,14 +97,18 @@ public sealed class WhatsAppIntegrationService(
         catch (Exception exception) when (
             exception is System.Data.Common.DbException or InvalidOperationException or TimeoutException)
         {
-            await TryPersistFailureStateAsync(integration.IntegrationId, "IntegrationPersistenceFailed");
+            var safeCode = executionContext.ExternalMutationMayHaveOccurred
+                ? "CompletionStateUnknown"
+                : "IntegrationPersistenceFailed";
+            await TryPersistFailureStateAsync(integration.IntegrationId, safeCode);
             throw;
         }
     }
 
     private async Task TryPersistFailureStateAsync(Guid integrationId, string safeErrorCode)
     {
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var timeout = new CancellationTokenSource(
+            TimeSpan.FromSeconds(apiOptions.Value.CompletionFailureStateTimeoutSeconds));
         try
         {
             var current = await repository.GetCurrentAsync(timeout.Token);
@@ -102,7 +118,12 @@ public sealed class WhatsAppIntegrationService(
             }
 
             await repository.SetConnectionStateAsync(
-                integrationId, ConnectionState.Error, safeErrorCode, timeout.Token);
+                integrationId,
+                safeErrorCode == "CompletionStateUnknown"
+                    ? ConnectionState.Unknown
+                    : ConnectionState.Error,
+                safeErrorCode,
+                timeout.Token);
         }
         catch (Exception)
         {

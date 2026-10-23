@@ -57,7 +57,21 @@ public sealed class WhatsAppIntegrationController(
     }
 
     private WhatsAppIntegrationDTO Map(WhatsAppIntegration integration, bool botEnabled) =>
-        new()
+        CreateDto(integration, botEnabled);
+
+    private WhatsAppIntegrationDTO CreateDto(WhatsAppIntegration integration, bool botEnabled)
+    {
+        var completionStateUnknown = integration.ConnectionState == ConnectionState.Unknown ||
+                                     string.Equals(
+                                         integration.LastConnectionErrorCode,
+                                         "CompletionStateUnknown",
+                                         StringComparison.Ordinal);
+        var connectionState = completionStateUnknown ||
+                              (integration.ConnectionState == ConnectionState.Connected &&
+                               !integration.HasCompleteConnection)
+            ? ConnectionState.Unknown
+            : integration.ConnectionState;
+        return new()
         {
             TenantId = integration.TenantId,
             WabaId = integration.WabaId,
@@ -65,11 +79,11 @@ public sealed class WhatsAppIntegrationController(
             BusinessPhoneNumber = integration.BusinessPhoneNumber,
             DisplayName = integration.DisplayName,
             OnboardingType = integration.OnboardingType,
-            ConnectionState = integration.ConnectionState == ConnectionState.Connected &&
-                              !integration.HasCompleteConnection
-                ? ConnectionState.Error
-                : integration.ConnectionState,
-            ConnectionErrorCode = integration.LastConnectionErrorCode,
+            ConnectionState = connectionState,
+            ConnectionErrorCode = connectionState == ConnectionState.Unknown &&
+                                  string.IsNullOrWhiteSpace(integration.LastConnectionErrorCode)
+                ? "CompletionStateUnknown"
+                : integration.LastConnectionErrorCode,
             BotEnabled = botEnabled,
             ConnectedAtUtc = integration.ConnectedAtUtc,
             HasCredentialReference = !string.IsNullOrWhiteSpace(integration.AccessTokenSecretRef),
@@ -78,4 +92,5 @@ public sealed class WhatsAppIntegrationController(
             CoexistenceEmbeddedSignupConfigId = metaOptions.Value.EffectiveCoexistenceEmbeddedSignupConfigId,
             MetaGraphApiVersion = metaOptions.Value.GraphApiVersion
         };
+    }
 }

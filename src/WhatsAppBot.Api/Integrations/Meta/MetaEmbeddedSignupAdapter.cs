@@ -49,6 +49,7 @@ public sealed class MetaEmbeddedSignupAdapter(
                 throw new MetaConfigurationException("Meta Embedded Signup returned incomplete asset identifiers.");
             }
 
+            executionContext.AuthorizationCodeAttempted = true;
             var token = await phaseLogger.RunAsync(
                 "OAuthCodeExchange",
                 () => metaClient.ExchangeAuthorizationCodeAsync(authorizationCode, cancellationToken));

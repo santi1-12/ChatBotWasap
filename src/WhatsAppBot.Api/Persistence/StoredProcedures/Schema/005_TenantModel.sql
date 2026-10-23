@@ -128,6 +128,17 @@ IF NOT EXISTS (
 )
     ALTER TABLE dbo.WhatsAppIntegration ADD CONSTRAINT CK_WhatsAppIntegration_OnboardingType
         CHECK (OnboardingType IS NULL OR OnboardingType IN (N'Standard', N'Coexistence'));
+IF EXISTS (
+    SELECT 1 FROM sys.check_constraints
+    WHERE parent_object_id = OBJECT_ID(N'dbo.WhatsAppIntegration')
+      AND name = N'CK_WhatsAppIntegration_ConnectionState'
+      AND definition NOT LIKE N'%Unknown%'
+)
+BEGIN
+    ALTER TABLE dbo.WhatsAppIntegration DROP CONSTRAINT CK_WhatsAppIntegration_ConnectionState;
+    ALTER TABLE dbo.WhatsAppIntegration ADD CONSTRAINT CK_WhatsAppIntegration_ConnectionState
+        CHECK (ConnectionState IN (N'NotConnected', N'Configuring', N'Connected', N'Error', N'Unknown'));
+END;
 IF NOT EXISTS (
     SELECT 1 FROM sys.check_constraints
     WHERE parent_object_id = OBJECT_ID(N'dbo.Conversation')

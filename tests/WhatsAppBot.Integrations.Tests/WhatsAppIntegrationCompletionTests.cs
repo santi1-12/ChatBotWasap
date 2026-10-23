@@ -31,7 +31,7 @@ public sealed class WhatsAppIntegrationCompletionTests
         var phaseLogger = CreatePhaseLogger(executionContext);
         var adapter = CreateAdapter(cloud, secretStore, repository, phaseLogger, executionContext);
         var service = new WhatsAppIntegrationService(
-            repository, adapter, secretStore, phaseLogger, executionContext);
+            repository, adapter, secretStore, phaseLogger, executionContext, CreateApiOptions());
 
         var integration = await service.CompleteSignupAsync(
             "authorization-code",
@@ -85,7 +85,8 @@ public sealed class WhatsAppIntegrationCompletionTests
             CreateAdapter(cloud, secretStore, repository, phaseLogger, executionContext),
             secretStore,
             phaseLogger,
-            executionContext);
+            executionContext,
+            CreateApiOptions());
 
         var error = await Assert.ThrowsAsync<ExternalDependencyException>(() =>
             service.CompleteSignupAsync(
@@ -98,7 +99,13 @@ public sealed class WhatsAppIntegrationCompletionTests
                 CancellationToken.None));
 
         Assert.Equal(expectedCode, error.SafeCode);
-        Assert.Equal(ConnectionState.Error, repository.Integration.ConnectionState);
+        var expectedState = failure is CompletionFailure.SecretStore or CompletionFailure.Subscription
+            ? ConnectionState.Unknown
+            : ConnectionState.Error;
+        Assert.Equal(expectedState, repository.Integration.ConnectionState);
+        Assert.Equal(
+            expectedState == ConnectionState.Unknown ? "CompletionStateUnknown" : expectedCode,
+            repository.Integration.LastConnectionErrorCode);
         Assert.False(repository.Integration.HasCompleteConnection);
     }
 
@@ -115,7 +122,8 @@ public sealed class WhatsAppIntegrationCompletionTests
             CreateAdapter(cloud, secretStore, repository, phaseLogger, executionContext),
             secretStore,
             phaseLogger,
-            executionContext);
+            executionContext,
+            CreateApiOptions());
 
         var error = await Assert.ThrowsAsync<ExternalDependencyException>(() =>
             service.CompleteSignupAsync(
@@ -123,7 +131,8 @@ public sealed class WhatsAppIntegrationCompletionTests
                 WhatsAppOnboardingType.Standard, CancellationToken.None));
 
         Assert.Equal("IntegrationPersistenceNotConfirmed", error.SafeCode);
-        Assert.Equal(ConnectionState.Error, repository.Integration.ConnectionState);
+        Assert.Equal(ConnectionState.Unknown, repository.Integration.ConnectionState);
+        Assert.Equal("CompletionStateUnknown", repository.Integration.LastConnectionErrorCode);
         Assert.False(repository.Integration.HasCompleteConnection);
     }
 
@@ -140,15 +149,42 @@ public sealed class WhatsAppIntegrationCompletionTests
             CreateAdapter(cloud, secretStore, repository, phaseLogger, executionContext),
             secretStore,
             phaseLogger,
-            executionContext);
+            executionContext,
+            CreateApiOptions());
 
         await Assert.ThrowsAsync<TaskCanceledException>(() =>
             service.CompleteSignupAsync(
                 "authorization-code", "waba-1", "phone-1",
                 WhatsAppOnboardingType.Coexistence, CancellationToken.None));
 
-        Assert.Equal(ConnectionState.Error, repository.Integration.ConnectionState);
+        Assert.Equal(ConnectionState.Unknown, repository.Integration.ConnectionState);
         Assert.Equal("CompletionStateUnknown", repository.Integration.LastConnectionErrorCode);
+    }
+
+    [Fact]
+    public async Task CompleteSignup_DoesNotRetryWhenPersistedStateIsUnknown()
+    {
+        var repository = new FakeIntegrationRepository { StartUnknown = true };
+        var cloud = new FakeMetaCloudApiClient();
+        var secretStore = new FakeSecretStore();
+        var executionContext = new CompletionExecutionContext();
+        var phaseLogger = CreatePhaseLogger(executionContext);
+        var service = new WhatsAppIntegrationService(
+            repository,
+            CreateAdapter(cloud, secretStore, repository, phaseLogger, executionContext),
+            secretStore,
+            phaseLogger,
+            executionContext,
+            CreateApiOptions());
+
+        var error = await Assert.ThrowsAsync<BusinessValidationException>(() =>
+            service.CompleteSignupAsync(
+                "single-use-code", "waba-1", "phone-1",
+                WhatsAppOnboardingType.Standard, CancellationToken.None));
+
+        Assert.Contains("indeterminate", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(cloud.Calls);
+        Assert.False(executionContext.AuthorizationCodeAttempted);
     }
 
     [Fact]
@@ -302,6 +338,9 @@ public sealed class WhatsAppIntegrationCompletionTests
             new HttpContextAccessor(),
             executionContext);
 
+    private static IOptions<ApiOptions> CreateApiOptions() =>
+        Options.Create(new ApiOptions { CompletionFailureStateTimeoutSeconds = 5 });
+
     private static IndexModel CreatePage(FakeAdminApiClient apiClient)
     {
         var page = new IndexModel(apiClient)
@@ -426,9 +465,21 @@ public sealed class WhatsAppIntegrationCompletionTests
             Guid.NewGuid(), null, null, null, null, ConnectionState.NotConnected, null, false);
         public List<ConnectionState> StateChanges { get; } = [];
         public bool SkipSignupPersistence { get; init; }
+        public bool StartUnknown { get; init; }
 
-        public Task<WhatsAppIntegration> GetCurrentAsync(CancellationToken cancellationToken) =>
-            Task.FromResult(Integration);
+        public Task<WhatsAppIntegration> GetCurrentAsync(CancellationToken cancellationToken)
+        {
+            if (StartUnknown)
+            {
+                return Task.FromResult(Integration with
+                {
+                    ConnectionState = ConnectionState.Unknown,
+                    LastConnectionErrorCode = "CompletionStateUnknown"
+                });
+            }
+
+            return Task.FromResult(Integration);
+        }
 
         public Task SaveSignupResultAsync(MetaSignupResult result, CancellationToken cancellationToken)
         {

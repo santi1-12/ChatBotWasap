@@ -1,6 +1,6 @@
 namespace WhatsAppBot.Shared.Enums;
 
-public enum ConnectionState { NotConnected, Configuring, Connected, Error }
+public enum ConnectionState { NotConnected, Configuring, Connected, Error, Unknown }
 public enum BotReplyMode { FaqOnly, FaqThenAi, AiOnly }
 public enum ConversationStatus { Open, Closed }
 public enum MessageDirection { Inbound, Outbound }

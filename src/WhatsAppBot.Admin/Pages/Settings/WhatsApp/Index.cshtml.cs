@@ -122,6 +122,7 @@ public sealed class IndexModel(IWhatsAppBotApiClient apiClient) : PageModel
         ConnectionState.Configuring => "Pendiente",
         ConnectionState.Connected => "Conectado",
         ConnectionState.Error => "Error",
+        ConnectionState.Unknown => "Estado indeterminado",
         _ => "Estado desconocido"
     };
 

@@ -116,6 +116,8 @@ public interface IMessageRepository
         long messageId, ProcessingState state, string? safeOutcomeCode, CancellationToken cancellationToken);
     Task<IReadOnlyList<OutboundMessageWorkItem>> ClaimOutboxBatchAsync(
         int batchSize, CancellationToken cancellationToken);
+    Task<OutboxRevalidationResult> RevalidateOutboxAsync(
+        OutboundMessageWorkItem item, CancellationToken cancellationToken);
     Task SetOutboxResultAsync(
         long messageId, MetaMessageSendResult result, bool isTerminal, CancellationToken cancellationToken);
     Task SetOutboxStateAsync(

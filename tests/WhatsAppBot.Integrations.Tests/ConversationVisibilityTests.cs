@@ -281,6 +281,9 @@ public sealed class ConversationVisibilityTests
             CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<IReadOnlyList<OutboundMessageWorkItem>> ClaimOutboxBatchAsync(
             int batchSize, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<OutboxRevalidationResult> RevalidateOutboxAsync(
+            OutboundMessageWorkItem item, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
         public Task SetOutboxResultAsync(
             long messageId, MetaMessageSendResult result, bool isTerminal,
             CancellationToken cancellationToken) => throw new NotSupportedException();

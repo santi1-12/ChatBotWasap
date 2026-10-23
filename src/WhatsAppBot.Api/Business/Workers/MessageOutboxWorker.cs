@@ -56,6 +56,12 @@ public sealed class MessageOutboxWorker(
             itemDeadline.CancelAfter(TimeSpan.FromSeconds(workerOptions.ItemTimeoutSeconds));
             try
             {
+                var revalidation = await messages.RevalidateOutboxAsync(item, itemDeadline.Token);
+                if (!revalidation.IsAllowed)
+                {
+                    continue;
+                }
+
                 var decision = policy.Evaluate(item.LastCustomerMessageAtUtc, clock.UtcNow);
                 var result = decision.IsAllowed
                     ? await sender.SendTextAsync(item.PhoneNumberId, item.Recipient, item.Text, itemDeadline.Token)

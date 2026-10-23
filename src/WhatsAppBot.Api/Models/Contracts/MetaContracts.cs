@@ -52,11 +52,16 @@ public sealed record OutboundMessageInsertResult(
 public sealed record OutboundMessageWorkItem(
     long MessageId,
     Guid IntegrationId,
+    Guid TenantId,
+    long ConversationId,
     string PhoneNumberId,
     string Recipient,
     string Text,
+    string ConversationVersion,
     DateTimeOffset LastCustomerMessageAtUtc,
     int AttemptCount);
+
+public sealed record OutboxRevalidationResult(bool IsAllowed, string? OutcomeCode);
 
 public static class MessageOutcomeCodes
 {
@@ -67,6 +72,11 @@ public static class MessageOutcomeCodes
     public const string AiFallbackNotConfigured = "AiFallbackNotConfigured";
     public const string UnsupportedMessageType = "UnsupportedMessageType";
     public const string MetaSendFailed = "MetaSendFailed";
+    public const string ConversationInHumanMode = "ConversationInHumanMode";
+    public const string ConversationClosed = "ConversationClosed";
+    public const string ConversationVersionConflict = "ConversationVersionConflict";
+    public const string IntegrationUnavailable = "IntegrationUnavailable";
+    public const string ManualSendFailed = "ManualSendFailed";
 }
 
 public static class MetaWebhookEventTypes

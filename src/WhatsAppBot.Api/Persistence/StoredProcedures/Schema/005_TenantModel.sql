@@ -135,6 +135,16 @@ IF COL_LENGTH(N'dbo.WebhookInboxEvent', N'TenantId') IS NULL
     ALTER TABLE dbo.WebhookInboxEvent ADD TenantId uniqueidentifier NULL;
 IF COL_LENGTH(N'dbo.MessageOutbox', N'TenantId') IS NULL
     ALTER TABLE dbo.MessageOutbox ADD TenantId uniqueidentifier NULL;
+IF COL_LENGTH(N'dbo.MessageOutbox', N'ConversationVersion') IS NULL
+    ALTER TABLE dbo.MessageOutbox ADD ConversationVersion binary(8) NULL;
+GO
+
+UPDATE outbox
+SET ConversationVersion = conversation.Version
+FROM dbo.MessageOutbox AS outbox
+INNER JOIN dbo.Message AS message ON message.MessageId = outbox.MessageId
+INNER JOIN dbo.Conversation AS conversation ON conversation.ConversationId = message.ConversationId
+WHERE outbox.ConversationVersion IS NULL;
 GO
 
 IF NOT EXISTS (

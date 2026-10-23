@@ -89,13 +89,36 @@ public sealed class MessageRepository(StoredProcedureExecutor executor) : IMessa
             reader => new OutboundMessageWorkItem(
                 reader.GetInt64(reader.GetOrdinal("MessageId")),
                 reader.GetGuid(reader.GetOrdinal("IntegrationId")),
+                reader.GetGuid(reader.GetOrdinal("TenantId")),
+                reader.GetInt64(reader.GetOrdinal("ConversationId")),
                 reader.GetString(reader.GetOrdinal("PhoneNumberId")),
                 reader.GetString(reader.GetOrdinal("Recipient")),
                 reader.GetString(reader.GetOrdinal("ContentText")),
+                ConversationVersion.Format((byte[])reader[reader.GetOrdinal("ConversationVersion")]),
                 new DateTimeOffset(DateTime.SpecifyKind(
                     reader.GetDateTime(reader.GetOrdinal("LastCustomerMessageAtUtc")), DateTimeKind.Utc)),
                 reader.GetInt32(reader.GetOrdinal("AttemptCount"))),
             cancellationToken)).ToArray();
+
+    public async Task<OutboxRevalidationResult> RevalidateOutboxAsync(
+        OutboundMessageWorkItem item, CancellationToken cancellationToken) =>
+        await executor.QuerySingleAsync(
+            "dbo.sp_MessageOutbox_Revalidate",
+            [
+                new SqlParameter("@MessageId", SqlDbType.BigInt) { Value = item.MessageId },
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = item.TenantId },
+                new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier) { Value = item.IntegrationId },
+                new SqlParameter("@ConversationId", SqlDbType.BigInt) { Value = item.ConversationId },
+                new SqlParameter("@ConversationVersion", SqlDbType.Binary, 8)
+                    { Value = ConversationVersion.Parse(item.ConversationVersion) }
+            ],
+            reader => new OutboxRevalidationResult(
+                reader.GetBoolean(reader.GetOrdinal("IsAllowed")),
+                reader.IsDBNull(reader.GetOrdinal("OutcomeCode"))
+                    ? null
+                    : reader.GetString(reader.GetOrdinal("OutcomeCode"))),
+            cancellationToken)
+        ?? throw new InvalidOperationException("The outbox revalidation did not return a result.");
 
     public Task SetOutboxResultAsync(
         long messageId,

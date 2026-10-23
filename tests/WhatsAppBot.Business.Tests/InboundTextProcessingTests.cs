@@ -217,6 +217,9 @@ public sealed class InboundTextProcessingTests
 
         public Task<IReadOnlyList<OutboundMessageWorkItem>> ClaimOutboxBatchAsync(
             int batchSize, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<OutboxRevalidationResult> RevalidateOutboxAsync(
+            OutboundMessageWorkItem item, CancellationToken cancellationToken) =>
+            throw new NotImplementedException();
         public Task SetOutboxResultAsync(
             long messageId, MetaMessageSendResult result, bool isTerminal, CancellationToken cancellationToken) =>
             throw new NotImplementedException();

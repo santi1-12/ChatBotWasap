@@ -8,6 +8,7 @@ public sealed class ContactRepository(StoredProcedureExecutor executor) : IConta
 {
     public async Task<long> UpsertWhatsAppAsync(
         Guid integrationId,
+        Guid tenantId,
         string whatsappUserId,
         string? displayName,
         CancellationToken cancellationToken)
@@ -16,6 +17,7 @@ public sealed class ContactRepository(StoredProcedureExecutor executor) : IConta
             "dbo.sp_Contact_UpsertWhatsApp",
             [
                 new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier) { Value = integrationId },
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId },
                 new SqlParameter("@WhatsAppUserId", SqlDbType.NVarChar, 64) { Value = whatsappUserId },
                 new SqlParameter("@DisplayName", SqlDbType.NVarChar, 256)
                     { Value = (object?)displayName ?? DBNull.Value }

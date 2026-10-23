@@ -14,6 +14,22 @@ BEGIN
 
     IF @TenantId IS NULL
         THROW 51030, 'A Tenant is required to persist a conversation.', 1;
+    IF NOT EXISTS
+    (
+        SELECT 1
+        FROM dbo.WhatsAppIntegration
+        WHERE IntegrationId = @IntegrationId AND TenantId = @TenantId
+    )
+        THROW 51031, 'The integration is not assigned to the Tenant.', 1;
+    IF NOT EXISTS
+    (
+        SELECT 1
+        FROM dbo.Contact
+        WHERE ContactId = @ContactId
+          AND IntegrationId = @IntegrationId
+          AND TenantId = @TenantId
+    )
+        THROW 51032, 'The contact is not assigned to the Tenant integration.', 1;
 
     BEGIN TRANSACTION;
     DECLARE @ConversationId bigint;
@@ -39,7 +55,7 @@ BEGIN
     ELSE
     BEGIN
         SELECT @WasClosed = CASE
-            WHEN BasicStatus = N'Closed' OR LifecycleStatus = N'Cerrada' THEN 1
+            WHEN LifecycleStatus = N'Cerrada' THEN 1
             ELSE 0
         END
         FROM dbo.Conversation WITH (UPDLOCK, HOLDLOCK)

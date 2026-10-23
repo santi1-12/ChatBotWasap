@@ -79,7 +79,8 @@ SET LifecycleStatus = CASE
         ELSE N'Abierta'
     END
 FROM dbo.Conversation AS conversation
-WHERE conversation.TenantId IS NULL;
+WHERE (conversation.BasicStatus = N'Closed' AND conversation.LifecycleStatus <> N'Cerrada')
+   OR (conversation.BasicStatus <> N'Closed' AND conversation.LifecycleStatus <> N'Abierta');
 
 UPDATE message
 SET ActorType = CASE

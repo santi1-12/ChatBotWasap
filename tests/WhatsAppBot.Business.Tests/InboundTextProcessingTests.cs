@@ -173,7 +173,8 @@ public sealed class InboundTextProcessingTests
     private sealed class FakeContactRepository : IContactRepository
     {
         public Task<long> UpsertWhatsAppAsync(
-            Guid integrationId, string whatsappUserId, string? displayName, CancellationToken cancellationToken) =>
+            Guid integrationId, Guid tenantId, string whatsappUserId, string? displayName,
+            CancellationToken cancellationToken) =>
             Task.FromResult(5L);
     }
 

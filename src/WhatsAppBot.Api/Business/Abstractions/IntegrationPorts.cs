@@ -87,7 +87,8 @@ public interface IWebhookInboxRepository
 public interface IContactRepository
 {
     Task<long> UpsertWhatsAppAsync(
-        Guid integrationId, string whatsappUserId, string? displayName, CancellationToken cancellationToken);
+        Guid integrationId, Guid tenantId, string whatsappUserId, string? displayName,
+        CancellationToken cancellationToken);
 }
 
 public interface IConversationRepository

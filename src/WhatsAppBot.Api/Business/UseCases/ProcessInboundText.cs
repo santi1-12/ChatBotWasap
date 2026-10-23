@@ -39,8 +39,11 @@ public sealed class ProcessInboundText(
             return;
         }
 
+        var tenantId = integration.TenantId
+            ?? throw new InvalidOperationException("The WhatsApp integration is not assigned to a Tenant.");
         var contactId = await contactRepository.UpsertWhatsAppAsync(
             integration.IntegrationId,
+            tenantId,
             inboundEvent.WhatsAppUserId,
             inboundEvent.ContactDisplayName,
             cancellationToken);
@@ -48,8 +51,7 @@ public sealed class ProcessInboundText(
             integration.IntegrationId, cancellationToken);
         var conversationId = await conversationRepository.GetOrCreateAsync(
             integration.IntegrationId,
-            integration.TenantId
-                ?? throw new InvalidOperationException("The WhatsApp integration is not assigned to a Tenant."),
+            tenantId,
             contactId,
             inboundEvent.ProviderTimestampUtc.Value,
             configuration.IsBotEnabled,
@@ -61,7 +63,7 @@ public sealed class ProcessInboundText(
         if (!configuration.IsBotEnabled)
         {
             await handoffService.TryHandoffAsync(
-                integration.TenantId.Value, conversationId,
+                tenantId, conversationId,
                 ConversationHandoffReasonCodes.BusinessRule, cancellationToken);
             await messageRepository.SetProcessingOutcomeAsync(
                 inboundMessage.MessageId, ProcessingState.NoReply, MessageOutcomeCodes.BotDisabled, cancellationToken);
@@ -71,7 +73,7 @@ public sealed class ProcessInboundText(
         if (IsCustomerRequestingHuman(inboundEvent.Text))
         {
             await handoffService.TryHandoffAsync(
-                integration.TenantId.Value, conversationId,
+                tenantId, conversationId,
                 ConversationHandoffReasonCodes.CustomerRequestedHuman, cancellationToken);
             await messageRepository.SetProcessingOutcomeAsync(
                 inboundMessage.MessageId, ProcessingState.NoReply,
@@ -88,7 +90,7 @@ public sealed class ProcessInboundText(
         catch (Exception) when (!cancellationToken.IsCancellationRequested)
         {
             await handoffService.TryHandoffAsync(
-                integration.TenantId.Value, conversationId,
+                tenantId, conversationId,
                 ConversationHandoffReasonCodes.BlockingError, cancellationToken);
             await messageRepository.SetProcessingOutcomeAsync(
                 inboundMessage.MessageId, ProcessingState.NoReply,
@@ -99,7 +101,7 @@ public sealed class ProcessInboundText(
         if (resolution.Kind == BotReplyResolutionKind.NoReply)
         {
             await handoffService.TryHandoffAsync(
-                integration.TenantId.Value, conversationId,
+                tenantId, conversationId,
                 ConversationHandoffReasonCodes.BotUnableToResolve, cancellationToken);
             await messageRepository.SetProcessingOutcomeAsync(
                 inboundMessage.MessageId,
@@ -112,7 +114,7 @@ public sealed class ProcessInboundText(
         if (resolution.Kind == BotReplyResolutionKind.AiFallbackRequired)
         {
             await handoffService.TryHandoffAsync(
-                integration.TenantId.Value, conversationId,
+                tenantId, conversationId,
                 ConversationHandoffReasonCodes.BotUnableToResolve, cancellationToken);
             await messageRepository.SetProcessingOutcomeAsync(
                 inboundMessage.MessageId,
@@ -134,7 +136,7 @@ public sealed class ProcessInboundText(
         if (!policy.IsAllowed)
         {
             await handoffService.TryHandoffAsync(
-                integration.TenantId.Value, conversationId,
+                tenantId, conversationId,
                 ConversationHandoffReasonCodes.BusinessRule, cancellationToken);
             await messageRepository.SetProcessingOutcomeAsync(
                 inboundMessage.MessageId, ProcessingState.NoReply, policy.OutcomeCode, cancellationToken);

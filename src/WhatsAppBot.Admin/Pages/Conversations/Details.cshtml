@@ -32,6 +32,12 @@
         </div>
         <div class="conversation-summary-meta">
             <span class="state-pill @(detail.Conversation.Status == ConversationStatus.Open ? "ready" : "neutral")">@Model.StatusLabel(detail.Conversation.Status)</span>
+            <span class="state-pill @(detail.Conversation.AttentionMode == AttentionMode.Humano ? "warning" : "ready")">Atención: @Model.AttentionLabel(detail.Conversation.AttentionMode)</span>
+            <span class="state-pill neutral">Ciclo: @Model.LifecycleLabel(detail.Conversation.LifecycleStatus)</span>
+            @if (detail.Conversation.AssignedAdminId is { } assignedAdminId)
+            {
+                <span class="muted">Responsable: #@assignedAdminId</span>
+            }
             <span class="muted">@(detail.Conversation.LastMessagePreview ?? "Sin vista previa")</span>
         </div>
     </section>
@@ -59,8 +65,8 @@
                 var inbound = message.Direction == MessageDirection.Inbound;
                 <article class="message-row @(inbound ? "message-inbound" : "message-outbound")">
                     <div class="message-bubble">
-                        <header class="message-header">
-                            <strong>@Model.DirectionLabel(message.Direction)</strong>
+                            <header class="message-header">
+                            <strong>@Model.DirectionLabel(message.Direction) · @Model.ActorLabel(message.ActorType)</strong>
                             <span>@message.CreatedAtUtc.ToLocalTime().ToString("g")</span>
                         </header>
 
@@ -98,6 +104,7 @@
                         }
 
                         <footer class="message-footer">
+                            <span>Origen: @Model.OriginLabel(message.Origin)</span>
                             <span>@Model.ProcessingLabel(message.ProcessingState)</span>
                             @if (Model.DeliveryLabel(message.DeliveryState) is { } deliveryLabel)
                             {

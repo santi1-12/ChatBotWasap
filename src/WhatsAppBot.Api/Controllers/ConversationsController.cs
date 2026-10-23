@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using WhatsAppBot.Api.Business.Abstractions;
 using WhatsAppBot.Api.Models.Contracts;
+using WhatsAppBot.Api.Models.Enums;
 using WhatsAppBot.Shared.DTOs;
 using WhatsAppBot.Shared.Responses;
 
@@ -88,14 +89,8 @@ public sealed class ConversationsController(
     };
 
     private static string? MapSafeOutcomeCode(string? code) => code switch
-    {
-        MessageOutcomeCodes.MessagingWindowClosed => code,
-        MessageOutcomeCodes.TemplateRequired => code,
-        MessageOutcomeCodes.BotDisabled => code,
-        MessageOutcomeCodes.NoFrequentResponse => code,
-        MessageOutcomeCodes.AiFallbackNotConfigured => code,
-        MessageOutcomeCodes.UnsupportedMessageType => code,
-        MessageOutcomeCodes.MetaSendFailed => code,
-        _ => null
-    };
+        {
+            _ when MessageOutcomeCodeRules.IsAllowlisted(code) => code,
+            _ => null
+        };
 }

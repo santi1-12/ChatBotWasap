@@ -830,7 +830,7 @@ components:
             $ref: "#/components/schemas/ConversationAuditEventDTO"
     ConversationAuditEventDTO:
       type: object
-      required: [eventType, actorType, occurredAtUtc]
+       required: [eventType, actorType, origin, occurredAtUtc]
       properties:
         eventType:
           type: string
@@ -838,6 +838,9 @@ components:
         actorType:
           type: string
           enum: [Admin, Bot, System]
+        origin:
+          type: string
+          enum: [MetaCloudApi, AdminPanel, System, FutureWhatsAppBusinessApp]
         actorAdminId:
           type: [integer, 'null']
           format: int64
@@ -902,10 +905,12 @@ components:
         outcomeCode:
           type: [string, 'null']
           description: Safe non-secret reason for a no-reply or rejected transition, including messaging policy blocks.
-          enum: [MessagingWindowClosed, TemplateRequired, BotDisabled, NoFrequentResponse,
-                 AiFallbackNotConfigured, UnsupportedMessageType, MetaSendFailed,
-                 ConversationInHumanMode, ConversationVersionConflict, ManualSendFailed,
-                 MediaExpired, HandoffToHuman, null]
+           enum: [MessagingWindowClosed, TemplateRequired, BotDisabled, NoFrequentResponse,
+                  AiFallbackNotConfigured, UnsupportedMessageType, MetaSendFailed,
+                  MetaDeliveryFailed, ConversationInHumanMode, ConversationClosed,
+                  ConversationVersionConflict, IntegrationUnavailable, ManualSendFailed,
+                  ManualReplyRequiresHuman, ManualReplyNotAuthorized, BlockingError,
+                  MediaExpired, HandoffToHuman, null]
         deliveryState:
           type: [string, 'null']
           enum: [Pending, Sent, Delivered, Read, Failed, null]

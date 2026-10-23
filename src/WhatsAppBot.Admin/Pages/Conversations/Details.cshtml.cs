@@ -58,6 +58,28 @@ public sealed class DetailsModel(IWhatsAppBotApiClient apiClient) : PageModel
         _ => "Desconocido"
     };
 
+    public string AttentionLabel(AttentionMode mode) => mode == AttentionMode.Humano ? "Humano" : "Bot";
+
+    public string LifecycleLabel(LifecycleStatus status) => status == LifecycleStatus.Cerrada ? "Cerrada" : "Abierta";
+
+    public string ActorLabel(ActorType? actorType) => actorType switch
+    {
+        ActorType.Customer => "Cliente",
+        ActorType.Bot => "Bot",
+        ActorType.Admin => "Administrador",
+        ActorType.System => "Sistema",
+        _ => "No informado"
+    };
+
+    public string OriginLabel(Origin? origin) => origin switch
+    {
+        Origin.MetaCloudApi => "Meta Cloud API",
+        Origin.AdminPanel => "Panel Admin",
+        Origin.System => "Sistema",
+        Origin.FutureWhatsAppBusinessApp => "WhatsApp Business App",
+        _ => "No informado"
+    };
+
     public string DirectionLabel(MessageDirection direction) => direction switch
     {
         MessageDirection.Inbound => "Cliente",
@@ -110,6 +132,15 @@ public sealed class DetailsModel(IWhatsAppBotApiClient apiClient) : PageModel
         "AiFallbackNotConfigured" => "La IA de fallback no está configurada",
         "UnsupportedMessageType" => "Tipo de mensaje no compatible",
         "MetaSendFailed" => "Meta no confirmó el envío",
+        "MetaDeliveryFailed" => "Meta reportó fallo de entrega",
+        "ConversationInHumanMode" => "La conversación está siendo atendida por una persona",
+        "ConversationClosed" => "La conversación está cerrada",
+        "ConversationVersionConflict" => "La conversación cambió antes de enviar",
+        "IntegrationUnavailable" => "La integración no está disponible",
+        "ManualSendFailed" => "No se pudo aceptar la respuesta manual",
+        "ManualReplyRequiresHuman" => "La respuesta manual requiere atención humana",
+        "ManualReplyNotAuthorized" => "El administrador no está autorizado para responder",
+        "BlockingError" => "El procesamiento automático fue bloqueado",
         _ => null
     };
 }

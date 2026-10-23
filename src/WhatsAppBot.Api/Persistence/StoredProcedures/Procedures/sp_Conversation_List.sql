@@ -17,18 +17,28 @@ BEGIN
 
     SELECT
         page.ConversationId,
+        page.TenantId,
         page.Contact,
         page.LastMessageAtUtc,
         page.Status,
+        page.AttentionMode,
+        page.LifecycleStatus,
+        page.AssignedAdminId,
+        page.Version,
         page.LastMessagePreview,
         totals.TotalCount
     FROM
     (
         SELECT
             conversation.ConversationId,
+            conversation.TenantId,
             COALESCE(NULLIF(LTRIM(RTRIM(contact.DisplayName)), N''), contact.WhatsAppUserId) AS Contact,
             conversation.LastMessageAtUtc,
             conversation.BasicStatus AS Status,
+            conversation.AttentionMode,
+            conversation.LifecycleStatus,
+            conversation.AssignedAdminId,
+            CONVERT(binary(8), conversation.Version) AS Version,
             lastMessage.LastMessagePreview
         FROM dbo.Conversation AS conversation
         INNER JOIN dbo.Contact AS contact

@@ -35,6 +35,10 @@ public sealed class IndexModel(IWhatsAppBotApiClient apiClient) : PageModel
         _ => "Desconocido"
     };
 
+    public string AttentionLabel(AttentionMode mode) => mode == AttentionMode.Humano ? "Humano" : "Bot";
+
+    public string LifecycleLabel(LifecycleStatus status) => status == LifecycleStatus.Cerrada ? "Cerrada" : "Abierta";
+
     private async Task LoadAsync(CancellationToken cancellationToken)
     {
         try

@@ -185,6 +185,16 @@ public sealed class MessageRepository(StoredProcedureExecutor executor) : IMessa
             reader.IsDBNull(reader.GetOrdinal("LastMessagePreview"))
                 ? null
                 : reader.GetString(reader.GetOrdinal("LastMessagePreview")));
+        summary = summary with
+        {
+            TenantId = reader.GetGuid(reader.GetOrdinal("TenantId")),
+            AttentionMode = Enum.Parse<AttentionMode>(reader.GetString(reader.GetOrdinal("AttentionMode")), false),
+            LifecycleStatus = Enum.Parse<LifecycleStatus>(reader.GetString(reader.GetOrdinal("LifecycleStatus")), false),
+            AssignedAdminId = reader.IsDBNull(reader.GetOrdinal("AssignedAdminId"))
+                ? null
+                : reader.GetInt64(reader.GetOrdinal("AssignedAdminId")),
+            Version = ConversationVersion.Format((byte[])reader[reader.GetOrdinal("Version")])
+        };
 
         var messageIdOrdinal = reader.GetOrdinal("MessageId");
         if (reader.IsDBNull(messageIdOrdinal))
@@ -194,6 +204,10 @@ public sealed class MessageRepository(StoredProcedureExecutor executor) : IMessa
 
         var replySourceOrdinal = reader.GetOrdinal("ReplySource");
         var deliveryStateOrdinal = reader.GetOrdinal("DeliveryState");
+        var actorTypeOrdinal = reader.GetOrdinal("ActorType");
+        var originOrdinal = reader.GetOrdinal("Origin");
+        var createdByAdminOrdinal = reader.GetOrdinal("CreatedByAdminId");
+        var sourceInboundOrdinal = reader.GetOrdinal("SourceInboundMessageId");
         var message = new ConversationMessageRecord(
             reader.GetInt64(messageIdOrdinal),
             Enum.Parse<MessageDirection>(reader.GetString(reader.GetOrdinal("Direction")), false),
@@ -216,6 +230,22 @@ public sealed class MessageRepository(StoredProcedureExecutor executor) : IMessa
                 ? null
                 : reader.GetString(reader.GetOrdinal("OutcomeCode")),
             ToUtc(reader, "CreatedAtUtc"));
+        message = message with
+        {
+            TenantId = reader.GetGuid(reader.GetOrdinal("TenantId")),
+            ActorType = reader.IsDBNull(actorTypeOrdinal)
+                ? null
+                : Enum.Parse<ActorType>(reader.GetString(actorTypeOrdinal), false),
+            Origin = reader.IsDBNull(originOrdinal)
+                ? null
+                : Enum.Parse<Origin>(reader.GetString(originOrdinal), false),
+            CreatedByAdminId = reader.IsDBNull(createdByAdminOrdinal)
+                ? null
+                : reader.GetInt64(createdByAdminOrdinal),
+            SourceInboundMessageId = reader.IsDBNull(sourceInboundOrdinal)
+                ? null
+                : reader.GetInt64(sourceInboundOrdinal)
+        };
         return new DetailRow(summary, message);
     }
 

@@ -176,6 +176,16 @@ public sealed class ConversationRepository(StoredProcedureExecutor executor)
             reader.IsDBNull(reader.GetOrdinal("LastMessagePreview"))
                 ? null
                 : reader.GetString(reader.GetOrdinal("LastMessagePreview")));
+        summary = summary with
+        {
+            TenantId = reader.GetGuid(reader.GetOrdinal("TenantId")),
+            AttentionMode = Enum.Parse<AttentionMode>(reader.GetString(reader.GetOrdinal("AttentionMode")), false),
+            LifecycleStatus = Enum.Parse<LifecycleStatus>(reader.GetString(reader.GetOrdinal("LifecycleStatus")), false),
+            AssignedAdminId = reader.IsDBNull(reader.GetOrdinal("AssignedAdminId"))
+                ? null
+                : reader.GetInt64(reader.GetOrdinal("AssignedAdminId")),
+            Version = ConversationVersion.Format((byte[])reader[reader.GetOrdinal("Version")])
+        };
         return new ListRow(summary, reader.GetInt64(reader.GetOrdinal("TotalCount")));
     }
 

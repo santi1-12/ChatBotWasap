@@ -1,5 +1,6 @@
 @page
 @model WhatsAppBot.Admin.Pages.Conversations.IndexModel
+@using WhatsAppBot.Shared.Enums
 @{
     ViewData["Title"] = "Conversaciones";
 }
@@ -39,6 +40,7 @@
                         <th>Contacto</th>
                         <th>Último mensaje</th>
                         <th>Actividad</th>
+                        <th>Atención</th>
                         <th>Estado</th>
                         <th><span class="visually-hidden">Acciones</span></th>
                     </tr>
@@ -54,6 +56,7 @@
                         </td>
                         <td class="conversation-preview">@(conversation.LastMessagePreview ?? "Sin contenido de texto")</td>
                         <td>@conversation.LastMessageAtUtc.ToLocalTime().ToString("g")</td>
+                        <td><span class="state-pill @(conversation.AttentionMode == AttentionMode.Humano ? "warning" : "ready")">@Model.AttentionLabel(conversation.AttentionMode)</span></td>
                         <td><span class="state-pill @(conversation.Status == WhatsAppBot.Shared.Enums.ConversationStatus.Open ? "ready" : "neutral")">@Model.StatusLabel(conversation.Status)</span></td>
                         <td class="text-end">
                             <a class="btn btn-sm btn-outline-secondary" asp-page="./Details" asp-route-id="@conversation.ConversationId">Ver historial</a>

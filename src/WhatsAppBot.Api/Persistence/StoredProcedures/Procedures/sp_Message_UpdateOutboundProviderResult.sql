@@ -12,17 +12,35 @@ BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
     BEGIN TRANSACTION;
+    DECLARE @CurrentDeliveryState nvarchar(24);
+    DECLARE @CurrentFailureCode nvarchar(100);
+    SELECT @CurrentDeliveryState = DeliveryState
+        ,@CurrentFailureCode = FailureCode
+    FROM dbo.Message WITH (UPDLOCK, HOLDLOCK)
+    WHERE MessageId = @MessageId AND Direction = N'Outbound';
+
     IF @Succeeded = 1
     BEGIN
         UPDATE dbo.Message
         SET ProviderMessageId = @ProviderMessageId,
-            DeliveryState = N'Sent',
-            ProcessingState = N'Completed',
-            FailureCode = NULL,
+            DeliveryState = CASE
+                WHEN @CurrentDeliveryState IN (N'Delivered', N'Read', N'Failed')
+                    THEN @CurrentDeliveryState
+                ELSE N'Sent'
+            END,
+            ProcessingState = CASE
+                WHEN @CurrentDeliveryState = N'Failed' THEN N'Failed'
+                ELSE N'Completed'
+            END,
+            FailureCode = CASE
+                WHEN @CurrentFailureCode IS NOT NULL THEN @CurrentFailureCode
+                ELSE NULL
+            END,
             UpdatedAtUtc = SYSUTCDATETIME()
         WHERE MessageId = @MessageId AND Direction = N'Outbound';
         UPDATE dbo.MessageOutbox
-        SET State = N'Sent', UpdatedAtUtc = SYSUTCDATETIME()
+        SET State = CASE WHEN @CurrentDeliveryState = N'Failed' THEN N'Failed' ELSE N'Sent' END,
+            UpdatedAtUtc = SYSUTCDATETIME()
         WHERE MessageId = @MessageId;
     END
     ELSE IF @IsTerminal = 1
@@ -32,9 +50,14 @@ BEGIN
             ProcessingState = N'Failed',
             FailureCode = @SafeFailureCode,
             UpdatedAtUtc = SYSUTCDATETIME()
-        WHERE MessageId = @MessageId AND Direction = N'Outbound';
+        WHERE MessageId = @MessageId AND Direction = N'Outbound'
+          AND @CurrentDeliveryState NOT IN (N'Delivered', N'Read');
         UPDATE dbo.MessageOutbox
-        SET State = N'Failed', UpdatedAtUtc = SYSUTCDATETIME()
+        SET State = CASE
+                WHEN @CurrentDeliveryState IN (N'Delivered', N'Read') THEN N'Sent'
+                ELSE N'Failed'
+            END,
+            UpdatedAtUtc = SYSUTCDATETIME()
         WHERE MessageId = @MessageId;
     END
     ELSE

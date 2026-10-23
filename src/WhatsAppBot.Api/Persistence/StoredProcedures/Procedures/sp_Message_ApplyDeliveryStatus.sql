@@ -21,13 +21,15 @@ BEGIN
     DECLARE @MessageId bigint;
     DECLARE @CurrentState nvarchar(24);
     DECLARE @CurrentStatusAtUtc datetime2(3);
+    DECLARE @CurrentFailureCode nvarchar(100);
     DECLARE @NewState nvarchar(24);
     DECLARE @ShouldApply bit = 0;
 
     SELECT TOP (1)
         @MessageId = message.MessageId,
         @CurrentState = message.DeliveryState,
-        @CurrentStatusAtUtc = message.DeliveryStatusAtUtc
+        @CurrentStatusAtUtc = message.DeliveryStatusAtUtc,
+        @CurrentFailureCode = message.FailureCode
     FROM dbo.Message AS message WITH (UPDLOCK, HOLDLOCK)
     INNER JOIN dbo.WhatsAppIntegration AS integration
         ON integration.IntegrationId = message.IntegrationId
@@ -49,7 +51,8 @@ BEGIN
         WHEN N'Sent' THEN 1
         WHEN N'Delivered' THEN 2
         WHEN N'Read' THEN 3
-        WHEN N'Failed' THEN 4
+        -- Failed records a provider failure, but a later confirmed delivery may recover it.
+        WHEN N'Failed' THEN 1
         ELSE -1
     END;
     DECLARE @IncomingRank int = CASE @DeliveryStatus
@@ -60,10 +63,15 @@ BEGIN
         ELSE -1
     END;
 
-    IF @CurrentState = N'Read' OR @CurrentState = N'Failed'
+    IF @CurrentState = N'Read'
         SET @ShouldApply = 0;
     ELSE IF @DeliveryStatus = N'failed'
-        SET @ShouldApply = CASE WHEN @CurrentState IN (N'Pending', N'Sent') THEN 1 ELSE 0 END;
+        SET @ShouldApply = CASE
+            WHEN @CurrentState IN (N'Pending', N'Sent') AND
+                 (@CurrentStatusAtUtc IS NULL OR @ProviderTimestampUtc >= @CurrentStatusAtUtc)
+                THEN 1
+            ELSE 0
+        END;
     ELSE IF @IncomingRank > @CurrentRank AND
             (@CurrentStatusAtUtc IS NULL OR @ProviderTimestampUtc >= @CurrentStatusAtUtc)
         SET @ShouldApply = 1;
@@ -80,7 +88,11 @@ BEGIN
         UPDATE dbo.Message
         SET DeliveryState = @NewState,
             ProcessingState = CASE WHEN @NewState = N'Failed' THEN N'Failed' ELSE N'Completed' END,
-            FailureCode = CASE WHEN @NewState = N'Failed' THEN N'MetaDeliveryFailed' ELSE NULL END,
+            FailureCode = CASE
+                WHEN @NewState = N'Failed' THEN N'MetaDeliveryFailed'
+                WHEN @CurrentFailureCode IS NOT NULL THEN @CurrentFailureCode
+                ELSE NULL
+            END,
             DeliveryStatusAtUtc = @ProviderTimestampUtc,
             UpdatedAtUtc = SYSUTCDATETIME()
         WHERE MessageId = @MessageId;

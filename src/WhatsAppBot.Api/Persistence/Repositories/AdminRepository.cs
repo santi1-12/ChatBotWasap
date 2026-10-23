@@ -26,12 +26,16 @@ public sealed class AdminRepository(StoredProcedureExecutor executor) : IAdminis
             cancellationToken);
 
     public Task<bool> CreateFirstAdministratorAsync(
-        string normalizedEmail, string passwordHash, CancellationToken cancellationToken) =>
+        string normalizedEmail,
+        string passwordHash,
+        string tenantLegalName,
+        CancellationToken cancellationToken) =>
         executor.ExecuteBooleanAsync(
             "dbo.sp_Admin_CreateFirstAdministrator",
             [
                 new SqlParameter("@Email", SqlDbType.NVarChar, 320) { Value = normalizedEmail },
-                new SqlParameter("@PasswordHash", SqlDbType.NVarChar, 512) { Value = passwordHash }
+                new SqlParameter("@PasswordHash", SqlDbType.NVarChar, 512) { Value = passwordHash },
+                new SqlParameter("@TenantLegalName", SqlDbType.NVarChar, 256) { Value = tenantLegalName }
             ],
             cancellationToken);
 }

@@ -89,6 +89,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<ISecretReferenceResolver>(provider =>
             provider.GetRequiredService<UserSecretsSecretStore>());
         services.AddScoped<BootstrapCommand>();
+        services.AddScoped<ITenantContext, TenantContext>();
         return services;
     }
 }

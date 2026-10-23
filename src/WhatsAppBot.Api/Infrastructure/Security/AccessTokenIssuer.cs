@@ -11,13 +11,13 @@ namespace WhatsAppBot.Api.Infrastructure.Security;
 
 public sealed class AccessTokenIssuer(IOptions<AuthenticationOptions> options) : IAccessTokenIssuer
 {
-    public IssuedAccessToken Create(long administratorId, string normalizedEmail)
+    public IssuedAccessToken Create(long administratorId, string normalizedEmail, Guid? activeTenantId = null)
     {
         var settings = options.Value;
         var expiresAt = DateTimeOffset.UtcNow.AddMinutes(settings.AccessTokenMinutes);
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(settings.SigningKey));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-        var claims = new[]
+        var claims = new List<Claim>
         {
             new Claim(JwtRegisteredClaimNames.Sub, administratorId.ToString()),
             new Claim(JwtRegisteredClaimNames.Email, normalizedEmail),
@@ -25,6 +25,10 @@ public sealed class AccessTokenIssuer(IOptions<AuthenticationOptions> options) :
             new Claim(ClaimTypes.Name, normalizedEmail),
             new Claim(ClaimTypes.Role, "Administrator")
         };
+        if (activeTenantId.HasValue)
+        {
+            claims.Add(new Claim(TenantClaimTypes.TenantId, activeTenantId.Value.ToString("D")));
+        }
         var token = new JwtSecurityToken(
             settings.Issuer,
             settings.Audience,

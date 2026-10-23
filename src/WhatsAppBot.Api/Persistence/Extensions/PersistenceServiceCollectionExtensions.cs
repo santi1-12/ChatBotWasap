@@ -9,6 +9,7 @@ public static class PersistenceServiceCollectionExtensions
     {
         services.AddScoped<StoredProcedureExecutor>();
         services.AddScoped<IAdministratorRepository, AdminRepository>();
+        services.AddScoped<ITenantRepository, TenantRepository>();
         services.AddScoped<IBotConfigurationRepository, BotConfigurationRepository>();
         services.AddScoped<IFrequentResponseRepository, FrequentResponseRepository>();
         services.AddScoped<IWhatsAppIntegrationRepository, WhatsAppIntegrationRepository>();

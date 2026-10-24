@@ -1,0 +1,236 @@
+@page
+@model WhatsAppBot.Admin.Pages.Conversations.DetailsModel
+@using WhatsAppBot.Shared.Enums
+@{
+    ViewData["Title"] = "Detalle de conversación";
+    var detail = Model.Conversation;
+}
+
+<section class="page-heading">
+    <div>
+        <p class="eyebrow">CONVERSACIONES</p>
+        <h1>Detalle de conversación</h1>
+        @if (detail is not null)
+        {
+            <p class="muted">@detail.Conversation.Contact · última actividad @detail.Conversation.LastMessageAtUtc.ToLocalTime().ToString("g")</p>
+        }
+    </div>
+    <a class="btn btn-outline-secondary" asp-page="./Index">Volver a conversaciones</a>
+</section>
+
+@if (Model.ErrorMessage is not null)
+{
+    <div class="alert alert-danger" role="alert">@Model.ErrorMessage</div>
+}
+
+@if (Model.SuccessMessage is not null)
+{
+    <div class="alert alert-success" role="status">@Model.SuccessMessage</div>
+}
+
+@if (detail is not null)
+{
+    <section class="content-card conversation-summary-card">
+        <div>
+            <span class="eyebrow">CONTACTO</span>
+            <h2>@detail.Conversation.Contact</h2>
+        </div>
+        <div class="conversation-summary-meta">
+            <span class="state-pill @(detail.Conversation.Status == ConversationStatus.Open ? "ready" : "neutral")">@Model.StatusLabel(detail.Conversation.Status)</span>
+            <span class="state-pill @(detail.Conversation.AttentionMode == AttentionMode.Humano ? "warning" : "ready")">Atención: @Model.AttentionLabel(detail.Conversation.AttentionMode)</span>
+            <span class="state-pill neutral">Ciclo: @Model.LifecycleLabel(detail.Conversation.LifecycleStatus)</span>
+            @if (detail.Conversation.AssignedAdminId is { } assignedAdminId)
+            {
+                <span class="muted">Responsable: #@assignedAdminId</span>
+            }
+            <span class="muted">@(detail.Conversation.LastMessagePreview ?? "Sin vista previa")</span>
+        </div>
+    </section>
+
+    <section class="content-card conversation-controls" aria-label="Controles de conversación">
+        <div class="page-heading compact-heading">
+            <div>
+                <p class="eyebrow">ATENCIÓN</p>
+                <h2>Control operativo</h2>
+                <p class="muted">La versión se valida en el servidor para evitar sobrescribir otra acción.</p>
+            </div>
+        </div>
+
+        <div class="conversation-action-row">
+            @if (detail.Conversation.LifecycleStatus == LifecycleStatus.Abierta && detail.Conversation.AttentionMode == AttentionMode.Bot)
+            {
+                <form method="post" asp-page-handler="Action" asp-route-id="@detail.Conversation.ConversationId">
+                    <input type="hidden" name="ActionRequest.Action" value="Take" />
+                    <input type="hidden" name="ActionRequest.ExpectedVersion" value="@detail.Conversation.Version" />
+                    <button class="btn btn-primary" type="submit">Tomar conversación</button>
+                </form>
+                <form method="post" asp-page-handler="Action" asp-route-id="@detail.Conversation.ConversationId" class="conversation-handoff-form">
+                    <input type="hidden" name="ActionRequest.Action" value="Handoff" />
+                    <input type="hidden" name="ActionRequest.ExpectedVersion" value="@detail.Conversation.Version" />
+                    <label class="visually-hidden" for="handoffReason">Motivo del handoff</label>
+                    <select id="handoffReason" name="ActionRequest.ReasonCode" class="form-select form-select-sm">
+                        <option value="CustomerRequestedHuman">Cliente pidió un humano</option>
+                        <option value="BotUnableToResolve">El bot no pudo resolver</option>
+                        <option value="BusinessRule">Regla de negocio</option>
+                        <option value="BlockingError">Error bloqueante</option>
+                    </select>
+                    <button class="btn btn-outline-secondary" type="submit">Pasar a humano</button>
+                </form>
+            }
+            @if (detail.Conversation.LifecycleStatus == LifecycleStatus.Abierta && detail.Conversation.AttentionMode == AttentionMode.Humano)
+            {
+                <form method="post" asp-page-handler="Action" asp-route-id="@detail.Conversation.ConversationId">
+                    <input type="hidden" name="ActionRequest.Action" value="ReturnToBot" />
+                    <input type="hidden" name="ActionRequest.ExpectedVersion" value="@detail.Conversation.Version" />
+                    <button class="btn btn-outline-secondary" type="submit">Devolver al bot</button>
+                </form>
+            }
+            @if (detail.Conversation.LifecycleStatus == LifecycleStatus.Abierta)
+            {
+                <form method="post" asp-page-handler="Action" asp-route-id="@detail.Conversation.ConversationId">
+                    <input type="hidden" name="ActionRequest.Action" value="Close" />
+                    <input type="hidden" name="ActionRequest.ExpectedVersion" value="@detail.Conversation.Version" />
+                    <button class="btn btn-outline-secondary" type="submit">Cerrar</button>
+                </form>
+            }
+            else
+            {
+                <form method="post" asp-page-handler="Action" asp-route-id="@detail.Conversation.ConversationId">
+                    <input type="hidden" name="ActionRequest.Action" value="Reopen" />
+                    <input type="hidden" name="ActionRequest.ExpectedVersion" value="@detail.Conversation.Version" />
+                    <button class="btn btn-primary" type="submit">Reabrir</button>
+                </form>
+            }
+        </div>
+
+        @if (detail.Conversation.LifecycleStatus == LifecycleStatus.Abierta && detail.Conversation.AttentionMode == AttentionMode.Humano)
+        {
+            <form method="post" asp-page-handler="ManualReply" asp-route-id="@detail.Conversation.ConversationId" class="manual-reply-form">
+                <label for="manualReplyText">Respuesta manual</label>
+                <textarea id="manualReplyText" name="ManualMessage.Text" class="form-control" rows="3" maxlength="4096" required placeholder="Escribe una respuesta de texto..."></textarea>
+                <input type="hidden" name="ManualMessage.ExpectedVersion" value="@detail.Conversation.Version" />
+                <button class="btn btn-primary" type="submit">Enviar respuesta</button>
+            </form>
+        }
+    </section>
+
+    @if (detail.Messages.Count == 0)
+    {
+        <section class="content-card empty-state conversation-empty-history">
+            <span class="card-icon blue">◌</span>
+            <h2>Historial vacío</h2>
+            <p class="muted">La conversación existe, pero todavía no tiene mensajes consultables.</p>
+        </section>
+    }
+    else
+    {
+        @if (Model.HasOlderMessages)
+        {
+            <div class="conversation-load-older">
+                <a class="btn btn-sm btn-outline-secondary" asp-page="./Details" asp-route-id="@detail.Conversation.ConversationId" asp-route-beforeMessageId="@detail.Messages.First().MessageId">Cargar mensajes anteriores</a>
+            </div>
+        }
+
+        <section class="conversation-timeline" aria-label="Historial de mensajes">
+            @foreach (var message in detail.Messages)
+            {
+                var inbound = message.Direction == MessageDirection.Inbound;
+                <article class="message-row @(inbound ? "message-inbound" : "message-outbound")">
+                    <div class="message-bubble">
+                            <header class="message-header">
+                            <strong>@Model.DirectionLabel(message.Direction) · @Model.ActorLabel(message.ActorType)</strong>
+                            <span>@message.CreatedAtUtc.ToLocalTime().ToString("g")</span>
+                        </header>
+
+                        <div class="message-kind">@Model.MessageTypeLabel(message.MessageType)</div>
+                        @if (message.MessageType == MessageType.Text)
+                        {
+                            <p class="message-content">@(message.Text ?? "Sin texto")</p>
+                        }
+                        else if (message.MessageType == MessageType.Audio)
+                        {
+                            @if (!string.IsNullOrWhiteSpace(message.MediaUrl))
+                            {
+                                <audio controls preload="none" src="@message.MediaUrl">El navegador no puede reproducir este audio.</audio>
+                            }
+                            else
+                            {
+                                <p class="media-placeholder">@(message.MediaAvailable ? "Audio conservado; el acceso seguro todavía no está habilitado." : "Audio recibido; el contenido multimedia no está disponible.")</p>
+                            }
+                            <p class="message-transcription"><strong>Transcripción:</strong> @(message.Transcription ?? "No disponible")</p>
+                        }
+                        else if (message.MessageType == MessageType.Image)
+                        {
+                            @if (!string.IsNullOrWhiteSpace(message.MediaUrl))
+                            {
+                                <img class="message-image" src="@message.MediaUrl" alt="Imagen recibida" loading="lazy" />
+                            }
+                            else
+                            {
+                                <p class="media-placeholder">@(message.MediaAvailable ? "Imagen conservada; el acceso seguro todavía no está habilitado." : "Imagen recibida; el contenido multimedia no está disponible.")</p>
+                            }
+                        }
+                        else
+                        {
+                            <p class="media-placeholder">Mensaje no compatible para visualización.</p>
+                        }
+
+                        <footer class="message-footer">
+                            <span>Origen: @Model.OriginLabel(message.Origin)</span>
+                            <span>@Model.ProcessingLabel(message.ProcessingState)</span>
+                            @if (Model.DeliveryLabel(message.DeliveryState) is { } deliveryLabel)
+                            {
+                                <span>@deliveryLabel</span>
+                            }
+                            @if (Model.ReplySourceLabel(message.ReplySource) is { } sourceLabel)
+                            {
+                                <span>@sourceLabel</span>
+                            }
+                            @if (Model.OutcomeLabel(message.OutcomeCode) is { } outcomeLabel)
+                            {
+                                <span>@outcomeLabel</span>
+                            }
+                        </footer>
+                    </div>
+                </article>
+            }
+        </section>
+    }
+
+    @if (detail.AuditEvents.Count > 0)
+    {
+        <section class="content-card conversation-audit-card" aria-label="Auditoría de conversación">
+            <div class="page-heading compact-heading">
+                <div>
+                    <p class="eyebrow">AUDITORÍA</p>
+                    <h2>Eventos de control</h2>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Evento</th>
+                            <th>Actor</th>
+                            <th>Origen</th>
+                            <th>Motivo</th>
+                            <th>Fecha</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var audit in detail.AuditEvents)
+                    {
+                        <tr>
+                            <td>@audit.EventType</td>
+                            <td>@Model.ActorLabel(audit.ActorType)</td>
+                            <td>@Model.OriginLabel(audit.Origin)</td>
+                            <td>@(audit.ReasonCode ?? "Sin motivo")</td>
+                            <td>@audit.OccurredAtUtc.ToLocalTime().ToString("g")</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+}

@@ -6,6 +6,8 @@ using WhatsAppBot.Api.Infrastructure.Bootstrap;
 using WhatsAppBot.Api.Infrastructure.Database;
 using WhatsAppBot.Api.Infrastructure.Options;
 using WhatsAppBot.Api.Infrastructure.Security;
+using WhatsAppBot.Api.Business.Services;
+using WhatsAppBot.Api.Infrastructure;
 
 namespace WhatsAppBot.Api.Infrastructure.Extensions;
 
@@ -33,12 +35,78 @@ public static class InfrastructureServiceCollectionExtensions
                 $"ConnectionStrings:{DatabaseOptions.ConnectionStringName} is required.")
             .ValidateOnStart();
         services.AddSingleton<ISqlConnectionFactory>(new SqlConnectionFactory(connectionString));
-        services.AddOptions<MetaOptions>().Bind(configuration.GetSection(MetaOptions.SectionName));
-        services.AddOptions<AiOptions>().Bind(configuration.GetSection(AiOptions.SectionName));
-        services.AddOptions<MediaStorageOptions>().Bind(configuration.GetSection(MediaStorageOptions.SectionName));
+        services.AddOptions<MetaOptions>()
+            .Bind(configuration.GetSection(MetaOptions.SectionName))
+            .Validate(options => options.RequestTimeoutSeconds is > 0 and <= 120,
+                "Meta:RequestTimeoutSeconds must be between 1 and 120.")
+            .Validate(options => options.WebhookMaxBodyBytes is >= 1024 and <= 1048576,
+                "Meta:WebhookMaxBodyBytes must be between 1024 and 1048576.")
+            .Validate(options => options.WorkerBatchSize is >= 1 and <= 100,
+                "Meta:WorkerBatchSize must be between 1 and 100.")
+            .Validate(options => options.MaxPhoneNumberPages is >= 1 and <= 100,
+                "Meta:MaxPhoneNumberPages must be between 1 and 100.")
+            .ValidateOnStart();
+        services.AddOptions<AiOptions>()
+            .Bind(configuration.GetSection(AiOptions.SectionName))
+            .Validate(options => options.RequestTimeoutSeconds is > 0 and <= 600,
+                "OpenAI:RequestTimeoutSeconds must be between 1 and 600.")
+            .Validate(options => options.MaxInputCharacters is >= 1 and <= 1_000_000,
+                "OpenAI:MaxInputCharacters must be between 1 and 1000000.")
+            .Validate(options => options.MaxOutputTokens is >= 1 and <= 100_000,
+                "OpenAI:MaxOutputTokens must be between 1 and 100000.")
+            .Validate(options => options.MaxOutputCharacters is >= 1 and <= 1_000_000,
+                "OpenAI:MaxOutputCharacters must be between 1 and 1000000.")
+            .Validate(options => Uri.TryCreate(options.Endpoint, UriKind.Absolute, out var endpoint)
+                                 && endpoint.Scheme == Uri.UriSchemeHttps,
+                "OpenAI:Endpoint must be an absolute HTTPS URL.")
+            .Validate(options => options.MaxAudioBytes is >= 1_024 and <= 100_000_000,
+                "OpenAI:MaxAudioBytes must be between 1024 and 100000000.")
+            .Validate(options => options.MaxImageBytes is >= 1_024 and <= 100_000_000,
+                "OpenAI:MaxImageBytes must be between 1024 and 100000000.")
+            .ValidateOnStart();
+        services.AddOptions<MediaStorageOptions>()
+            .Bind(configuration.GetSection(MediaStorageOptions.SectionName))
+            .Validate(options => options.RequestTimeoutSeconds is > 0 and <= 600,
+                "MediaStorage:RequestTimeoutSeconds must be between 1 and 600.")
+            .Validate(options => options.MaxFileBytes is >= 1_024 and <= 1_000_000_000,
+                "MediaStorage:MaxFileBytes must be between 1024 and 1000000000.")
+            .Validate(options => options.RetentionDays is >= 1 and <= 3650,
+                "MediaStorage:RetentionDays must be between 1 and 3650.")
+            .ValidateOnStart();
+        services.AddOptions<FfmpegOptions>()
+            .Bind(configuration.GetSection(FfmpegOptions.SectionName))
+            .Validate(options => options.TimeoutSeconds is > 0 and <= 1800,
+                "FFmpeg:TimeoutSeconds must be between 1 and 1800.")
+            .Validate(options => options.MaxInputBytes is >= 1_024 and <= 1_000_000_000,
+                "FFmpeg:MaxInputBytes must be between 1024 and 1000000000.")
+            .Validate(options => options.MaxOutputBytes is >= 1_024 and <= 2_000_000_000,
+                "FFmpeg:MaxOutputBytes must be between 1024 and 2000000000.")
+            .Validate(options => options.MaxDurationSeconds is > 0 and <= 7200,
+                "FFmpeg:MaxDurationSeconds must be between 1 and 7200.")
+            .ValidateOnStart();
+        services.AddOptions<WorkerOptions>()
+            .Bind(configuration.GetSection(WorkerOptions.SectionName))
+            .Validate(options => options.PollIntervalSeconds is > 0 and <= 60,
+                "Workers:PollIntervalSeconds must be between 1 and 60.")
+            .Validate(options => options.ItemTimeoutSeconds is > 0 and <= 1800,
+                "Workers:ItemTimeoutSeconds must be between 1 and 1800.")
+            .Validate(options => options.MaximumAttempts is > 0 and <= 20,
+                "Workers:MaximumAttempts must be between 1 and 20.")
+            .Validate(options => options.RetryBaseDelaySeconds is > 0 and <= 300,
+                "Workers:RetryBaseDelaySeconds must be between 1 and 300.")
+            .ValidateOnStart();
         services.AddOptions<ApiOptions>().Bind(configuration.GetSection(ApiOptions.SectionName))
             .Validate(options => options.RequestTimeoutSeconds is > 0 and <= 120,
                 "Api:RequestTimeoutSeconds must be between 1 and 120.")
+            .Validate(options => options.MaxRequestBodyBytes is >= 1024 and <= 104857600,
+                "Api:MaxRequestBodyBytes must be between 1024 and 104857600.")
+            .Validate(options => options.CompletionFailureStateTimeoutSeconds is > 0 and <= 60,
+                "Api:CompletionFailureStateTimeoutSeconds must be between 1 and 60.")
+            .ValidateOnStart();
+        services.AddOptions<SqlOptions>()
+            .Bind(configuration.GetSection(SqlOptions.SectionName))
+            .Validate(options => options.CommandTimeoutSeconds is > 0 and <= 600,
+                "Sql:CommandTimeoutSeconds must be between 1 and 600.")
             .ValidateOnStart();
         services.AddOptions<AuthenticationOptions>()
             .Bind(configuration.GetSection(AuthenticationOptions.SectionName))
@@ -74,7 +142,14 @@ public static class InfrastructureServiceCollectionExtensions
             });
         services.AddAuthorization();
         services.AddSingleton<IAccessTokenIssuer, AccessTokenIssuer>();
+        services.AddSingleton<IClock, SystemClock>();
+        services.AddSingleton<IWhatsAppMessagingPolicy, WhatsAppMessagingPolicy>();
+        services.AddSingleton<UserSecretsSecretStore>();
+        services.AddSingleton<ISecretStore>(provider => provider.GetRequiredService<UserSecretsSecretStore>());
+        services.AddSingleton<ISecretReferenceResolver>(provider =>
+            provider.GetRequiredService<UserSecretsSecretStore>());
         services.AddScoped<BootstrapCommand>();
+        services.AddScoped<ITenantContext, TenantContext>();
         return services;
     }
 }

@@ -45,7 +45,7 @@ BEGIN
         IsActive bit NOT NULL CONSTRAINT DF_WhatsAppIntegration_IsActive DEFAULT (0),
         ActiveSlot AS (CASE WHEN IsActive = 1 THEN 1 ELSE NULL END) PERSISTED,
         CONSTRAINT CK_WhatsAppIntegration_ConnectionState
-            CHECK (ConnectionState IN (N'NotConnected', N'Configuring', N'Connected', N'Error'))
+            CHECK (ConnectionState IN (N'NotConnected', N'Configuring', N'Connected', N'Error', N'Unknown'))
     );
 END;
 GO
@@ -234,12 +234,14 @@ BEGIN
     (
         MessageId bigint NOT NULL CONSTRAINT PK_MessageOutbox PRIMARY KEY,
         IntegrationId uniqueidentifier NOT NULL,
+        SourceInboundMessageId bigint NULL,
         State nvarchar(16) NOT NULL CONSTRAINT DF_MessageOutbox_State DEFAULT (N'Pending'),
         AttemptCount int NOT NULL CONSTRAINT DF_MessageOutbox_AttemptCount DEFAULT (0),
         NextAttemptAtUtc datetime2(3) NOT NULL CONSTRAINT DF_MessageOutbox_NextAttemptAt DEFAULT (SYSUTCDATETIME()),
         CreatedAtUtc datetime2(3) NOT NULL CONSTRAINT DF_MessageOutbox_CreatedAt DEFAULT (SYSUTCDATETIME()),
         UpdatedAtUtc datetime2(3) NOT NULL CONSTRAINT DF_MessageOutbox_UpdatedAt DEFAULT (SYSUTCDATETIME()),
         CONSTRAINT FK_MessageOutbox_Message FOREIGN KEY (MessageId) REFERENCES dbo.Message(MessageId),
+        CONSTRAINT FK_MessageOutbox_SourceInbound FOREIGN KEY (SourceInboundMessageId) REFERENCES dbo.Message(MessageId),
         CONSTRAINT FK_MessageOutbox_Integration FOREIGN KEY (IntegrationId)
             REFERENCES dbo.WhatsAppIntegration(IntegrationId),
         CONSTRAINT CK_MessageOutbox_State CHECK (State IN (N'Pending', N'Sending', N'Sent', N'Failed'))

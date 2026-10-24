@@ -16,6 +16,12 @@ public sealed class BootstrapCommand(
                 "Set Bootstrap:AdminEmail in User Secrets or a protected environment variable before bootstrapping.");
         }
 
+        var tenantLegalName = configuration["Bootstrap:TenantLegalName"]?.Trim();
+        if (string.IsNullOrWhiteSpace(tenantLegalName))
+        {
+            tenantLegalName = "Initial Tenant";
+        }
+
         var password = Environment.GetEnvironmentVariable("BOOTSTRAP_ADMIN_PASSWORD");
         if (string.IsNullOrEmpty(password))
         {
@@ -27,7 +33,8 @@ public sealed class BootstrapCommand(
             throw new InvalidOperationException("The bootstrap password must contain at least 14 characters.");
         }
 
-        var created = await bootstrapper.CreateFirstAdministratorAsync(email, password, cancellationToken);
+        var created = await bootstrapper.CreateFirstAdministratorAsync(
+            email, password, tenantLegalName, cancellationToken);
         if (!created)
         {
             logger.LogWarning("Administrator bootstrap refused because an administrator already exists.");

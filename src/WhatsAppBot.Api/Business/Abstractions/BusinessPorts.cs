@@ -10,12 +10,16 @@ public interface IAdministratorRepository
 {
     Task<Administrator?> GetForAuthenticationAsync(string normalizedEmail, CancellationToken cancellationToken);
     Task UpdateLastLoginAsync(long adminId, CancellationToken cancellationToken);
-    Task<bool> CreateFirstAdministratorAsync(string normalizedEmail, string passwordHash, CancellationToken cancellationToken);
+    Task<bool> CreateFirstAdministratorAsync(
+        string normalizedEmail,
+        string passwordHash,
+        string tenantLegalName,
+        CancellationToken cancellationToken);
 }
 
 public interface IAccessTokenIssuer
 {
-    IssuedAccessToken Create(long administratorId, string normalizedEmail);
+    IssuedAccessToken Create(long administratorId, string normalizedEmail, Guid? activeTenantId = null);
 }
 
 public interface IAdministratorAuthenticator
@@ -26,12 +30,18 @@ public interface IAdministratorAuthenticator
 
 public interface IAdministratorBootstrapper
 {
-    Task<bool> CreateFirstAdministratorAsync(string email, string password, CancellationToken cancellationToken);
+    Task<bool> CreateFirstAdministratorAsync(
+        string email,
+        string password,
+        string tenantLegalName,
+        CancellationToken cancellationToken);
 }
 
 public interface IBotConfigurationRepository
 {
     Task<BotConfiguration> GetCurrentAsync(CancellationToken cancellationToken);
+    Task<BotConfiguration> GetForIntegrationAsync(
+        Guid integrationId, CancellationToken cancellationToken);
     Task<BotConfiguration> UpdateAsync(
         Guid integrationId, bool isBotEnabled, BotReplyMode replyMode, CancellationToken cancellationToken);
 }
@@ -39,6 +49,8 @@ public interface IBotConfigurationRepository
 public interface IBotConfigurationService
 {
     Task<BotConfiguration> GetAsync(CancellationToken cancellationToken);
+    Task<BotConfiguration> GetForIntegrationAsync(
+        Guid integrationId, CancellationToken cancellationToken);
     Task<BotConfiguration> UpdateAsync(
         bool isBotEnabled, BotReplyMode replyMode, CancellationToken cancellationToken);
 }

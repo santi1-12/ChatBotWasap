@@ -17,16 +17,22 @@ BEGIN
     IF @ReplyMode NOT IN (N'FaqOnly', N'FaqThenAi', N'AiOnly')
         THROW 51011, 'The selected reply mode is not supported.', 1;
 
+    DECLARE @TenantId uniqueidentifier =
+        (SELECT TenantId FROM dbo.WhatsAppIntegration WHERE IntegrationId = @IntegrationId);
+    IF @TenantId IS NULL
+        THROW 51012, 'The integration is not assigned to a Tenant.', 1;
+
     UPDATE dbo.BotConfiguration
-    SET IsBotEnabled = @IsBotEnabled,
+    SET TenantId = @TenantId,
+        IsBotEnabled = @IsBotEnabled,
         ReplyMode = @ReplyMode,
         UpdatedAtUtc = SYSUTCDATETIME()
     WHERE IntegrationId = @IntegrationId;
 
     IF @@ROWCOUNT = 0
     BEGIN
-        INSERT dbo.BotConfiguration (IntegrationId, IsBotEnabled, ReplyMode)
-        VALUES (@IntegrationId, @IsBotEnabled, @ReplyMode);
+        INSERT dbo.BotConfiguration (IntegrationId, TenantId, IsBotEnabled, ReplyMode)
+        VALUES (@IntegrationId, @TenantId, @IsBotEnabled, @ReplyMode);
     END;
 
     SELECT IntegrationId, IsBotEnabled, ReplyMode, CreatedAtUtc, UpdatedAtUtc

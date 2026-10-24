@@ -7,7 +7,8 @@ USE [WhatsAppBot];
 GO
 CREATE OR ALTER PROCEDURE dbo.sp_Admin_CreateFirstAdministrator
     @Email nvarchar(320),
-    @PasswordHash nvarchar(512)
+    @PasswordHash nvarchar(512),
+    @TenantLegalName nvarchar(256) = N'Initial Tenant'
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -36,6 +37,13 @@ BEGIN
 
     INSERT dbo.Administrator (Email, PasswordHash, IsActive)
     VALUES (UPPER(LTRIM(RTRIM(@Email))), @PasswordHash, 1);
+
+    DECLARE @AdminId bigint = CONVERT(bigint, SCOPE_IDENTITY());
+    DECLARE @TenantId uniqueidentifier = NEWID();
+    INSERT dbo.Tenant (TenantId, LegalName, IsActive)
+    VALUES (@TenantId, COALESCE(NULLIF(LTRIM(RTRIM(@TenantLegalName)), N''), N'Initial Tenant'), 1);
+    INSERT dbo.TenantMembership (TenantId, AdminId, IsActive)
+    VALUES (@TenantId, @AdminId, 1);
 
     COMMIT TRANSACTION;
     SELECT CAST(1 AS bit);

@@ -6,14 +6,22 @@ namespace WhatsAppBot.Shared.DTOs;
 
 public sealed class WhatsAppIntegrationDTO
 {
+    public Guid? TenantId { get; init; }
     public string? WabaId { get; init; }
     public string? PhoneNumberId { get; init; }
     public string? BusinessPhoneNumber { get; init; }
     public string? DisplayName { get; init; }
     public required ConnectionState ConnectionState { get; init; }
+    public WhatsAppOnboardingType? OnboardingType { get; init; }
     public required bool BotEnabled { get; init; }
     public DateTimeOffset? ConnectedAtUtc { get; init; }
+    public string? ConnectionErrorCode { get; init; }
     public bool HasCredentialReference { get; init; }
+    public string? MetaAppId { get; init; }
+    public string? EmbeddedSignupConfigId { get; init; }
+    public string? CoexistenceEmbeddedSignupConfigId { get; init; }
+    public string? EffectiveEmbeddedSignupConfigId { get; init; }
+    public string? MetaGraphApiVersion { get; init; }
 }
 
 public sealed class EmbeddedSignupCompletionRequestDTO
@@ -24,8 +32,11 @@ public sealed class EmbeddedSignupCompletionRequestDTO
     [Required, MaxLength(64)]
     public string WabaId { get; init; } = string.Empty;
 
-    [Required, MaxLength(64)]
-    public string PhoneNumberId { get; init; } = string.Empty;
+    [MaxLength(64)]
+    public string? PhoneNumberId { get; init; }
+
+    [Required, EnumDataType(typeof(WhatsAppOnboardingType))]
+    public WhatsAppOnboardingType? OnboardingType { get; init; }
 }
 
 public sealed class BotConfigurationDTO
@@ -89,9 +100,14 @@ public sealed class FrequentResponseDTO
 
 public sealed class MessageDTO
 {
+    public Guid? TenantId { get; init; }
     public long MessageId { get; init; }
     public required MessageDirection Direction { get; init; }
     public required MessageType MessageType { get; init; }
+    public ActorType? ActorType { get; init; }
+    public Origin? Origin { get; init; }
+    public long? CreatedByAdminId { get; init; }
+    public long? SourceInboundMessageId { get; init; }
     public string? Text { get; init; }
     public string? Transcription { get; init; }
     public bool MediaAvailable { get; init; }
@@ -105,10 +121,15 @@ public sealed class MessageDTO
 
 public sealed class ConversationSummaryDTO
 {
+    public Guid? TenantId { get; init; }
     public long ConversationId { get; init; }
     public required string Contact { get; init; }
     public DateTimeOffset LastMessageAtUtc { get; init; }
     public required ConversationStatus Status { get; init; }
+    public AttentionMode AttentionMode { get; init; } = AttentionMode.Bot;
+    public LifecycleStatus LifecycleStatus { get; init; } = LifecycleStatus.Abierta;
+    public long? AssignedAdminId { get; init; }
+    public string? Version { get; init; }
     public string? LastMessagePreview { get; init; }
 }
 
@@ -116,6 +137,34 @@ public sealed class ConversationDetailDTO
 {
     public required ConversationSummaryDTO Conversation { get; init; }
     public IReadOnlyList<MessageDTO> Messages { get; init; } = [];
+    public IReadOnlyList<ConversationAuditEventDTO> AuditEvents { get; init; } = [];
+}
+
+public sealed class ConversationActionRequestDTO
+{
+    public required ConversationAction Action { get; init; }
+    public string? ReasonCode { get; init; }
+    public required string ExpectedVersion { get; set; }
+}
+
+public sealed class ManualMessageRequestDTO
+{
+    [Required, MaxLength(4096)]
+    public string Text { get; init; } = string.Empty;
+
+    [Required, MaxLength(128)]
+    public string ExpectedVersion { get; set; } = string.Empty;
+}
+
+public sealed class ConversationAuditEventDTO
+{
+    public required string EventType { get; init; }
+    public required ActorType ActorType { get; init; }
+    public Origin Origin { get; init; } = Origin.System;
+    public long? ActorAdminId { get; init; }
+    public string? ReasonCode { get; init; }
+    public DateTimeOffset OccurredAtUtc { get; init; }
+    public string? ResultingVersion { get; init; }
 }
 
 public sealed class PagedResultDTO<T>

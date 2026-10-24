@@ -25,6 +25,14 @@ public sealed class GlobalExceptionMiddleware(
                     StatusCodes.Status400BadRequest, "ValidationFailed", exception.Message),
                 BusinessNotFoundException => (
                     StatusCodes.Status404NotFound, "NotFound", exception.Message),
+                ConversationConflictException => (
+                    StatusCodes.Status409Conflict, "ConversationVersionConflict", exception.Message),
+                ManualReplyRejectedException manualReply => (
+                    StatusCodes.Status409Conflict, manualReply.SafeCode, manualReply.Message),
+                ExternalDependencyException => (
+                    StatusCodes.Status502BadGateway,
+                    "ExternalDependencyFailure",
+                    "The external service could not complete the request."),
                 _ => (
                     StatusCodes.Status500InternalServerError,
                     "InternalError",
@@ -33,8 +41,9 @@ public sealed class GlobalExceptionMiddleware(
             if (statusCode >= StatusCodes.Status500InternalServerError)
             {
                 logger.LogError(
-                    "Unhandled request failure {ExceptionType} for trace {TraceId}",
+                    "Request failed with {ExceptionType} and safe provider code {SafeCode} for trace {TraceId}",
                     exception.GetType().Name,
+                    (exception as ExternalDependencyException)?.SafeCode,
                     traceId);
             }
             else

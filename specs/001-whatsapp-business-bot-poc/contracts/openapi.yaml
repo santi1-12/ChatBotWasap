@@ -225,7 +225,7 @@ paths:
   /api/v1/admin/conversations:
     get:
       operationId: listConversations
-      summary: List conversations for the connected number
+      summary: List conversations for the authenticated tenant and connected integration
       parameters:
         - in: query
           name: page
@@ -250,7 +250,7 @@ paths:
   /api/v1/admin/conversations/{id}:
     get:
       operationId: getConversation
-      summary: Read conversation details and paginated messages
+      summary: Read tenant-authorized conversation details and paginated messages
       parameters:
         - in: path
           name: id
@@ -272,10 +272,90 @@ paths:
                 $ref: "#/components/schemas/ResponseEConversationDetailDTO"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/admin/conversations/{id}/actions:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+          format: int64
+    post:
+      operationId: applyConversationAction
+      summary: Apply a tenant-scoped conversation control action
+      description: >
+        Applies take/handoff, return-to-bot, close or reopen using an expected conversation
+        version. The action is audited with the authenticated administrator or system actor.
+        Human attention has priority over Bot processing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConversationActionRequestDTO"
+      responses:
+        "200":
+          description: Updated conversation state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResponseEConversationDetailDTO"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/v1/admin/conversations/{id}/messages:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+          format: int64
+    post:
+      operationId: sendManualConversationMessage
+      summary: Send a manual Admin text reply
+      description: >
+        Sends a text reply only while the conversation is in Humano attention mode. The API
+        persists the Admin-origin message and applies the same WhatsApp window/template and
+        tenant/concurrency guards as automated replies.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ManualMessageRequestDTO"
+      responses:
+        "202":
+          description: Manual message accepted for the durable outbound workflow
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResponseEMessageDTO"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
   /api/v1/admin/messages/{id}/media:
     get:
       operationId: getMessageMedia
       summary: Stream authorized conversation media through Api
+      description: >
+        Returns private media only after conversation authorization. The URL/storage reference
+        is never public; expired media returns 410 while the message and allowed metadata remain
+        in the conversation history.
       parameters:
         - in: path
           name: id
@@ -299,6 +379,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+        "410":
+          $ref: "#/components/responses/Gone"
   /webhooks/meta/whatsapp:
     get:
       operationId: verifyMetaWebhook
@@ -350,6 +432,10 @@ paths:
       responses:
         "200":
           description: Event durably accepted; empty response body
+        "413":
+          description: Webhook request exceeds the configured body size limit
+        "415":
+          description: Webhook content type is not application/json
         "400":
           description: Invalid event envelope
         "401":
@@ -385,8 +471,20 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ResponseEError"
+    Gone:
+      description: Media expired according to the retention policy
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ResponseEError"
     ExternalDependencyFailure:
       description: Meta/AI provider failure
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ResponseEError"
+    Conflict:
+      description: Conversation version or attention-state conflict
       content:
         application/json:
           schema:
@@ -453,6 +551,13 @@ components:
           properties:
             data:
               $ref: "#/components/schemas/ConversationDetailDTO"
+    ResponseEMessageDTO:
+      allOf:
+        - $ref: "#/components/schemas/ResponseEBase"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/MessageDTO"
     ResponseEBoolean:
       allOf:
         - $ref: "#/components/schemas/ResponseEBase"
@@ -503,7 +608,7 @@ components:
           format: date-time
     EmbeddedSignupCompletionRequestDTO:
       type: object
-      required: [authorizationCode, wabaId, phoneNumberId]
+      required: [authorizationCode, wabaId, onboardingType]
       properties:
         authorizationCode:
           type: string
@@ -511,30 +616,59 @@ components:
         wabaId:
           type: string
         phoneNumberId:
+          type: [string, 'null']
+          description: Optional for Standard or Coexistence; Api uses it when supplied, otherwise discovers it from the WABA and rejects zero or ambiguous matches.
+        onboardingType:
           type: string
+          enum: [Standard, Coexistence]
+          description: Explicitly selects the Standard Cloud API or WhatsApp Business App Coexistence onboarding flow. Standard uses Meta:EmbeddedSignupConfigId; Coexistence uses its dedicated config when present and otherwise falls back to the Standard config.
     WhatsAppIntegrationDTO:
       type: object
       required: [connectionState, botEnabled]
       properties:
+        tenantId:
+          type: [string, 'null']
+          format: uuid
         wabaId:
-          type: string
+          type: [string, 'null']
         phoneNumberId:
-          type: string
+          type: [string, 'null']
         businessPhoneNumber:
-          type: string
+          type: [string, 'null']
         displayName:
-          type: string
+          type: [string, 'null']
+        onboardingType:
+          type: [string, 'null']
+          enum: [Standard, Coexistence, null]
         connectionState:
           type: string
-          enum: [NotConnected, Configuring, Connected, Error]
+          enum: [NotConnected, Configuring, Connected, Error, Unknown]
+        connectionErrorCode:
+          type: [string, 'null']
+          description: Safe backend error classification; never contains provider response details or credentials.
         botEnabled:
           type: boolean
         connectedAtUtc:
-          type: string
+          type: [string, 'null']
           format: date-time
         hasCredentialReference:
           type: boolean
           description: Indicates server-side credentials are configured; never returns a secret.
+        metaAppId:
+          type: string
+          description: Public Meta application ID used by the Embedded Signup SDK.
+        embeddedSignupConfigId:
+          type: string
+          description: Public Embedded Signup configuration ID.
+        coexistenceEmbeddedSignupConfigId:
+          type: [string, 'null']
+          description: Optional public configuration ID dedicated to Coexistence; the Standard configuration ID is the fallback.
+        effectiveEmbeddedSignupConfigId:
+          type: [string, 'null']
+          description: Effective public Embedded Signup configuration selected for the persisted modality.
+        metaGraphApiVersion:
+          type: string
+          description: Configured Graph API version used by the Meta SDK.
     BotConfigurationDTO:
       type: object
       required: [isBotEnabled, replyMode]
@@ -575,7 +709,7 @@ components:
           minimum: 0
           maximum: 1000
         category:
-          type: string
+          type: [string, 'null']
           maxLength: 100
         isActive:
           type: boolean
@@ -622,13 +756,42 @@ components:
           type: integer
         totalCount:
           type: integer
+    ConversationActionRequestDTO:
+      type: object
+      required: [action, expectedVersion]
+      properties:
+        action:
+          type: string
+          enum: [Take, Handoff, ReturnToBot, Close, Reopen]
+          description: Human or lifecycle transition; automatic handoff also records a system actor and reason.
+        reasonCode:
+          type: [string, 'null']
+          maxLength: 100
+          description: Allowlisted handoff reason such as CustomerRequestedHuman, BotUnableToResolve, BusinessRule or BlockingError.
+        expectedVersion:
+          type: string
+          description: Opaque conversation version used to reject stale concurrent actions.
+    ManualMessageRequestDTO:
+      type: object
+      required: [text, expectedVersion]
+      properties:
+        text:
+          type: string
+          minLength: 1
+          description: Initial POC manual reply type; outbound media composition is not included.
+        expectedVersion:
+          type: string
+          description: Opaque conversation version used to revalidate Humano attention before enqueueing.
     ConversationSummaryDTO:
       type: object
-      required: [conversationId, contact, lastMessageAtUtc, status]
+      required: [conversationId, tenantId, contact, lastMessageAtUtc, status, lifecycleStatus, attentionMode]
       properties:
         conversationId:
           type: integer
           format: int64
+        tenantId:
+          type: string
+          format: uuid
         contact:
           type: string
         lastMessageAtUtc:
@@ -637,11 +800,26 @@ components:
         status:
           type: string
           enum: [Open, Closed]
-        lastMessagePreview:
+        lifecycleStatus:
           type: string
+          enum: [Abierta, Cerrada]
+        attentionMode:
+          type: string
+          enum: [Bot, Humano]
+        assignedAdminId:
+          type: [integer, 'null']
+          format: int64
+        assignedAdminEmail:
+          type: [string, 'null']
+          format: email
+        version:
+          type: string
+          description: Opaque optimistic-concurrency version.
+        lastMessagePreview:
+          type: [string, 'null']
     ConversationDetailDTO:
       type: object
-      required: [conversation, messages]
+      required: [conversation, messages, auditEvents]
       properties:
         conversation:
           $ref: "#/components/schemas/ConversationSummaryDTO"
@@ -649,42 +827,91 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/MessageDTO"
+        auditEvents:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConversationAuditEventDTO"
+    ConversationAuditEventDTO:
+      type: object
+      required: [eventType, actorType, origin, occurredAtUtc]
+      properties:
+        eventType:
+          type: string
+          enum: [Take, AutomaticHandoff, ReturnToBot, Assign, Close, Reopen, ManualReply]
+        actorType:
+          type: string
+          enum: [Admin, Bot, System]
+        origin:
+          type: string
+          enum: [MetaCloudApi, AdminPanel, System, FutureWhatsAppBusinessApp]
+        actorAdminId:
+          type: [integer, 'null']
+          format: int64
+        reasonCode:
+          type: [string, 'null']
+        occurredAtUtc:
+          type: string
+          format: date-time
+        resultingVersion:
+          type: [string, 'null']
     MessageDTO:
       type: object
-      required: [messageId, direction, messageType, processingState, createdAtUtc]
+      required: [messageId, tenantId, direction, messageType, actorType, origin, processingState, createdAtUtc]
       properties:
         messageId:
           type: integer
           format: int64
+        tenantId:
+          type: string
+          format: uuid
         direction:
           type: string
           enum: [Inbound, Outbound]
         messageType:
           type: string
           enum: [Text, Audio, Image, Unsupported]
+          description: Future media types may extend this enum; video, documents, location and contacts are not in this POC.
+        actorType:
+          type: string
+          enum: [Customer, Bot, Admin, System]
+        origin:
+          type: string
+          enum: [MetaCloudApi, AdminPanel, System, FutureWhatsAppBusinessApp]
+        createdByAdminId:
+          type: [integer, 'null']
+          format: int64
+        sourceInboundMessageId:
+          type: [integer, 'null']
+          format: int64
         text:
-          type: string
+          type: [string, 'null']
         transcription:
-          type: string
+          type: [string, 'null']
         mediaAvailable:
           type: boolean
         mediaUrl:
-          type: string
+          type: [string, 'null']
           format: uri
           description: Authorized short-lived API URL, not a public object-store URL.
+        mediaAvailabilityState:
+          type: [string, 'null']
+          enum: [Pending, Available, Expired, Failed, Deleted, null]
+        mediaExpiresAtUtc:
+          type: [string, 'null']
+          format: date-time
         replySource:
-          type: string
-          enum: [FrequentResponse, AI, Admin]
+          type: [string, 'null']
+          enum: [FrequentResponse, AI, Admin, null]
         processingState:
           type: string
           enum: [Received, Processing, Completed, Failed, NoReply]
         outcomeCode:
-          type: string
-          description: Safe non-secret reason for a no-reply result, including messaging policy blocks.
-          enum: [MessagingWindowClosed, TemplateRequired, BotDisabled, NoFrequentResponse]
+          type: [string, 'null']
+          description: Safe non-secret reason for a no-reply or rejected transition, including messaging policy blocks.
+          enum: [MessagingWindowClosed, TemplateRequired, BotDisabled, NoFrequentResponse, AiFallbackNotConfigured, AiConfigurationMissing, AiProviderTimeout, AiProviderUnavailable, AiInvalidResponse, AiUnableToResolve, UnsupportedMessageType, MetaSendFailed, MetaDeliveryFailed, ConversationInHumanMode, ConversationClosed, ConversationVersionConflict, IntegrationUnavailable, ManualSendFailed, ManualReplyRequiresHuman, ManualReplyNotAuthorized, BlockingError, MediaExpired, HandoffToHuman, null]
         deliveryState:
-          type: string
-          enum: [Pending, Sent, Delivered, Read, Failed]
+          type: [string, 'null']
+          enum: [Pending, Sent, Delivered, Read, Failed, null]
         createdAtUtc:
           type: string
           format: date-time

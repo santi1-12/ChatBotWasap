@@ -22,10 +22,16 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM @Expressions)
         THROW 51021, 'At least one expression is required.', 1;
 
+    DECLARE @TenantId uniqueidentifier =
+        (SELECT TenantId FROM dbo.WhatsAppIntegration WHERE IntegrationId = @IntegrationId);
+    IF @TenantId IS NULL
+        THROW 51022, 'The integration is not assigned to a Tenant.', 1;
+
     BEGIN TRY
         BEGIN TRANSACTION;
         UPDATE dbo.FrequentResponse
-        SET QuestionOrIntent = @QuestionOrIntent,
+        SET TenantId = @TenantId,
+            QuestionOrIntent = @QuestionOrIntent,
             AnswerText = @AnswerText,
             Priority = @Priority,
             Category = @Category,

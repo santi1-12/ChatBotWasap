@@ -2,17 +2,19 @@
 
 This guide distinguishes the repository behavior currently validated from the approved POC target.
 The current local slice covers solution/bootstrap, bot configuration/FAQ, Meta Embedded Signup,
-signed text-webhook/outbox processing and read-only Admin conversation visibility. The approved
-POC target additionally includes OpenAI, audio, image, Bot/Humano attention, manual Admin replies,
-conversation lifecycle control and tenant-aware isolation. Coexistence history synchronization
-remains future work.
+signed text-webhook/outbox processing, Admin conversation visibility and provider-neutral AI text
+generation. The approved POC target additionally includes OpenAI, GitHub Copilot, audio, image,
+Bot/Humano attention, manual Admin replies, conversation lifecycle control and tenant-aware
+isolation. Coexistence history synchronization remains future work.
 
 ## Scope status
 
 - **Implementado o validado localmente**: bootstrap, autenticación Admin, configuración del bot,
   respuestas frecuentes, Embedded Signup/estado de integración, webhook firmado, inbox/outbox,
-  procesamiento de texto/FAQ y consulta de conversaciones.
-- **Dentro de esta POC, pendiente de implementación**: OpenAI, audio, imagen, storage privado con
+  procesamiento de texto/FAQ, consulta de conversaciones y adapters de texto OpenAI/Copilot con
+  selección explícita, límites y fallos seguros.
+- **Dentro de esta POC, pendiente de validación o implementación**: smoke adicional de Copilot,
+  audio, imagen, storage privado con
   expiración inicial de 30 días, toma/handoff, respuesta manual, devolución al bot,
   cierre/reapertura, auditoría, membresías de tenant y asignación simple.
 - **Fase posterior explícita**: `history`, `smb_app_state_sync`, `smb_message_echoes`,
@@ -31,14 +33,17 @@ ya existan en el código.
   Server environment; LocalDB is not a production requirement.
 - Meta Developer app with WhatsApp Cloud API, Embedded Signup v4 configuration, HTTPS webhook,
   required permissions/advanced access, approved test number and permitted test recipients.
-- OpenAI API account/key and configured text/vision and transcription model identifiers.
+- OpenAI API account/key and configured text/vision and transcription model identifiers when
+  `AI:Provider=OpenAI` is selected.
+- For the local GitHub Copilot POC, the Windows user running the API must be authenticated in
+  Copilot CLI. Do not configure a GitHub token, PAT, device code or cookie in the application.
 - FFmpeg available to the API worker for OGG/Opus normalization; private media storage.
 - User Secrets locally; production secret-store adapter configured before any live customer
   data is processed.
 - Owner approval for the initial 30-day media retention, Meta opt-in/message policy, and AI
   provider data processing before real customer data is processed.
 
-## Estado de validación real (2026-09-30)
+## Estado de validación real (2026-11-04)
 
 La configuración real de Meta ya está preparada: Developer App, WhatsApp Cloud API, Facebook
 Login for Business, Embedded Signup, App ID, App Secret, Verify Token, configuración de signup,
@@ -53,8 +58,14 @@ ingreso detrás del proxy y debe conservarse.
 El popup de Embedded Signup abre desde Admin. La prueba real se detuvo cuando Meta indicó que
 el número seleccionado ya pertenece a WhatsApp Business App. Por ello se incorpora el flujo
 Coexistence, pero la vinculación real del mismo número aún debe probarse. La verificación
-empresarial de Meta continúa pendiente/en revisión. Todavía **no** se ha validado la recepción
-ni el envío de mensajes del bot por WhatsApp real.
+empresarial de Meta continúa pendiente/en revisión.
+
+El 2026-11-04 se validó el flujo real de texto sobre la conversación `6`: se cambió a
+`AttentionMode=Bot` desde Admin, se envió un mensaje sin coincidencia FAQ, el webhook llegó a la
+API, GitHub Copilot generó la respuesta con el modelo efectivo reportado `gpt-6-luna`, WhatsApp
+entregó la respuesta y Admin mostró `Origen: IA` con estado `Entregado/Leído`. La evidencia no
+registra prompts, respuestas completas ni credenciales. Audio, imagen y los demás escenarios
+amplios del POC permanecen pendientes.
 
 ## Local setup and first administrator
 
@@ -191,11 +202,19 @@ ni el envío de mensajes del bot por WhatsApp real.
    responses are managed from the Configuration navigation.
 
 10. Use Configuración → Bot to activate/deactivate the bot and select `FaqOnly`, `FaqThenAi`,
-     or `AiOnly`. The default remains `FaqThenAi`; the OpenAI adapter is provider-neutral and
-     uses the configured secret reference only when AI is required. Without model/credential
-     configuration, AI-required messages record a safe outcome and hand off to Humano rather
-     than inventing content. Automated tests use a stub; real provider validation remains a
-     separate live gate.
+      or `AiOnly`. The default remains `FaqThenAi`; `AI:Provider` selects `OpenAI` or
+      `GitHubCopilot` behind `IAiReplyGenerator`. Without model/credential/authentication
+      configuration, AI-required messages record a safe outcome and hand off to Humano rather
+      than inventing content. Automated tests use fakes; live provider validation is a separate
+      gate. Common settings live under `AI`; OpenAI-specific settings remain under `OpenAI`.
+      Copilot POC settings are under `AI:GitHubCopilot`, with `Model=auto` and
+      `UseLoggedInUser=true`. The SDK is pinned to stable `GitHub.Copilot.SDK 1.0.28`; each
+      generation creates a new restricted session with no tools, MCP, skills, config discovery,
+      file hooks, git operations, session store or infinite session. SDK `Empty` mode in this
+      version disables keytar, so the adapter uses the default CLI mode with the same restrictive
+      session settings to preserve secure logged-in-user authentication. This flag is local POC
+      only; production must provide an approved corporate identity/token strategy through the
+      integration factory without changing Business or `IAiReplyGenerator`.
 11. Use Configuración → WhatsApp Business and complete the official Embedded Signup flow. Select
     Standard or Coexistence explicitly. The backend exchanges the one-time code, validates a
     supplied Phone Number ID or discovers it only when the WABA match is unambiguous, stores the
@@ -207,7 +226,7 @@ ni el envío de mensajes del bot por WhatsApp real.
     FAQ responses. Put one literal word or phrase per line. The matcher applies Unicode Form KC,
     trims and collapses whitespace, compares invariant case-insensitive literal containment,
     selects the highest priority, and breaks ties by ascending stable response ID. This local
-    configuration slice requires neither Meta nor OpenAI credentials.
+     configuration slice requires neither Meta nor external AI credentials.
 13. Run automated checks. Persistence tests are guarded by an explicit Development LocalDB
     connection string and reject non-LocalDB targets:
 
@@ -217,16 +236,16 @@ ni el envío de mensajes del bot por WhatsApp real.
     Remove-Item Env:WHATSAPPBOT_TEST_CONNECTION_STRING
     ```
 
-## Approved POC target validation (pending implementation)
+## Remaining Approved POC Validation
 
-The following sequence describes the approved target and must not be reported as complete until
-its implementation and evidence exist:
+The following sequence is broader than the completed T119-T122 provider slice and must not be
+reported as complete until each implementation and evidence gate exists:
 
 1. Select a tenant through an authenticated Admin membership and verify that integrations,
    configuration, conversations, messages and media cannot cross the tenant boundary. Use
    `AssignedAdminId` for simple responsibility; do not add teams or queues.
 2. Receive a new text, audio and image message. Persist the same conversation identity, show
-   actor/origin, process text/audio/image through the configured FAQ/OpenAI rules, and expose
+   actor/origin, process text/audio/image through the configured FAQ/AI-provider rules, and expose
    private media through authorized access only.
 3. Take a conversation from Bot to Humano, send a manual text reply, return it to Bot, close it,
    and send a new inbound message. Verify the same conversation reopens as Abierta + Bot when the
@@ -294,10 +313,11 @@ its implementation and evidence exist:
    signed webhook is durably added to inbox, the inbound text is persisted, Business checks
    reply mode and policy, and only an allowed FAQ candidate enters the SQL outbox. The outbox
    worker rechecks the window before using the official Cloud API sender.
-9. This milestone deliberately does not call OpenAI: `FaqOnly` misses become no-reply,
-   `FaqThenAi` misses and `AiOnly` are stored as `AiFallbackNotConfigured` no-reply outcomes.
-   Free-form FAQ replies are not Meta templates and cannot bypass a closed window. No
-   template-authoring or template-sending UI is implemented.
+9. Select the configured AI provider (`OpenAI` or `GitHubCopilot`) for `FaqThenAi` misses and
+    `AiOnly`. `FaqOnly` remains no-reply for misses; missing configuration, provider failure,
+    timeout or invalid output produces a safe outcome and handoff rather than invented content.
+    Free-form AI replies are not Meta templates and cannot bypass a closed window. No
+    template-authoring or template-sending UI is implemented.
 
 ### Coexistence prerequisites and POC limits
 
@@ -402,7 +422,8 @@ its implementation and evidence exist:
 - Verify raw audio/photo objects expire after the initial 30-day policy while the message,
   permitted metadata and available transcript remain in the history. Do not add teams or queues.
 - Search application logs and browser responses for App Secret, Verify Token, Meta business
-  token, OpenAI API key, full webhook bodies and raw media; none may appear.
+  token, OpenAI/GitHub credentials, full prompts/responses, full webhook bodies and raw media;
+  none may appear.
 - Run end-to-end validation only against Meta test assets and consented recipients until Meta
   review, opt-in policy, AI data terms, and current .NET 10 LTS servicing are verified.
 

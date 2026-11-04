@@ -12,13 +12,15 @@ namespace WhatsAppBot.Api.Integrations.OpenAI;
 
 public sealed class OpenAiReplyGenerator(
     HttpClient httpClient,
-    IOptions<AiOptions> options,
+    IOptions<AiOptions> aiOptions,
+    IOptions<OpenAiOptions> options,
     ISecretReferenceResolver secretResolver) : IAiReplyGenerator
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public async Task<string> GenerateReplyAsync(string prompt, CancellationToken cancellationToken)
     {
+        var commonSettings = aiOptions.Value;
         var settings = options.Value;
         if (string.IsNullOrWhiteSpace(settings.TextModel) ||
             string.IsNullOrWhiteSpace(settings.ApiKeyReference))
@@ -47,7 +49,7 @@ public sealed class OpenAiReplyGenerator(
         }
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(settings.RequestTimeoutSeconds));
+        timeout.CancelAfter(TimeSpan.FromSeconds(commonSettings.RequestTimeoutSeconds));
         using var request = new HttpRequestMessage(HttpMethod.Post, settings.Endpoint);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
         request.Content = JsonContent.Create(new
@@ -134,7 +136,7 @@ public sealed class OpenAiReplyGenerator(
                         ConversationHandoffReasonCodes.BotUnableToResolve);
                 }
 
-                if (content.Length > settings.MaxOutputCharacters)
+                if (content.Length > commonSettings.MaxOutputCharacters)
                 {
                     throw new AiGenerationException(
                         MessageOutcomeCodes.AiInvalidResponse,

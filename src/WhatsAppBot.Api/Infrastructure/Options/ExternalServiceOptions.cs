@@ -21,7 +21,26 @@ public sealed class MetaOptions
             : CoexistenceEmbeddedSignupConfigId;
 }
 
+public static class AiProviderNames
+{
+    public const string OpenAI = "OpenAI";
+    public const string GitHubCopilot = "GitHubCopilot";
+
+    public static bool IsSupported(string? provider) =>
+        string.Equals(provider, OpenAI, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(provider, GitHubCopilot, StringComparison.OrdinalIgnoreCase);
+}
+
 public sealed class AiOptions
+{
+    public const string SectionName = "AI";
+    public string Provider { get; init; } = AiProviderNames.OpenAI;
+    public int RequestTimeoutSeconds { get; init; } = 60;
+    public int MaxInputCharacters { get; init; } = 12000;
+    public int MaxOutputCharacters { get; init; } = 8000;
+}
+
+public sealed class OpenAiOptions
 {
     public const string SectionName = "OpenAI";
     public string ApiKeyReference { get; init; } = "OpenAI:ApiKey";
@@ -29,12 +48,16 @@ public sealed class AiOptions
     public string? TextModel { get; init; }
     public string? ImageModel { get; init; }
     public string? TranscriptionModel { get; init; }
-    public int RequestTimeoutSeconds { get; init; } = 60;
-    public int MaxInputCharacters { get; init; } = 12000;
     public int MaxOutputTokens { get; init; } = 1000;
-    public int MaxOutputCharacters { get; init; } = 8000;
     public long MaxAudioBytes { get; init; } = 25_000_000;
     public long MaxImageBytes { get; init; } = 10_000_000;
+}
+
+public sealed class GitHubCopilotOptions
+{
+    public const string SectionName = "AI:GitHubCopilot";
+    public string Model { get; init; } = "auto";
+    public bool UseLoggedInUser { get; init; } = true;
 }
 
 public sealed class MediaStorageOptions

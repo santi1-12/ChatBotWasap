@@ -38,6 +38,34 @@ public sealed class OptionsValidationTests
         Assert.Contains("FFmpeg:MaxInputBytes", exception.Message);
     }
 
+    [Fact]
+    public void UnknownAiProviderFailsExplicitly()
+    {
+        using var provider = BuildProvider(new Dictionary<string, string?>
+        {
+            ["AI:Provider"] = "UnknownProvider"
+        });
+
+        var options = provider.GetRequiredService<IOptions<AiOptions>>();
+
+        var exception = Assert.Throws<OptionsValidationException>(() => options.Value);
+        Assert.Contains("AI:Provider", exception.Message);
+    }
+
+    [Fact]
+    public void EmptyCopilotModelFailsExplicitly()
+    {
+        using var provider = BuildProvider(new Dictionary<string, string?>
+        {
+            ["AI:GitHubCopilot:Model"] = ""
+        });
+
+        var options = provider.GetRequiredService<IOptions<GitHubCopilotOptions>>();
+
+        var exception = Assert.Throws<OptionsValidationException>(() => options.Value);
+        Assert.Contains("AI:GitHubCopilot:Model", exception.Message);
+    }
+
     private static ServiceProvider BuildProvider(IReadOnlyDictionary<string, string?> overrides)
     {
         var values = new Dictionary<string, string?>(overrides)

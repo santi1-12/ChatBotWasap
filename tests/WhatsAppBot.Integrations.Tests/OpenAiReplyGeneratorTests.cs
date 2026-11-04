@@ -18,7 +18,8 @@ public sealed class OpenAiReplyGeneratorTests
         using var client = new HttpClient(handler);
         var generator = new OpenAiReplyGenerator(
             client,
-            Options.Create(new AiOptions
+            Options.Create(new AiOptions()),
+            Options.Create(new OpenAiOptions
             {
                 ApiKeyReference = "OpenAI:ApiKey",
                 Endpoint = "https://ai.test/v1/chat/completions",
@@ -42,7 +43,8 @@ public sealed class OpenAiReplyGeneratorTests
         using var client = new HttpClient(handler);
         var generator = new OpenAiReplyGenerator(
             client,
-            Options.Create(new AiOptions { TextModel = "configured-model" }),
+            Options.Create(new AiOptions()),
+            Options.Create(new OpenAiOptions { TextModel = "configured-model" }),
             new FakeSecretResolver(null));
 
         var exception = await Assert.ThrowsAsync<AiGenerationException>(() =>
@@ -59,7 +61,8 @@ public sealed class OpenAiReplyGeneratorTests
         using var client = new HttpClient(handler);
         var generator = new OpenAiReplyGenerator(
             client,
-            Options.Create(new AiOptions { TextModel = "configured-model" }),
+            Options.Create(new AiOptions()),
+            Options.Create(new OpenAiOptions { TextModel = "configured-model" }),
             new FakeSecretResolver("secret-value"));
 
         var exception = await Assert.ThrowsAsync<AiGenerationException>(() =>

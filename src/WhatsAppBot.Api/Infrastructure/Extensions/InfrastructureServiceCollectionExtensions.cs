@@ -48,21 +48,31 @@ public static class InfrastructureServiceCollectionExtensions
             .ValidateOnStart();
         services.AddOptions<AiOptions>()
             .Bind(configuration.GetSection(AiOptions.SectionName))
+            .Validate(options => AiProviderNames.IsSupported(options.Provider),
+                "AI:Provider must be OpenAI or GitHubCopilot.")
             .Validate(options => options.RequestTimeoutSeconds is > 0 and <= 600,
-                "OpenAI:RequestTimeoutSeconds must be between 1 and 600.")
+                "AI:RequestTimeoutSeconds must be between 1 and 600.")
             .Validate(options => options.MaxInputCharacters is >= 1 and <= 1_000_000,
-                "OpenAI:MaxInputCharacters must be between 1 and 1000000.")
+                "AI:MaxInputCharacters must be between 1 and 1000000.")
+            .Validate(options => options.MaxOutputCharacters is >= 1 and <= 1_000_000,
+                "AI:MaxOutputCharacters must be between 1 and 1000000.")
+            .ValidateOnStart();
+        services.AddOptions<OpenAiOptions>()
+            .Bind(configuration.GetSection(OpenAiOptions.SectionName))
             .Validate(options => options.MaxOutputTokens is >= 1 and <= 100_000,
                 "OpenAI:MaxOutputTokens must be between 1 and 100000.")
-            .Validate(options => options.MaxOutputCharacters is >= 1 and <= 1_000_000,
-                "OpenAI:MaxOutputCharacters must be between 1 and 1000000.")
             .Validate(options => Uri.TryCreate(options.Endpoint, UriKind.Absolute, out var endpoint)
                                  && endpoint.Scheme == Uri.UriSchemeHttps,
-                "OpenAI:Endpoint must be an absolute HTTPS URL.")
+                 "OpenAI:Endpoint must be an absolute HTTPS URL.")
             .Validate(options => options.MaxAudioBytes is >= 1_024 and <= 100_000_000,
                 "OpenAI:MaxAudioBytes must be between 1024 and 100000000.")
             .Validate(options => options.MaxImageBytes is >= 1_024 and <= 100_000_000,
-                "OpenAI:MaxImageBytes must be between 1024 and 100000000.")
+                 "OpenAI:MaxImageBytes must be between 1024 and 100000000.")
+            .ValidateOnStart();
+        services.AddOptions<GitHubCopilotOptions>()
+            .Bind(configuration.GetSection(GitHubCopilotOptions.SectionName))
+            .Validate(options => !string.IsNullOrWhiteSpace(options.Model),
+                "AI:GitHubCopilot:Model is required.")
             .ValidateOnStart();
         services.AddOptions<MediaStorageOptions>()
             .Bind(configuration.GetSection(MediaStorageOptions.SectionName))

@@ -2,6 +2,7 @@ using RestSharp;
 using Microsoft.Extensions.Options;
 using WhatsAppBot.Api.Business.Abstractions;
 using WhatsAppBot.Api.Infrastructure.Options;
+using WhatsAppBot.Api.Integrations.GitHubCopilot;
 using WhatsAppBot.Api.Integrations.Meta;
 using WhatsAppBot.Api.Integrations.OpenAI;
 
@@ -26,6 +27,10 @@ public static class IntegrationsServiceCollectionExtensions
         services.AddSingleton<IMetaWebhookChallengeValidator, MetaWebhookChallengeValidator>();
         services.AddSingleton<IMetaWebhookEventParser, MetaWebhookEventParser>();
         services.AddOpenAi();
+        services.AddGitHubCopilot();
+        services.AddScoped<AiReplyGeneratorSelector>();
+        services.AddScoped<IAiReplyGenerator>(provider =>
+            provider.GetRequiredService<AiReplyGeneratorSelector>());
         return services;
     }
 }

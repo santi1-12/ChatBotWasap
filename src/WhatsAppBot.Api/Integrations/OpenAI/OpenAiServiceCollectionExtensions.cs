@@ -6,7 +6,7 @@ public static class OpenAiServiceCollectionExtensions
 {
     public static IServiceCollection AddOpenAi(this IServiceCollection services)
     {
-        services.AddHttpClient<IAiReplyGenerator, OpenAiReplyGenerator>();
+        services.AddHttpClient<OpenAiReplyGenerator>();
         return services;
     }
 }

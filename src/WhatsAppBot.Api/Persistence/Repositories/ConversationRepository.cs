@@ -8,7 +8,10 @@ using WhatsAppBot.Shared.Enums;
 namespace WhatsAppBot.Api.Persistence.Repositories;
 
 public sealed class ConversationRepository(StoredProcedureExecutor executor)
-    : IConversationRepository, IConversationActionRepository, IConversationStateRepository
+    : IConversationRepository,
+      IConversationActionRepository,
+      IConversationStateRepository,
+      IConversationAuditRepository
 {
     private sealed record ListRow(ConversationSummaryRecord? Record, long TotalCount);
 

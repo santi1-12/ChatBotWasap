@@ -51,6 +51,8 @@ builder.Services.AddOptions<AdminApiOptions>()
         return Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out var uri) &&
                (uri.Scheme == Uri.UriSchemeHttps || builder.Environment.IsDevelopment());
     }, "AdminApi:BaseUrl must be an absolute HTTPS URL outside Development.")
+    .Validate(options => options.RequestTimeoutSeconds is > 0 and <= 120,
+        "AdminApi:RequestTimeoutSeconds must be between 1 and 120.")
     .ValidateOnStart();
 
 var apiOptions = builder.Configuration.GetSection(AdminApiOptions.SectionName).Get<AdminApiOptions>() ?? new();
@@ -62,7 +64,7 @@ if (!Uri.TryCreate(apiOptions.BaseUrl, UriKind.Absolute, out var apiUri))
 builder.Services.AddHttpClient<IWhatsAppBotApiClient, WhatsAppBotApiClient>(client =>
 {
     client.BaseAddress = apiUri;
-    client.Timeout = TimeSpan.FromSeconds(10);
+    client.Timeout = TimeSpan.FromSeconds(apiOptions.RequestTimeoutSeconds);
 });
 
 var app = builder.Build();

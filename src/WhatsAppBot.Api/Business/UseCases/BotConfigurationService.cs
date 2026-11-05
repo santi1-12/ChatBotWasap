@@ -5,10 +5,19 @@ using WhatsAppBot.Shared.Enums;
 
 namespace WhatsAppBot.Api.Business.UseCases;
 
-public sealed class BotConfigurationService(IBotConfigurationRepository repository) : IBotConfigurationService
+public sealed class BotConfigurationService(
+    IBotConfigurationRepository repository,
+    ITenantContext tenantContext) : IBotConfigurationService
 {
-    public Task<BotConfiguration> GetAsync(CancellationToken cancellationToken) =>
-        repository.GetCurrentAsync(cancellationToken);
+    public async Task<BotConfiguration> GetAsync(CancellationToken cancellationToken)
+    {
+        var tenant = await tenantContext.GetRequiredAsync(cancellationToken);
+        return await repository.GetCurrentAsync(tenant.TenantId, cancellationToken);
+    }
+
+    public Task<BotConfiguration> GetForIntegrationAsync(
+        Guid tenantId, Guid integrationId, CancellationToken cancellationToken) =>
+        repository.GetForIntegrationAsync(tenantId, integrationId, cancellationToken);
 
     public async Task<BotConfiguration> UpdateAsync(
         bool isBotEnabled, BotReplyMode replyMode, CancellationToken cancellationToken)
@@ -18,7 +27,9 @@ public sealed class BotConfigurationService(IBotConfigurationRepository reposito
             throw new BusinessValidationException("The selected reply mode is not supported.");
         }
 
-        var current = await repository.GetCurrentAsync(cancellationToken);
-        return await repository.UpdateAsync(current.IntegrationId, isBotEnabled, replyMode, cancellationToken);
+        var tenant = await tenantContext.GetRequiredAsync(cancellationToken);
+        var current = await repository.GetCurrentAsync(tenant.TenantId, cancellationToken);
+        return await repository.UpdateAsync(
+            tenant.TenantId, current.IntegrationId, isBotEnabled, replyMode, cancellationToken);
     }
 }

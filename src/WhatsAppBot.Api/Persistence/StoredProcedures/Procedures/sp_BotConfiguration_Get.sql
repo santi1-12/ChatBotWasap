@@ -6,13 +6,17 @@ GO
 USE [WhatsAppBot];
 GO
 CREATE OR ALTER PROCEDURE dbo.sp_BotConfiguration_Get
+    @TenantId uniqueidentifier,
+    @IntegrationId uniqueidentifier = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
 
     SELECT TOP (1)
-        IntegrationId, IsBotEnabled, ReplyMode, CreatedAtUtc, UpdatedAtUtc
+        TenantId, IntegrationId, IsBotEnabled, ReplyMode, CreatedAtUtc, UpdatedAtUtc
     FROM dbo.BotConfiguration
+    WHERE TenantId = @TenantId
+      AND (@IntegrationId IS NULL OR IntegrationId = @IntegrationId)
     ORDER BY CreatedAtUtc, IntegrationId;
 
     IF @@ROWCOUNT = 0

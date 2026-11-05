@@ -73,29 +73,48 @@ respeta la política de mensajería y queda conservado en la conversación del P
 
 ### User Story 3 - Consultar y controlar conversaciones (Priority: P2)
 
-Como administrador, quiero revisar las conversaciones, sus mensajes y el estado del bot para
-entender qué interacción tuvo cada cliente y controlar la automatización.
+Como administrador, quiero revisar las conversaciones, sus mensajes, el estado de atención y el
+responsable para entender qué interacción tuvo cada cliente y controlar la automatización.
 
 **Why this priority**: La visibilidad administrativa permite demostrar que el sistema recibió
 y procesó las interacciones, y permite pausar respuestas automáticas.
 
 **Independent Test**: Abrir Conversaciones después de una interacción y comprobar el contacto,
-la hora del último mensaje, el estado básico y el historial visualmente diferenciado.
+la hora del último mensaje, el ciclo de vida, el modo de atención, el responsable y el historial
+visualmente diferenciado.
 
 **Acceptance Scenarios**:
 
-1. **Given** que hay mensajes recibidos del número conectado, **When** el administrador abre
-   Conversaciones, **Then** puede ver el contacto, la fecha y hora del último mensaje, el estado
-   básico y el historial de cada conversación.
+1. **Given** que hay mensajes recibidos de una integración de la empresa, **When** el administrador
+   abre Conversaciones, **Then** puede ver el contacto, la fecha y hora del último mensaje, el
+   ciclo de vida, el modo de atención, el responsable y el historial de cada conversación.
 2. **Given** que el historial contiene mensajes entrantes y salientes de distintos tipos,
    **When** el administrador consulta la conversación, **Then** distingue mensajes del cliente
-   de los del bot, texto de audio y fotografías, ve la transcripción disponible y puede ver la
-   fotografía recibida.
+   del bot, del administrador y del sistema; distingue texto, audio y fotografías, ve la
+   transcripción disponible y puede ver la fotografía recibida.
 3. **Given** que una respuesta fue generada mediante IA, **When** el administrador consulta el
    historial, **Then** la respuesta aparece registrada como mensaje enviado por el bot.
 4. **Given** que el bot está activo, **When** el administrador lo desactiva, **Then** el Panel
    muestra el nuevo estado y dejan de enviarse respuestas automáticas; **When** lo activa de
    nuevo, **Then** el estado visible cambia a activo.
+5. **Given** que una conversación está abierta en modo Bot, **When** un administrador la toma,
+   **Then** pasa a modo Humano, se registra el administrador y el bot queda pausado exclusivamente
+   para esa conversación.
+6. **Given** que una conversación está en modo Humano, **When** el administrador responde desde
+   el Panel, **Then** el mensaje queda registrado como enviado por Admin, se somete a las reglas
+   de mensajería de Meta y conserva su resultado de entrega.
+7. **Given** que una conversación está en modo Humano, **When** el administrador selecciona
+   «Devolver al bot», **Then** pasa a modo Bot y las nuevas interacciones pueden volver a procesarse
+   automáticamente.
+8. **Given** que una conversación está abierta o en modo Humano, **When** el administrador la
+   cierra, **Then** queda en ciclo de vida Cerrada; **When** llega un mensaje nuevo y el bot está
+   habilitado, **Then** la misma conversación pasa a Abierta + Bot sin crear otro historial.
+9. **Given** que el bot detecta una petición de persona, una incapacidad para resolver, una regla
+   de negocio aplicable o un error bloqueante, **When** decide transferir, **Then** pasa la
+   conversación a Humano, registra el motivo y no genera una respuesta automática concurrente.
+10. **Given** que una conversación pertenece a una empresa, **When** un administrador autorizado
+    la consulta o modifica, **Then** no puede ver ni alterar conversaciones, mensajes, media o
+    configuración de otra empresa.
 
 ---
 
@@ -165,8 +184,25 @@ comportamiento cuando no exista coincidencia.
   búsqueda hasta que el administrador la corrija.
 - Si falla el guardado de una respuesta frecuente, el Panel informa el error y no indica que
   el cambio se haya guardado.
-- La POC opera con un solo número activo; no requiere que la interfaz permita administrar
-  números simultáneos.
+- Si Bot y Humano compiten por procesar una interacción, Humano tiene prioridad; la respuesta
+  automática debe revalidar el modo y la versión de la conversación justo antes de entrar al
+  outbox.
+- Si dos acciones administrativas compiten, solo una transición válida puede aplicarse; la
+  operación perdedora recibe un conflicto seguro y no modifica el historial.
+- Si una conversación Cerrada recibe un mensaje nuevo con el bot habilitado, se reabre como
+  Abierta + Bot conservando el mismo `ConversationId`; si el bot está deshabilitado, se reabre
+  sin iniciar procesamiento automático y queda disponible para atención humana.
+- Una transferencia automática a Humano registra un motivo auditable: solicitud del cliente,
+  incapacidad del bot, regla de negocio o error bloqueante.
+- Una respuesta manual se conserva como mensaje de Admin y nunca se presenta como enviada si
+  Meta la rechaza, la ventana expiró o una plantilla es obligatoria.
+- La expiración de un archivo de audio o imagen no elimina el mensaje ni su metadata permitida;
+  la transcripción disponible se conserva según la política de retención.
+- Los eventos `history`, `smb_app_state_sync` y `smb_message_echoes` de Coexistence no se
+  procesan en esta POC; deben ignorarse de forma segura y dejar un punto de extensión para una
+  fase posterior.
+- La POC no implementa equipos ni colas, pero el diseño permite múltiples administradores por
+  empresa y asignación simple mediante un administrador responsable.
 
 ## Requirements *(mandatory)*
 
@@ -188,7 +224,8 @@ comportamiento cuando no exista coincidencia.
 - **FR-006**: El administrador MUST poder activar y desactivar el procesamiento automático del
   bot, y el Panel MUST mostrar el estado vigente.
 - **FR-007**: Con el bot activo, el sistema MUST recibir mensajes de texto, notas de voz o
-  audio y fotografías enviados al número conectado.
+  audio y fotografías enviados al número conectado y conservarlos dentro de la conversación
+  de la empresa correspondiente.
 - **FR-008**: Para texto, el sistema MUST aplicar el modo de respuesta configurado: utilizar la
   respuesta frecuente aplicable en los modos que la habilitan, utilizar IA en «Solo IA» o como
   fallback únicamente en «Respuestas configuradas + Inteligencia Artificial como fallback»,
@@ -201,9 +238,10 @@ comportamiento cuando no exista coincidencia.
   el modo «Solo respuestas configuradas» MUST NOT invocar IA por una fotografía sin texto
   coincidente.
 - **FR-011**: El sistema MUST proporcionar al administrador una sección de conversaciones con
-  el contacto o número del cliente, fecha y hora del último mensaje, estado básico e historial.
-- **FR-012**: El historial MUST diferenciar mensajes del cliente y del bot, además de identificar
-  si cada mensaje contiene texto, audio o fotografía.
+  el contacto o número del cliente, fecha y hora del último mensaje, ciclo de vida, modo de
+  atención, responsable e historial.
+- **FR-012**: El historial MUST diferenciar mensajes del cliente, del bot, de un administrador y
+  del sistema, además de identificar si cada mensaje contiene texto, audio o fotografía.
 - **FR-013**: El Panel MUST mostrar la transcripción disponible para mensajes de audio y la
   imagen recibida para mensajes de fotografía.
 - **FR-014**: Las respuestas generadas mediante IA MUST formar parte del historial de la
@@ -214,8 +252,11 @@ comportamiento cuando no exista coincidencia.
   para el administrador y MUST NOT presentar una conexión o respuesta fallida como exitosa.
 - **FR-017**: La demostración MUST permitir verificar visualmente que el número está conectado
   y que un mensaje real enviado a ese número llega al sistema y queda procesado y registrado.
-- **FR-018**: La POC MUST soportar un único número activo y MUST excluir multiempresa y
-  administración simultánea de varios números del alcance actual.
+- **FR-018**: La POC MUST soportar un único número activo por empresa para el flujo operativo
+  inicial, pero MUST modelar desde ahora una empresa/tenant, sus membresías y sus integraciones
+  sin asumir un singleton global. `IntegrationId` puede ser la frontera técnica de los datos de
+  una integración, pero no sustituye a la frontera de empresa ni impide futuras integraciones
+  por empresa.
 - **FR-019**: La solución MUST cumplir la constitución del proyecto, que gobierna la
   arquitectura, la separación de responsabilidades y el tratamiento seguro de credenciales.
 - **FR-020**: El Panel Administrativo MUST ofrecer la sección Configuración → Respuestas
@@ -252,19 +293,63 @@ comportamiento cuando no exista coincidencia.
   cliente y respuestas dentro de la ventana de atención permitida. Si Meta requiere una
   plantilla oficial, el sistema MUST NOT sustituirla por contenido FAQ o IA y MUST registrar
   un resultado visible que no indique envío exitoso.
+- **FR-031**: Cada conversación MUST mantener separadas las dimensiones `AttentionMode`, con
+  valores `Bot` y `Humano`, y `LifecycleStatus`, con valores `Abierta` y `Cerrada`; MUST NOT
+  representar las tres condiciones en un único enum.
+- **FR-032**: Mientras `AttentionMode` sea `Humano`, el bot MUST permanecer pausado para esa
+  conversación. La prioridad de procesamiento MUST ser `Humano > Bot`, incluso si existe una
+  tarea automática pendiente.
+- **FR-033**: El Panel MUST permitir tomar una conversación, pasarla a Humano, responder
+  manualmente, devolverla al bot, cerrarla y reabrirla; cada acción MUST informar un resultado
+  seguro y conservar quién actuó y cuándo.
+- **FR-034**: El bot MUST poder transferir automáticamente una conversación a Humano cuando el
+  cliente pida una persona, el bot no pueda resolver, una regla de negocio lo determine o un
+  error impida continuar. El motivo MUST quedar modelado y auditable.
+- **FR-035**: Una conversación Cerrada que reciba un mensaje nuevo MUST conservar su identidad y
+  pasar a Abierta + Bot cuando el bot esté habilitado; si el bot está deshabilitado, MUST quedar
+  abierta sin respuesta automática.
+- **FR-036**: Las transiciones de atención, ciclo de vida, asignación y respuestas manuales MUST
+  registrar actor, origen, fecha, motivo cuando corresponda y resultado de la operación.
+- **FR-037**: La solución MUST modelar `Tenant`/Empresa, membresías, múltiples administradores
+  por empresa, integraciones asociadas a empresa y aislamiento de configuración, conversaciones,
+  mensajes y multimedia. La POC no requiere equipos ni colas.
+- **FR-038**: Audio e imagen MUST almacenarse mediante referencias privadas con acceso autorizado,
+  expiración inicial de 30 días y retención configurable a futuro. La expiración MUST conservar
+  el mensaje, metadata permitida y transcripción disponible.
+- **FR-039**: Coexistence MUST soportar en esta POC la conexión y los mensajes nuevos. Los eventos
+  `history`, `smb_app_state_sync`, `smb_message_echoes`, la sincronización de contactos y la
+  recuperación histórica MUST quedar fuera de la ejecución actual y documentados como fase
+  posterior.
+- **FR-040**: El modelo de mensajes y multimedia MUST permitir incorporar posteriormente video,
+  documentos, ubicación, contactos y otros tipos sin rediseñar el flujo principal; esos tipos no
+  forman parte de la validación funcional actual.
+- **FR-041**: Para `PhoneNumberId`, el sistema MUST usar el valor recibido cuando exista y, si
+  falta, descubrirlo mediante el WABA; solo puede continuar ante una coincidencia inequívoca y
+  nunca elegir arbitrariamente. Coexistence MUST usar `Meta:CoexistenceEmbeddedSignupConfigId`
+  cuando exista y hacer fallback a `Meta:EmbeddedSignupConfigId`; Standard usa
+  `Meta:EmbeddedSignupConfigId`.
 
 ### Key Entities
 
-- **Integración de WhatsApp**: La conexión autorizada de la empresa con WhatsApp Business;
-  incluye número, nombre disponible, estados de conexión y bot, y fecha de conexión.
+- **Tenant/Empresa**: Frontera de propiedad y autorización que agrupa administradores,
+  integraciones, configuración, conversaciones, mensajes y multimedia.
+- **Membresía**: Relación entre un administrador y una empresa, con estado de acceso; la POC no
+  requiere todavía un sistema complejo de roles.
+- **Integración de WhatsApp**: La conexión autorizada de una empresa con WhatsApp Business;
+  incluye número, nombre disponible, modalidad Standard/Coexistence, estados de conexión y bot,
+  y fecha de conexión.
 - **Cuenta de WhatsApp Business**: La cuenta empresarial seleccionada o creada durante la
   autorización oficial de Meta.
-- **Conversación**: El conjunto de mensajes asociados con un cliente y el número empresarial,
-  junto con el estado básico y la fecha del último mensaje.
-- **Mensaje**: Una interacción entrante o saliente con remitente, fecha y hora, tipo de
+- **Conversación**: El conjunto de mensajes asociados con un cliente y una integración de una
+  empresa, junto con el ciclo de vida, el modo de atención, el responsable, la versión de
+  concurrencia y la fecha del último mensaje.
+- **Mensaje**: Una interacción entrante o saliente con actor, origen, fecha y hora, tipo de
   contenido y datos disponibles para mostrar o procesar.
-- **Contenido multimedia**: Audio o fotografía recibidos, junto con la transcripción o el
-  resultado de análisis cuando esté disponible.
+- **Evento de atención**: Registro auditable de toma, transferencia automática, devolución al bot,
+  cierre, reapertura, asignación o respuesta administrativa.
+- **Contenido multimedia**: Audio o fotografía recibidos durante la POC, junto con la referencia
+  privada, estado de disponibilidad, expiración, transcripción o análisis cuando esté disponible;
+  el modelo queda abierto a futuros tipos multimedia.
 - **Estado del bot**: Indica si se encuentra habilitado o deshabilitado para procesamiento
   automático.
 - **Respuesta frecuente**: Regla administrable propia del bot, con pregunta, intención o
@@ -310,6 +395,17 @@ comportamiento cuando no exista coincidencia.
   eliminados no se utilizan, y las coincidencias múltiples seleccionan la prioridad mayor.
 - **SC-012**: El 100% de las respuestas originadas por una regla frecuente se registran en la
   conversación con su origen identificable.
+- **SC-013**: En una prueba de atención humana, tomar, responder, devolver al bot, cerrar y
+  reabrir una conversación conserva el historial, registra el actor y nunca permite respuestas
+  concurrentes de Bot y Humano.
+- **SC-014**: En una prueba con dos empresas y varios administradores, ningún administrador puede
+  consultar o modificar datos fuera de la empresa autorizada, y las conversaciones conservan su
+  `TenantId` e `IntegrationId`.
+- **SC-015**: En una prueba de retención, los archivos de audio e imagen dejan de estar
+  disponibles después de 30 días o la política configurada, mientras el mensaje, metadata
+  permitida y transcripción disponible permanecen consultables.
+- **SC-016**: En una prueba Coexistence, la conexión y los mensajes nuevos siguen el flujo POC;
+  los eventos históricos y `smb_*` no se procesan y no generan respuestas fabricadas.
 
 ## Assumptions
 
@@ -322,8 +418,14 @@ comportamiento cuando no exista coincidencia.
 - La respuesta mediante IA, transcripción de audio y análisis de fotografías dependen de que
   los servicios necesarios estén disponibles; los fallos se reflejan en la conversación y no se
   representan como éxito.
-- La POC procesa conversaciones del único número conectado y no incluye facturación,
-  reportería avanzada, campañas, CRM completo ni automatizaciones empresariales avanzadas.
+- La POC puede operar inicialmente con un número activo por empresa para la demostración, pero no
+  debe convertir esa limitación operativa en un singleton global. No incluye equipos, colas,
+  facturación, reportería avanzada, campañas, CRM completo ni automatizaciones empresariales
+  avanzadas.
+- Cada administrador pertenece a una o más empresas mediante membresías autorizadas. La primera
+  versión usa asignación simple con `AssignedAdminId`; no implementa equipos ni colas.
+- La respuesta manual de Admin es inicialmente texto; audio e imagen forman parte del inbound de
+  la POC y su procesamiento, no de un compositor outbound multimedia.
 - Una respuesta frecuente se considera aplicable cuando el texto del cliente o la
   transcripción disponible contiene una de sus expresiones asociadas, sin distinguir
   mayúsculas y minúsculas; si hay varias coincidencias, se usa la prioridad mayor. La

@@ -6,6 +6,7 @@ GO
 USE [WhatsAppBot];
 GO
 CREATE OR ALTER PROCEDURE dbo.sp_FrequentResponse_ListActiveCandidates
+    @TenantId uniqueidentifier,
     @IntegrationId uniqueidentifier
 AS
 BEGIN
@@ -13,6 +14,7 @@ BEGIN
 
     SELECT
         response.FrequentResponseId,
+        response.TenantId,
         response.IntegrationId,
         response.QuestionOrIntent,
         response.AnswerText,
@@ -29,7 +31,8 @@ BEGIN
             FOR JSON PATH
         ) AS ExpressionsJson
     FROM dbo.FrequentResponse AS response
-    WHERE response.IntegrationId = @IntegrationId
+    WHERE response.TenantId = @TenantId
+      AND response.IntegrationId = @IntegrationId
       AND response.IsActive = 1
     ORDER BY response.Priority DESC, response.FrequentResponseId;
 END;

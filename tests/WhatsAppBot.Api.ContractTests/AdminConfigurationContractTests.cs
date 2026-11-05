@@ -26,10 +26,12 @@ namespace WhatsAppBot.Api.ContractTests;
 public sealed class AdminConfigurationContractTests : IClassFixture<AdminApiFactory>
 {
     private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
+    private readonly AdminApiFactory _factory;
     private readonly HttpClient _client;
 
     public AdminConfigurationContractTests(AdminApiFactory factory)
     {
+        _factory = factory;
         _client = factory.CreateClient(new WebApplicationFactoryClientOptions
         {
             BaseAddress = new Uri("https://localhost"),
@@ -74,6 +76,31 @@ public sealed class AdminConfigurationContractTests : IClassFixture<AdminApiFact
         Assert.True(changed?.Success);
         Assert.True(changed!.Data!.IsBotEnabled);
         Assert.Equal(BotReplyMode.FaqOnly, changed.Data.ReplyMode);
+    }
+
+    [Fact]
+    public async Task AuthenticatedAdmin_CanReadTheEffectiveTenant()
+    {
+        _client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("ContractTest");
+
+        using var response = await _client.GetAsync("/api/v1/admin/tenant");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var tenant = await response.Content.ReadFromJsonAsync<ResponseE<TenantDTO>>(JsonOptions);
+        Assert.True(tenant?.Success);
+        Assert.Equal(Guid.Parse("22222222-2222-2222-2222-222222222222"), tenant!.Data!.TenantId);
+        Assert.Equal("Contract Tenant", tenant.Data.LegalName);
+    }
+
+    [Fact]
+    public void ApiHostCanResolveTextAudioAndImageProcessors()
+    {
+        using var scope = _factory.Services.CreateScope();
+
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IProcessInboundText>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IProcessInboundAudio>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IProcessInboundImage>());
     }
 
     [Fact]
@@ -167,8 +194,10 @@ public sealed class AdminApiFactory : WebApplicationFactory<Program>
         {
             services.RemoveAll<IBotConfigurationService>();
             services.RemoveAll<IFrequentResponseService>();
+            services.RemoveAll<ITenantContext>();
             services.AddSingleton<IBotConfigurationService, FakeBotConfigurationService>();
             services.AddSingleton<IFrequentResponseService, FakeFrequentResponseService>();
+            services.AddSingleton<ITenantContext, FakeTenantContext>();
             services.AddAuthentication(options =>
                 {
                     options.DefaultAuthenticateScheme = "ContractTest";
@@ -179,6 +208,27 @@ public sealed class AdminApiFactory : WebApplicationFactory<Program>
                     "ContractTest", _ => { });
         });
     }
+}
+
+internal sealed class FakeTenantContext : ITenantContext
+{
+    public TenantScope? Current { get; } = new(
+        new TenantRecord(
+            Guid.Parse("22222222-2222-2222-2222-222222222222"),
+            "Contract Tenant",
+            true,
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow),
+        new TenantMembershipRecord(
+            1,
+            Guid.Parse("22222222-2222-2222-2222-222222222222"),
+            19,
+            true,
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow));
+
+    public Task<TenantScope> GetRequiredAsync(CancellationToken cancellationToken) =>
+        Task.FromResult(Current!);
 }
 
 public sealed class ContractTestAuthenticationHandler(
@@ -206,6 +256,9 @@ internal sealed class FakeBotConfigurationService : IBotConfigurationService
 
     public Task<BotConfiguration> GetAsync(CancellationToken cancellationToken) =>
         Task.FromResult(_configuration);
+
+    public Task<BotConfiguration> GetForIntegrationAsync(
+        Guid tenantId, Guid integrationId, CancellationToken cancellationToken) => GetAsync(cancellationToken);
 
     public Task<BotConfiguration> UpdateAsync(
         bool isBotEnabled, BotReplyMode replyMode, CancellationToken cancellationToken)

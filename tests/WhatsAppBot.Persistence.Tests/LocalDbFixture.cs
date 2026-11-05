@@ -1,6 +1,8 @@
 using Microsoft.Data.SqlClient;
 using WhatsAppBot.Api.Infrastructure.Database;
+using WhatsAppBot.Api.Infrastructure.Options;
 using WhatsAppBot.Api.Persistence.Repositories;
+using Microsoft.Extensions.Options;
 
 namespace WhatsAppBot.Persistence.Tests;
 
@@ -25,15 +27,28 @@ public sealed class LocalDbFixture
         }
 
         ConnectionString = connectionString;
-        Executor = new StoredProcedureExecutor(new SqlConnectionFactory(connectionString));
+        Executor = new StoredProcedureExecutor(
+            new SqlConnectionFactory(connectionString), Options.Create(new SqlOptions()));
+        using var connection = new SqlConnection(connectionString);
+        connection.Open();
+        using var command = new SqlCommand(
+            "SELECT TOP (1) TenantId FROM dbo.BotConfiguration ORDER BY CreatedAtUtc, IntegrationId;",
+            connection);
+        TenantId = (Guid)(command.ExecuteScalar()
+            ?? throw new InvalidOperationException("The LocalDB test configuration has no TenantId."));
         ConfigurationRepository = new BotConfigurationRepository(Executor);
         FrequentResponseRepository = new FrequentResponseRepository(Executor);
+        WebhookInboxRepository = new WebhookInboxRepository(Executor);
+        OutboxRepository = new MessageOutboxRepository(Executor);
     }
 
     public string ConnectionString { get; }
+    public Guid TenantId { get; }
     public StoredProcedureExecutor Executor { get; }
     public BotConfigurationRepository ConfigurationRepository { get; }
     public FrequentResponseRepository FrequentResponseRepository { get; }
+    public WebhookInboxRepository WebhookInboxRepository { get; }
+    public MessageOutboxRepository OutboxRepository { get; }
 }
 
 [CollectionDefinition(Name)]

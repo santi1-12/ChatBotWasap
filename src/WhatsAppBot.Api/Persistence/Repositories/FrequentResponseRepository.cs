@@ -12,11 +12,12 @@ public sealed class FrequentResponseRepository(StoredProcedureExecutor executor)
     private sealed record ExpressionRow(string ExpressionText);
 
     public async Task<FrequentResponsePage> ListAsync(
-        Guid integrationId, int page, int pageSize, CancellationToken cancellationToken)
+        Guid tenantId, Guid integrationId, int page, int pageSize, CancellationToken cancellationToken)
     {
         var rows = await executor.QueryAsync(
             "dbo.sp_FrequentResponse_List",
             [
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId },
                 new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier) { Value = integrationId },
                 new SqlParameter("@Page", SqlDbType.Int) { Value = page },
                 new SqlParameter("@PageSize", SqlDbType.Int) { Value = pageSize }
@@ -29,10 +30,11 @@ public sealed class FrequentResponseRepository(StoredProcedureExecutor executor)
     }
 
     public async Task<FrequentResponseRecord?> GetAsync(
-        Guid integrationId, long frequentResponseId, CancellationToken cancellationToken) =>
+        Guid tenantId, Guid integrationId, long frequentResponseId, CancellationToken cancellationToken) =>
         await executor.QuerySingleAsync(
             "dbo.sp_FrequentResponse_GetById",
             [
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId },
                 new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier) { Value = integrationId },
                 new SqlParameter("@FrequentResponseId", SqlDbType.BigInt) { Value = frequentResponseId }
             ],
@@ -40,11 +42,11 @@ public sealed class FrequentResponseRepository(StoredProcedureExecutor executor)
             cancellationToken);
 
     public async Task<FrequentResponseRecord> CreateAsync(
-        Guid integrationId, FrequentResponseCommand command, CancellationToken cancellationToken)
+        Guid tenantId, Guid integrationId, FrequentResponseCommand command, CancellationToken cancellationToken)
     {
         var id = await executor.QuerySingleAsync(
             "dbo.sp_FrequentResponse_Create",
-            CreateParameters(integrationId, command),
+            CreateParameters(tenantId, integrationId, command),
             reader => reader.GetInt64(reader.GetOrdinal("FrequentResponseId")),
             cancellationToken);
         if (id < 1)
@@ -52,17 +54,18 @@ public sealed class FrequentResponseRepository(StoredProcedureExecutor executor)
             throw new InvalidOperationException("The stored procedure did not return the created response id.");
         }
 
-        return await GetAsync(integrationId, id, cancellationToken)
+        return await GetAsync(tenantId, integrationId, id, cancellationToken)
             ?? throw new InvalidOperationException("The created frequent response could not be read.");
     }
 
     public async Task<FrequentResponseRecord?> UpdateAsync(
-        Guid integrationId, long frequentResponseId, FrequentResponseCommand command,
+        Guid tenantId, Guid integrationId, long frequentResponseId, FrequentResponseCommand command,
         CancellationToken cancellationToken)
     {
         var updated = await executor.QuerySingleAsync(
             "dbo.sp_FrequentResponse_Update",
             [
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId },
                 new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier) { Value = integrationId },
                 new SqlParameter("@FrequentResponseId", SqlDbType.BigInt) { Value = frequentResponseId },
                 .. CreateCommandParameters(command)
@@ -70,15 +73,17 @@ public sealed class FrequentResponseRepository(StoredProcedureExecutor executor)
             reader => reader.GetBoolean(reader.GetOrdinal("Updated")),
             cancellationToken);
         return updated is true
-            ? await GetAsync(integrationId, frequentResponseId, cancellationToken)
+            ? await GetAsync(tenantId, integrationId, frequentResponseId, cancellationToken)
             : null;
     }
 
     public Task<bool> SetActiveAsync(
-        Guid integrationId, long frequentResponseId, bool isActive, CancellationToken cancellationToken) =>
+        Guid tenantId, Guid integrationId, long frequentResponseId, bool isActive,
+        CancellationToken cancellationToken) =>
         executor.ExecuteBooleanAsync(
             "dbo.sp_FrequentResponse_SetActive",
             [
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId },
                 new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier) { Value = integrationId },
                 new SqlParameter("@FrequentResponseId", SqlDbType.BigInt) { Value = frequentResponseId },
                 new SqlParameter("@IsActive", SqlDbType.Bit) { Value = isActive }
@@ -86,25 +91,31 @@ public sealed class FrequentResponseRepository(StoredProcedureExecutor executor)
             cancellationToken);
 
     public Task<bool> DeleteAsync(
-        Guid integrationId, long frequentResponseId, CancellationToken cancellationToken) =>
+        Guid tenantId, Guid integrationId, long frequentResponseId, CancellationToken cancellationToken) =>
         executor.ExecuteBooleanAsync(
             "dbo.sp_FrequentResponse_Delete",
             [
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId },
                 new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier) { Value = integrationId },
                 new SqlParameter("@FrequentResponseId", SqlDbType.BigInt) { Value = frequentResponseId }
             ],
             cancellationToken);
 
     public async Task<IReadOnlyList<FrequentResponseRecord>> ListActiveCandidatesAsync(
-        Guid integrationId, CancellationToken cancellationToken) =>
+        Guid tenantId, Guid integrationId, CancellationToken cancellationToken) =>
         (await executor.QueryAsync(
             "dbo.sp_FrequentResponse_ListActiveCandidates",
-            [new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier) { Value = integrationId }],
+            [
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId },
+                new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier) { Value = integrationId }
+            ],
             MapRecord,
             cancellationToken)).ToArray();
 
-    private static SqlParameter[] CreateParameters(Guid integrationId, FrequentResponseCommand command) =>
+    private static SqlParameter[] CreateParameters(
+        Guid tenantId, Guid integrationId, FrequentResponseCommand command) =>
     [
+        new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId },
         new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier) { Value = integrationId },
         .. CreateCommandParameters(command)
     ];
@@ -151,6 +162,7 @@ public sealed class FrequentResponseRepository(StoredProcedureExecutor executor)
             reader.IsDBNull(reader.GetOrdinal("Category")) ? null : reader.GetString(reader.GetOrdinal("Category")),
             reader.GetBoolean(reader.GetOrdinal("IsActive")))
         {
+            TenantId = reader.GetGuid(reader.GetOrdinal("TenantId")),
             CreatedAtUtc = new DateTimeOffset(DateTime.SpecifyKind(
                 reader.GetDateTime(reader.GetOrdinal("CreatedAtUtc")), DateTimeKind.Utc)),
             ModifiedAtUtc = new DateTimeOffset(DateTime.SpecifyKind(

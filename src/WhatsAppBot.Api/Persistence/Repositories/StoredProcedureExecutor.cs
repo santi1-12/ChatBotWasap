@@ -1,10 +1,14 @@
 using System.Data;
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Options;
 using WhatsAppBot.Api.Infrastructure.Database;
+using WhatsAppBot.Api.Infrastructure.Options;
 
 namespace WhatsAppBot.Api.Persistence.Repositories;
 
-public sealed class StoredProcedureExecutor(ISqlConnectionFactory connectionFactory)
+public sealed class StoredProcedureExecutor(
+    ISqlConnectionFactory connectionFactory,
+    IOptions<SqlOptions> options)
 {
     public async Task<IReadOnlyList<T>> QueryAsync<T>(
         string procedure,
@@ -16,7 +20,7 @@ public sealed class StoredProcedureExecutor(ISqlConnectionFactory connectionFact
         await using var command = new SqlCommand(procedure, connection)
         {
             CommandType = CommandType.StoredProcedure,
-            CommandTimeout = 15
+            CommandTimeout = options.Value.CommandTimeoutSeconds
         };
         command.Parameters.AddRange(parameters.ToArray());
         await connection.OpenAsync(cancellationToken);
@@ -39,7 +43,7 @@ public sealed class StoredProcedureExecutor(ISqlConnectionFactory connectionFact
         await using var command = new SqlCommand(procedure, connection)
         {
             CommandType = CommandType.StoredProcedure,
-            CommandTimeout = 15
+            CommandTimeout = options.Value.CommandTimeoutSeconds
         };
         command.Parameters.AddRange(parameters.ToArray());
         await connection.OpenAsync(cancellationToken);
@@ -56,7 +60,7 @@ public sealed class StoredProcedureExecutor(ISqlConnectionFactory connectionFact
         await using var command = new SqlCommand(procedure, connection)
         {
             CommandType = CommandType.StoredProcedure,
-            CommandTimeout = 15
+            CommandTimeout = options.Value.CommandTimeoutSeconds
         };
         command.Parameters.AddRange(parameters.ToArray());
         await connection.OpenAsync(cancellationToken);
@@ -72,7 +76,7 @@ public sealed class StoredProcedureExecutor(ISqlConnectionFactory connectionFact
         await using var command = new SqlCommand(procedure, connection)
         {
             CommandType = CommandType.StoredProcedure,
-            CommandTimeout = 15
+            CommandTimeout = options.Value.CommandTimeoutSeconds
         };
         command.Parameters.AddRange(parameters.ToArray());
         await connection.OpenAsync(cancellationToken);

@@ -8,6 +8,7 @@ namespace WhatsAppBot.Api.Business.UseCases;
 
 public sealed class AuthenticateAdministrator(
     IAdministratorRepository repository,
+    ITenantRepository tenantRepository,
     IAccessTokenIssuer tokenIssuer,
     IPasswordHasher<Administrator> passwordHasher) : IAdministratorAuthenticator
 {
@@ -29,6 +30,8 @@ public sealed class AuthenticateAdministrator(
         }
 
         await repository.UpdateLastLoginAsync(administrator.AdminId, cancellationToken);
-        return tokenIssuer.Create(administrator.AdminId, normalizedEmail);
+        var activeTenant = await tenantRepository.GetActiveForAdministratorAsync(
+            administrator.AdminId, null, cancellationToken);
+        return tokenIssuer.Create(administrator.AdminId, normalizedEmail, activeTenant?.TenantId);
     }
 }

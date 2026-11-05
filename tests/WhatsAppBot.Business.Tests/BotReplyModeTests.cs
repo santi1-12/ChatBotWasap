@@ -95,7 +95,10 @@ public sealed class BotReplyModeTests
         Assert.Equal(0, repository.CandidateQueries);
     }
 
-    private static BotConfiguration Configuration(BotReplyMode mode) => new(Guid.Empty, true, mode);
+    private static BotConfiguration Configuration(BotReplyMode mode) => new(Guid.Empty, true, mode)
+    {
+        TenantId = Guid.Empty
+    };
 
     private static FrequentResponseRecord Candidate(long id, string expression, string answer) =>
         new(new FrequentResponse(id, Guid.Empty, "intent", answer, 1, null, true), [expression]);
@@ -105,22 +108,31 @@ public sealed class BotReplyModeTests
     {
         public int CandidateQueries { get; private set; }
         public Task<IReadOnlyList<FrequentResponseRecord>> ListActiveCandidatesAsync(
-            Guid integrationId, CancellationToken cancellationToken)
+            Guid tenantId, Guid integrationId, CancellationToken cancellationToken)
         {
             CandidateQueries++;
             return Task.FromResult(candidates);
         }
-        public Task<FrequentResponsePage> ListAsync(Guid integrationId, int page, int pageSize, CancellationToken cancellationToken) =>
+        public Task<FrequentResponsePage> ListAsync(
+            Guid tenantId, Guid integrationId, int page, int pageSize, CancellationToken cancellationToken) =>
             throw new NotImplementedException();
-        public Task<FrequentResponseRecord?> GetAsync(Guid integrationId, long frequentResponseId, CancellationToken cancellationToken) =>
+        public Task<FrequentResponseRecord?> GetAsync(
+            Guid tenantId, Guid integrationId, long frequentResponseId, CancellationToken cancellationToken) =>
             throw new NotImplementedException();
-        public Task<FrequentResponseRecord> CreateAsync(Guid integrationId, FrequentResponseCommand command, CancellationToken cancellationToken) =>
+        public Task<FrequentResponseRecord> CreateAsync(
+            Guid tenantId, Guid integrationId, FrequentResponseCommand command,
+            CancellationToken cancellationToken) =>
             throw new NotImplementedException();
-        public Task<FrequentResponseRecord?> UpdateAsync(Guid integrationId, long frequentResponseId, FrequentResponseCommand command, CancellationToken cancellationToken) =>
+        public Task<FrequentResponseRecord?> UpdateAsync(
+            Guid tenantId, Guid integrationId, long frequentResponseId, FrequentResponseCommand command,
+            CancellationToken cancellationToken) =>
             throw new NotImplementedException();
-        public Task<bool> SetActiveAsync(Guid integrationId, long frequentResponseId, bool isActive, CancellationToken cancellationToken) =>
+        public Task<bool> SetActiveAsync(
+            Guid tenantId, Guid integrationId, long frequentResponseId, bool isActive,
+            CancellationToken cancellationToken) =>
             throw new NotImplementedException();
-        public Task<bool> DeleteAsync(Guid integrationId, long frequentResponseId, CancellationToken cancellationToken) =>
+        public Task<bool> DeleteAsync(
+            Guid tenantId, Guid integrationId, long frequentResponseId, CancellationToken cancellationToken) =>
             throw new NotImplementedException();
     }
 }

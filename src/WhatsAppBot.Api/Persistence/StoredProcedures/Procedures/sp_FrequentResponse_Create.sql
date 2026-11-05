@@ -6,6 +6,7 @@ GO
 USE [WhatsAppBot];
 GO
 CREATE OR ALTER PROCEDURE dbo.sp_FrequentResponse_Create
+    @TenantId uniqueidentifier,
     @IntegrationId uniqueidentifier,
     @QuestionOrIntent nvarchar(500),
     @AnswerText nvarchar(max),
@@ -21,12 +22,21 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM @Expressions)
         THROW 51021, 'At least one expression is required.', 1;
 
+    IF NOT EXISTS
+    (
+        SELECT 1
+        FROM dbo.WhatsAppIntegration
+        WHERE IntegrationId = @IntegrationId
+          AND TenantId = @TenantId
+    )
+        THROW 51022, 'The integration is not assigned to the active Tenant.', 1;
+
     BEGIN TRY
         BEGIN TRANSACTION;
         INSERT dbo.FrequentResponse
-            (IntegrationId, QuestionOrIntent, AnswerText, Priority, Category, IsActive)
+            (IntegrationId, TenantId, QuestionOrIntent, AnswerText, Priority, Category, IsActive)
         VALUES
-            (@IntegrationId, @QuestionOrIntent, @AnswerText, @Priority, @Category, @IsActive);
+            (@IntegrationId, @TenantId, @QuestionOrIntent, @AnswerText, @Priority, @Category, @IsActive);
 
         DECLARE @FrequentResponseId bigint = CONVERT(bigint, SCOPE_IDENTITY());
         INSERT dbo.FrequentResponseExpression

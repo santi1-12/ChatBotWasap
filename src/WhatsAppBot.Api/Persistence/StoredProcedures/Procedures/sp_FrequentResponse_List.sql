@@ -6,6 +6,7 @@ GO
 USE [WhatsAppBot];
 GO
 CREATE OR ALTER PROCEDURE dbo.sp_FrequentResponse_List
+    @TenantId uniqueidentifier,
     @IntegrationId uniqueidentifier,
     @Page int,
     @PageSize int
@@ -18,6 +19,7 @@ BEGIN
 
     SELECT
         page.FrequentResponseId,
+        page.TenantId,
         page.IntegrationId,
         page.QuestionOrIntent,
         page.AnswerText,
@@ -32,6 +34,7 @@ BEGIN
     (
         SELECT
             response.FrequentResponseId,
+            response.TenantId,
             response.IntegrationId,
             response.QuestionOrIntent,
             response.AnswerText,
@@ -48,7 +51,8 @@ BEGIN
                 FOR JSON PATH
             ) AS ExpressionsJson
         FROM dbo.FrequentResponse AS response
-        WHERE response.IntegrationId = @IntegrationId
+        WHERE response.TenantId = @TenantId
+          AND response.IntegrationId = @IntegrationId
         ORDER BY response.Priority DESC, response.FrequentResponseId
         OFFSET (@Page - 1) * @PageSize ROWS FETCH NEXT @PageSize ROWS ONLY
     ) AS page
@@ -56,7 +60,8 @@ BEGIN
     (
         SELECT COUNT_BIG(*) AS TotalCount
         FROM dbo.FrequentResponse
-        WHERE IntegrationId = @IntegrationId
+        WHERE TenantId = @TenantId
+          AND IntegrationId = @IntegrationId
     ) AS totals ON 1 = 1;
 END;
 GO

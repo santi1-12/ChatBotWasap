@@ -13,12 +13,16 @@ $repositoryRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $schemaDirectory = Join-Path $repositoryRoot 'src\WhatsAppBot.Api\Persistence\StoredProcedures\Schema'
 $procedureDirectory = Join-Path $repositoryRoot 'src\WhatsAppBot.Api\Persistence\StoredProcedures\Procedures'
 $createDatabase = Join-Path $schemaDirectory '000_CreateDatabase.sql'
+$tenantMigration = Join-Path $schemaDirectory '007_TenantMigration.sql'
 
 if (-not (Get-Command sqlcmd -ErrorAction SilentlyContinue)) {
     throw 'sqlcmd is required. Install SQL Server command-line utilities and retry.'
 }
 if (-not (Test-Path -LiteralPath $createDatabase)) {
     throw "Database creation script not found: $createDatabase"
+}
+if (-not (Test-Path -LiteralPath $tenantMigration)) {
+    throw "Tenant migration script not found: $tenantMigration"
 }
 
 Write-Host "Preparing $Database on $ServerInstance using Windows authentication."

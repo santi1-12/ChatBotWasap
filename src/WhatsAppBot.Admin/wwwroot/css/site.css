@@ -55,6 +55,11 @@ a { text-decoration: none; }
 .summary-card h2 { margin: 0; color: #20382f; font-size: 19px; font-weight: 650; letter-spacing: -.3px; }
 .card-caption { margin: 8px 0 0; color: #819089; font-size: 11px; line-height: 1.55; }
 .content-card { margin-top: 19px; }
+.activity-card { overflow: hidden; padding: 25px 27px 0; }
+.activity-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 19px; }
+.activity-heading h2 { margin: 0; font-size: 18px; font-weight: 650; }
+.activity-card .alert { margin-bottom: 25px; }
+.activity-card .empty-state { margin: 0 -27px; }
 .setup-card { display: flex; align-items: center; justify-content: space-between; padding: 25px 27px; }
 .setup-copy { max-width: 650px; }
 .setup-copy h2 { margin: 0; font-size: 18px; font-weight: 650; }
@@ -134,5 +139,6 @@ a { text-decoration: none; }
 .btn-primary { border-color: var(--green); background: var(--green); }
 .btn-primary:hover { border-color: var(--green-dark); background: var(--green-dark); }
 .login-footnote { margin: 23px 0 0; color: #95a29d; text-align: center; font-size: 10px; }
+@media (max-width: 1100px) { .summary-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
 @media (max-width: 900px) { .sidebar { width: 205px; } .topbar { padding: 0 24px; } .page-content { padding: 30px 24px; } .summary-grid { grid-template-columns: 1fr; } }
-@media (max-width: 620px) { .sidebar { width: 58px; padding: 18px 8px; } .brand-lockup { margin: 0 4px 35px; } .brand-lockup > span:last-child, .sidebar-label, .side-link:not(.active), .side-link.active { font-size: 0; } .side-link { justify-content: center; padding: 0; } .side-link span { font-size: 17px; } .sidebar-footer { font-size: 0; padding-left: 0; } .sidebar-footer .status-dot { margin: 0; } .account-name { display: none; } .topbar { height: 62px; padding: 0 14px; } .page-content { padding: 25px 15px; } .page-heading { align-items: flex-start; gap: 12px; flex-direction: column; } .setup-card { align-items: flex-start; gap: 20px; flex-direction: column; } .settings-section { flex-direction: column; } .form-grid { grid-template-columns: 1fr; gap: 0; } .conversation-summary-card { align-items: flex-start; flex-direction: column; } .conversation-summary-meta { align-items: flex-start; flex-direction: column; text-align: left; } .message-bubble { width: 95%; } .app-footer { padding: 15px; } }
+@media (max-width: 620px) { .sidebar { width: 58px; padding: 18px 8px; } .brand-lockup { margin: 0 4px 35px; } .brand-lockup > span:last-child, .sidebar-label, .side-link:not(.active), .side-link.active { font-size: 0; } .side-link { justify-content: center; padding: 0; } .side-link span { font-size: 17px; } .sidebar-footer { font-size: 0; padding-left: 0; } .sidebar-footer .status-dot { margin: 0; } .account-name { display: none; } .topbar { height: 62px; padding: 0 14px; } .page-content { padding: 25px 15px; } .page-heading { align-items: flex-start; gap: 12px; flex-direction: column; } .activity-heading { align-items: flex-start; flex-direction: column; } .activity-card { padding: 20px 15px 0; } .activity-card .empty-state { margin: 0 -15px; } .setup-card { align-items: flex-start; gap: 20px; flex-direction: column; } .settings-section { flex-direction: column; } .form-grid { grid-template-columns: 1fr; gap: 0; } .conversation-summary-card { align-items: flex-start; flex-direction: column; } .conversation-summary-meta { align-items: flex-start; flex-direction: column; text-align: left; } .message-bubble { width: 95%; } .app-footer { padding: 15px; } }

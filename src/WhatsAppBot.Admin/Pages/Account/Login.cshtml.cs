@@ -46,7 +46,7 @@ public sealed class LoginModel(
             await HttpContext.SignInAsync(
                 CookieAuthenticationDefaults.AuthenticationScheme,
                 new ClaimsPrincipal(identity));
-            return RedirectToPage("/Index");
+            return RedirectToPage("/Dashboard/Index");
         }
         catch (HttpRequestException exception)
         {

@@ -615,6 +615,8 @@ public sealed class WhatsAppIntegrationCompletionTests
         public Task<ResponseE<AuthResponseDTO>?> LoginAsync(
             LoginRequestDTO request, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
+        public Task<ResponseE<TenantDTO>?> GetCurrentTenantAsync(
+            CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task DisconnectWhatsAppAsync(CancellationToken cancellationToken) =>
             throw new NotSupportedException();
         public Task<ResponseE<BotConfigurationDTO>?> GetBotConfigurationAsync(CancellationToken cancellationToken) =>

@@ -21,6 +21,7 @@ public sealed class OpenApiContractTests
         Assert.Contains("/api/v1/admin/conversations/{id}/actions", document.Paths.Keys);
         Assert.Contains("/api/v1/admin/conversations/{id}/messages", document.Paths.Keys);
         Assert.Contains("/api/v1/admin/messages/{id}/media", document.Paths.Keys);
+        Assert.Contains("/api/v1/admin/tenant", document.Paths.Keys);
 
         AssertResponses(document, "/api/v1/admin/conversations/{id}/actions", HttpMethod.Post,
             HttpStatusCode.OK, HttpStatusCode.BadRequest, HttpStatusCode.Unauthorized,
@@ -68,6 +69,11 @@ public sealed class OpenApiContractTests
         Assert.True(HasProperty(message, "outcomeCode"));
         Assert.True(HasProperty(message, "mediaAvailabilityState"));
         Assert.True(HasProperty(message, "mediaUrl"));
+
+        var tenant = Schema(document, "TenantDTO");
+        Assert.True(HasRequired(tenant, "tenantId"));
+        Assert.True(HasRequired(tenant, "legalName"));
+        Assert.True(HasRequired(tenant, "isActive"));
     }
 
     private static OpenApiDocument LoadDocument()

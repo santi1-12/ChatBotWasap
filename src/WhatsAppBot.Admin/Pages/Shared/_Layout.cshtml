@@ -10,10 +10,10 @@
 </head>
 <body class="app-shell">
     <aside class="sidebar">
-        <a class="brand-lockup" asp-page="/Index"><span class="brand-mark small">W</span><span>WhatsApp<span class="brand-light">Bot</span></span></a>
+        <a class="brand-lockup" asp-page="/Dashboard/Index"><span class="brand-mark small">W</span><span>WhatsApp<span class="brand-light">Bot</span></span></a>
         <div class="sidebar-label">ESPACIO DE TRABAJO</div>
         <nav class="side-nav">
-            <a class="side-link @(ViewContext.RouteData.Values["page"]?.ToString() == "/Index" ? "active" : "")" asp-page="/Index"><span>▦</span> Dashboard</a>
+            <a class="side-link @(ViewContext.RouteData.Values["page"]?.ToString()?.StartsWith("/Dashboard", StringComparison.Ordinal) == true ? "active" : "")" asp-page="/Dashboard/Index"><span>▦</span> Dashboard</a>
             <a class="side-link @(ViewContext.RouteData.Values["page"]?.ToString()?.StartsWith("/Conversations", StringComparison.Ordinal) == true ? "active" : "")" asp-page="/Conversations/Index"><span>◉</span> Conversaciones</a>
             <div class="sidebar-label mt-4">CONFIGURACIÓN</div>
             <a class="side-link @(ViewContext.RouteData.Values["page"]?.ToString()?.StartsWith("/Settings/WhatsApp", StringComparison.Ordinal) == true ? "active" : "")" asp-page="/Settings/WhatsApp/Index"><span>◎</span> WhatsApp Business</a>

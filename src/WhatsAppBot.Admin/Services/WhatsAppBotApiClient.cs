@@ -17,6 +17,7 @@ public interface IWhatsAppBotApiClient
 {
     Task<ResponseE<AuthResponseDTO>?> LoginAsync(LoginRequestDTO request, CancellationToken cancellationToken);
     Task<ResponseE<WhatsAppIntegrationDTO>?> GetWhatsAppIntegrationAsync(CancellationToken cancellationToken);
+    Task<ResponseE<TenantDTO>?> GetCurrentTenantAsync(CancellationToken cancellationToken);
     Task<ResponseE<WhatsAppIntegrationDTO>?> CompleteWhatsAppSignupAsync(
         EmbeddedSignupCompletionRequestDTO request, CancellationToken cancellationToken);
     Task DisconnectWhatsAppAsync(CancellationToken cancellationToken);
@@ -96,6 +97,9 @@ public sealed class WhatsAppBotApiClient : IWhatsAppBotApiClient
     public Task<ResponseE<WhatsAppIntegrationDTO>?> GetWhatsAppIntegrationAsync(
         CancellationToken cancellationToken) =>
         GetAsync<WhatsAppIntegrationDTO>("api/v1/admin/whatsapp/integration", cancellationToken);
+
+    public Task<ResponseE<TenantDTO>?> GetCurrentTenantAsync(CancellationToken cancellationToken) =>
+        GetAsync<TenantDTO>("api/v1/admin/tenant", cancellationToken);
 
     public Task<ResponseE<WhatsAppIntegrationDTO>?> CompleteWhatsAppSignupAsync(
         EmbeddedSignupCompletionRequestDTO request, CancellationToken cancellationToken) =>

@@ -1,0 +1,129 @@
+@page
+@model WhatsAppBot.Admin.Pages.Dashboard.IndexModel
+@using WhatsAppBot.Shared.Enums
+@{
+    ViewData["Title"] = "Dashboard";
+}
+
+<section class="page-heading">
+    <div>
+        <p class="eyebrow">RESUMEN DEL SISTEMA</p>
+        <h1>Dashboard</h1>
+        <p class="muted">Estado actual del Tenant y de la operación de WhatsAppBot.</p>
+    </div>
+    <div class="date-chip"><span class="status-dot"></span> @Model.ConnectionLabel</div>
+</section>
+
+<section class="summary-grid" aria-label="Estado del sistema">
+    <article class="summary-card">
+        <div class="card-topline"><span class="card-icon green">◎</span><span class="state-pill @(Model.IntegrationAvailable && Model.Integration?.ConnectionState == ConnectionState.Connected ? "ready" : "neutral")">@Model.ConnectionLabel</span></div>
+        <p class="card-label">WhatsApp Business</p>
+        <h2>@Model.ConnectionTitle</h2>
+        <p class="card-caption">@Model.ConnectionCaption</p>
+    </article>
+    <article class="summary-card">
+        <div class="card-topline"><span class="card-icon violet">✳</span><span class="state-pill @(Model.BotConfiguration?.IsBotEnabled == true ? "ready" : "neutral")">@Model.BotLabel</span></div>
+        <p class="card-label">Automatización</p>
+        <h2>@Model.BotTitle</h2>
+        <p class="card-caption">@Model.BotCaption</p>
+    </article>
+    <article class="summary-card">
+        <div class="card-topline"><span class="card-icon blue">⌂</span><span class="state-pill @(Model.Tenant?.IsActive == true ? "ready" : "neutral")">@Model.TenantLabel</span></div>
+        <p class="card-label">Tenant efectivo</p>
+        <h2>@Model.TenantTitle</h2>
+        <p class="card-caption">@Model.TenantCaption</p>
+    </article>
+</section>
+
+@if (Model.IntegrationError is not null || Model.BotConfigurationError is not null || Model.TenantError is not null)
+{
+    <div class="alert alert-warning mt-3" role="status">
+        @if (Model.IntegrationError is not null)
+        {
+            <div>@Model.IntegrationError</div>
+        }
+        @if (Model.BotConfigurationError is not null)
+        {
+            <div>@Model.BotConfigurationError</div>
+        }
+        @if (Model.TenantError is not null)
+        {
+            <div>@Model.TenantError</div>
+        }
+    </div>
+}
+
+<section class="content-card activity-card">
+    <div class="activity-heading">
+        <div>
+            <p class="eyebrow">VISIBILIDAD</p>
+            <h2>Actividad reciente</h2>
+            <p class="muted">Conversaciones más recientes del Tenant efectivo.</p>
+        </div>
+        @if (Model.ActivityAvailable)
+        {
+            <span class="date-chip">@Model.ConversationCount conversación@(Model.ConversationCount == 1 ? "" : "es")</span>
+        }
+    </div>
+
+    @if (Model.ActivityError is not null)
+    {
+        <div class="alert alert-warning" role="status">@Model.ActivityError</div>
+    }
+    else if (Model.RecentConversations.Count == 0)
+    {
+        <div class="empty-state">
+            <span class="card-icon green">◉</span>
+            <h2>Aún no hay conversaciones</h2>
+            <p class="muted">Las interacciones recibidas aparecerán aquí cuando exista historial persistido.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table conversation-table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Contacto</th>
+                        <th>Último mensaje</th>
+                        <th>Actividad</th>
+                        <th>Atención</th>
+                        <th>Estado</th>
+                        <th><span class="visually-hidden">Acciones</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var conversation in Model.RecentConversations)
+                {
+                    <tr>
+                        <td>
+                            <a class="conversation-contact" asp-page="/Conversations/Details" asp-route-id="@conversation.ConversationId">
+                                @conversation.Contact
+                            </a>
+                        </td>
+                        <td class="conversation-preview">@(conversation.LastMessagePreview ?? "Sin contenido de texto")</td>
+                        <td>@conversation.LastMessageAtUtc.ToLocalTime().ToString("g")</td>
+                        <td><span class="state-pill @(conversation.AttentionMode == AttentionMode.Humano ? "warning" : "ready")">@Model.AttentionLabel(conversation.AttentionMode)</span></td>
+                        <td><span class="state-pill @(conversation.Status == ConversationStatus.Open ? "ready" : "neutral")">@Model.StatusLabel(conversation.Status)</span></td>
+                        <td class="text-end">
+                            <a class="btn btn-sm btn-outline-secondary" asp-page="/Conversations/Details" asp-route-id="@conversation.ConversationId">Ver historial</a>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+<section class="content-card setup-card">
+    <div class="setup-copy">
+        <p class="eyebrow">CONFIGURACIÓN</p>
+        <h2>Administra el comportamiento del bot</h2>
+        <p>Configura el estado, el modo de respuesta y las respuestas frecuentes desde las opciones del panel.</p>
+    </div>
+    <div class="row-actions">
+        <a asp-page="/Settings/Bot/Index" class="btn btn-sm btn-outline-secondary">Configurar bot</a>
+        <a asp-page="/Settings/FrequentResponses/Index" class="btn btn-sm btn-outline-secondary">Respuestas frecuentes</a>
+    </div>
+</section>

@@ -398,6 +398,8 @@ public sealed class ConversationVisibilityTests
             LoginRequestDTO request, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<ResponseE<WhatsAppIntegrationDTO>?> GetWhatsAppIntegrationAsync(
             CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<ResponseE<TenantDTO>?> GetCurrentTenantAsync(
+            CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<ResponseE<WhatsAppIntegrationDTO>?> CompleteWhatsAppSignupAsync(
             EmbeddedSignupCompletionRequestDTO request, CancellationToken cancellationToken) =>
             throw new NotSupportedException();

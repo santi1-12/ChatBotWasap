@@ -56,6 +56,20 @@ paths:
           description: Disconnected
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /api/v1/admin/tenant:
+    get:
+      operationId: getCurrentTenant
+      summary: Get the effective Tenant for the authenticated administrator
+      description: Tenant scope is resolved from the authenticated membership; no Tenant identifier is accepted from the caller.
+      responses:
+        "200":
+          description: Effective Tenant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResponseETenantDTO"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
   /api/v1/admin/whatsapp/embedded-signup:
     post:
       operationId: completeEmbeddedSignup
@@ -516,6 +530,13 @@ components:
           properties:
             data:
               $ref: "#/components/schemas/WhatsAppIntegrationDTO"
+    ResponseETenantDTO:
+      allOf:
+        - $ref: "#/components/schemas/ResponseEBase"
+        - type: object
+          properties:
+            data:
+              $ref: "#/components/schemas/TenantDTO"
     ResponseEBotConfigurationDTO:
       allOf:
         - $ref: "#/components/schemas/ResponseEBase"
@@ -669,6 +690,23 @@ components:
         metaGraphApiVersion:
           type: string
           description: Configured Graph API version used by the Meta SDK.
+    TenantDTO:
+      type: object
+      required: [tenantId, legalName, isActive, createdAtUtc, updatedAtUtc]
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+        legalName:
+          type: string
+        isActive:
+          type: boolean
+        createdAtUtc:
+          type: string
+          format: date-time
+        updatedAtUtc:
+          type: string
+          format: date-time
     BotConfigurationDTO:
       type: object
       required: [isBotEnabled, replyMode]

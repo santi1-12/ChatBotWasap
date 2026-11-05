@@ -6,6 +6,8 @@ CREATE OR ALTER PROCEDURE dbo.sp_WebhookInbox_Insert
     @EventType nvarchar(80),
     @PhoneNumberId nvarchar(64),
     @WabaId nvarchar(64) = NULL,
+    @HistoryImportKey nvarchar(256) = NULL,
+    @HistoryTotalCount int = 0,
     @NormalizedEventJson nvarchar(max)
 AS
 BEGIN
@@ -46,8 +48,38 @@ BEGIN
         SELECT CONVERT(bit, 0) AS Inserted;
         RETURN;
     END;
-    INSERT dbo.WebhookInboxEvent (IntegrationId, TenantId, EventKey, EventType, NormalizedEventJson)
-    VALUES (@IntegrationId, @TenantId, @EventKey, @EventType, @NormalizedEventJson);
+    INSERT dbo.WebhookInboxEvent
+        (IntegrationId, TenantId, EventKey, EventType, HistoryImportKey, HistoryTotalCount, NormalizedEventJson)
+    VALUES
+        (@IntegrationId, @TenantId, @EventKey, @EventType, @HistoryImportKey,
+         CASE WHEN @HistoryTotalCount < 0 THEN 0 ELSE @HistoryTotalCount END, @NormalizedEventJson);
+    IF @HistoryImportKey IS NOT NULL AND @EventType = N'HistoricalMessage'
+    BEGIN
+        IF NOT EXISTS
+        (
+            SELECT 1 FROM dbo.HistoryImportStatus WITH (UPDLOCK, SERIALIZABLE)
+            WHERE TenantId = @TenantId
+              AND IntegrationId = @IntegrationId
+              AND HistoryImportKey = @HistoryImportKey
+        )
+        BEGIN
+            INSERT dbo.HistoryImportStatus
+                (TenantId, IntegrationId, HistoryImportKey, TotalCount, StartedAtUtc)
+            VALUES
+                (@TenantId, @IntegrationId, @HistoryImportKey,
+                 CASE WHEN @HistoryTotalCount < 0 THEN 0 ELSE @HistoryTotalCount END,
+                 SYSUTCDATETIME());
+        END
+        ELSE
+        BEGIN
+            UPDATE dbo.HistoryImportStatus
+            SET TotalCount = CASE WHEN @HistoryTotalCount > TotalCount THEN @HistoryTotalCount ELSE TotalCount END,
+                UpdatedAtUtc = SYSUTCDATETIME()
+            WHERE TenantId = @TenantId
+              AND IntegrationId = @IntegrationId
+              AND HistoryImportKey = @HistoryImportKey;
+        END;
+    END;
     COMMIT TRANSACTION;
     SELECT CONVERT(bit, 1) AS Inserted;
 END;

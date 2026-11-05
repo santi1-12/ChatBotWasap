@@ -6,17 +6,34 @@ namespace WhatsAppBot.Api.Business.UseCases;
 public sealed class MessageProcessingService(
     IProcessInboundText inboundTextProcessor,
     IProcessInboundMedia mediaProcessor,
-    IProcessMetaDeliveryStatus deliveryStatusProcessor)
+    IProcessMetaDeliveryStatus deliveryStatusProcessor,
+    IProcessCoexistenceMessage? coexistenceProcessor = null)
 {
-    public Task ProcessAsync(NormalizedMetaEvent webhookEvent, CancellationToken cancellationToken) =>
-        webhookEvent.EventType switch
+    public async Task<MetaEventProcessingResult> ProcessAsync(
+        NormalizedMetaEvent webhookEvent, CancellationToken cancellationToken)
+    {
+        switch (webhookEvent.EventType)
         {
-            MetaWebhookEventTypes.InboundText =>
-                inboundTextProcessor.ProcessAsync(webhookEvent, cancellationToken),
-            MetaWebhookEventTypes.InboundAudio or MetaWebhookEventTypes.InboundImage =>
-                mediaProcessor.ProcessAsync(webhookEvent, cancellationToken),
-            MetaWebhookEventTypes.DeliveryStatus =>
-                deliveryStatusProcessor.ProcessAsync(webhookEvent, cancellationToken),
-            _ => Task.CompletedTask
-        };
+            case MetaWebhookEventTypes.InboundText:
+                await inboundTextProcessor.ProcessAsync(webhookEvent, cancellationToken);
+                return MetaEventProcessingResult.None;
+            case MetaWebhookEventTypes.InboundAudio:
+            case MetaWebhookEventTypes.InboundImage:
+                await mediaProcessor.ProcessAsync(webhookEvent, cancellationToken);
+                return MetaEventProcessingResult.None;
+            case MetaWebhookEventTypes.DeliveryStatus:
+                await deliveryStatusProcessor.ProcessAsync(webhookEvent, cancellationToken);
+                return MetaEventProcessingResult.None;
+            case MetaWebhookEventTypes.HistoricalMessage:
+            case MetaWebhookEventTypes.OutboundAppMessage:
+                if (coexistenceProcessor is null)
+                {
+                    throw new InvalidOperationException("Coexistence message processing is not registered.");
+                }
+
+                return await coexistenceProcessor.ProcessAsync(webhookEvent, cancellationToken);
+            default:
+                return MetaEventProcessingResult.None;
+        }
+    }
 }

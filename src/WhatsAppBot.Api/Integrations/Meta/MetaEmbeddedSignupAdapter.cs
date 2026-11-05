@@ -21,7 +21,8 @@ public sealed class MetaEmbeddedSignupAdapter(
         string wabaId,
         string? phoneNumberId,
         WhatsAppOnboardingType onboardingType,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool importHistory = false)
     {
         try
         {
@@ -138,7 +139,8 @@ public sealed class MetaEmbeddedSignupAdapter(
                 TenantId = integration.TenantId
                     ?? throw new InvalidOperationException("The WhatsApp integration is not assigned to a Tenant."),
                 OnboardingType = onboardingType,
-                EffectiveEmbeddedSignupConfigId = signupConfigId!
+                EffectiveEmbeddedSignupConfigId = signupConfigId!,
+                ImportHistory = importHistory && onboardingType == WhatsAppOnboardingType.Coexistence
             };
         }
         catch (MetaApiException exception)

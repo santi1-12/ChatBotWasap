@@ -62,10 +62,11 @@ BEGIN
         SELECT MAX(inbound.ProviderTimestampUtc) AS LastCustomerMessageAtUtc
         FROM dbo.Message inbound
         WHERE inbound.IntegrationId = o.IntegrationId
-          AND inbound.TenantId = o.TenantId
-          AND inbound.ConversationId = m.ConversationId
-          AND inbound.Direction = N'Inbound'
-    ) latestCustomerMessage
+           AND inbound.TenantId = o.TenantId
+           AND inbound.ConversationId = m.ConversationId
+           AND inbound.Direction = N'Inbound'
+           AND inbound.IsHistorical = 0
+     ) latestCustomerMessage
     INNER JOIN dbo.Conversation conv
         ON conv.ConversationId = m.ConversationId
        AND conv.TenantId = o.TenantId

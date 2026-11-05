@@ -31,6 +31,7 @@ public sealed record WhatsAppIntegration(Guid IntegrationId, string? WabaId, str
     public Guid? TenantId { get; init; }
     public WhatsAppOnboardingType? OnboardingType { get; init; }
     public string? EffectiveEmbeddedSignupConfigId { get; init; }
+    public bool HistoryImportRequested { get; init; }
     public bool HasCompleteConnection =>
         ConnectionState == ConnectionState.Connected &&
         IsActive &&
@@ -103,6 +104,9 @@ public sealed record Message(long MessageId, Guid IntegrationId, long Conversati
     public long? FrequentResponseId { get; init; }
     public long? SourceInboundMessageId { get; init; }
     public DateTimeOffset? ProviderTimestampUtc { get; init; }
+    public bool IsHistorical { get; init; }
+    public string? SourceEventKey { get; init; }
+    public string? HistoryImportKey { get; init; }
     public DateTimeOffset UpdatedAtUtc { get; init; }
     public string? FailureCode { get; init; }
     public string? OutcomeCode { get; init; }
@@ -133,7 +137,23 @@ public sealed record WebhookInboxEvent(long WebhookInboxEventId, string EventKey
     public DateTimeOffset ReceivedAtUtc { get; init; }
     public DateTimeOffset? ProcessedAtUtc { get; init; }
     public string? LastFailureCode { get; init; }
+    public string? HistoryImportKey { get; init; }
+    public int HistoryTotalCount { get; init; }
+    public string? HistoryOutcome { get; init; }
 }
+
+public sealed record HistoryImportStatusRecord(
+    string HistoryImportKey,
+    HistoryImportState State,
+    int TotalCount,
+    int ProcessedCount,
+    int ImportedCount,
+    int DuplicateCount,
+    int SkippedCount,
+    int FailedCount,
+    DateTimeOffset? StartedAtUtc,
+    DateTimeOffset? CompletedAtUtc,
+    string? ErrorCode);
 
 public sealed record MessageOutbox(long MessageId, Guid IntegrationId, MessageOutboxState State,
     int AttemptCount, DateTimeOffset NextAttemptAtUtc)

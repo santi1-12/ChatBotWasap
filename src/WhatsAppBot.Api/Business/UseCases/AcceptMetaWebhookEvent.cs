@@ -15,7 +15,9 @@ public sealed class AcceptMetaWebhookEvent(IWebhookInboxRepository inboxReposito
                 MetaWebhookEventTypes.InboundAudio or
                 MetaWebhookEventTypes.InboundImage or
                 MetaWebhookEventTypes.DeliveryStatus or
-                MetaWebhookEventTypes.UnsupportedMessage))
+                MetaWebhookEventTypes.UnsupportedMessage or
+                MetaWebhookEventTypes.HistoricalMessage or
+                MetaWebhookEventTypes.OutboundAppMessage))
             {
                 throw new BusinessValidationException("The Meta webhook event type is not supported.");
             }

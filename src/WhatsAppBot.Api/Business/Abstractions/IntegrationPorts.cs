@@ -38,7 +38,8 @@ public interface IMetaEmbeddedSignupAdapter
         string wabaId,
         string? phoneNumberId,
         WhatsAppOnboardingType onboardingType,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        bool importHistory = false);
 }
 
 public interface IMetaWebhookSignatureValidator
@@ -66,6 +67,8 @@ public interface IWhatsAppIntegrationRepository
         CancellationToken cancellationToken);
     Task SaveSignupResultAsync(
         MetaSignupResult result, CancellationToken cancellationToken);
+    Task<HistoryImportStatusRecord?> GetLatestHistoryImportAsync(
+        Guid tenantId, Guid integrationId, CancellationToken cancellationToken);
     Task SetConnectionStateAsync(
         Guid integrationId, ConnectionState state, string? safeErrorCode, CancellationToken cancellationToken);
     Task DisconnectAsync(Guid integrationId, CancellationToken cancellationToken);
@@ -74,12 +77,14 @@ public interface IWhatsAppIntegrationRepository
 public interface IWhatsAppIntegrationService
 {
     Task<WhatsAppIntegration> GetCurrentAsync(CancellationToken cancellationToken);
+    Task<HistoryImportStatusRecord?> GetHistoryImportStatusAsync(CancellationToken cancellationToken);
     Task<WhatsAppIntegration> CompleteSignupAsync(
         string authorizationCode,
         string wabaId,
         string? phoneNumberId,
         WhatsAppOnboardingType onboardingType,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        bool importHistory = false);
     Task DisconnectAsync(CancellationToken cancellationToken);
 }
 
@@ -93,7 +98,8 @@ public interface IWebhookInboxRepository
         string eventKey,
         WebhookInboxState state,
         string? safeFailureCode,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        string? historyOutcome = null);
 }
 
 public interface IContactRepository
@@ -111,6 +117,14 @@ public interface IConversationRepository
         long contactId,
         DateTimeOffset lastMessageAtUtc,
         bool isBotEnabled,
+        CancellationToken cancellationToken);
+    Task<long> GetOrCreateCoexistenceAsync(
+        Guid integrationId,
+        Guid tenantId,
+        long contactId,
+        DateTimeOffset lastMessageAtUtc,
+        bool isBotEnabled,
+        bool humanActivity,
         CancellationToken cancellationToken);
     Task<ConversationPage> ListAsync(
         Guid tenantId, Guid integrationId, int page, int pageSize, CancellationToken cancellationToken);
@@ -130,6 +144,12 @@ public interface IMessageRepository
         Guid integrationId,
         long conversationId,
         NormalizedMetaEvent inboundEvent,
+        CancellationToken cancellationToken);
+    Task<InboundMessageInsertResult> InsertCoexistenceAsync(
+        Guid tenantId,
+        Guid integrationId,
+        long conversationId,
+        NormalizedMetaEvent coexistenceEvent,
         CancellationToken cancellationToken);
     Task SetProcessingOutcomeAsync(
         Guid tenantId,
@@ -158,6 +178,12 @@ public interface IMessageRepository
         MessageOutboxState state,
         int retryDelaySeconds,
         CancellationToken cancellationToken);
+}
+
+public interface IProcessCoexistenceMessage
+{
+    Task<MetaEventProcessingResult> ProcessAsync(
+        NormalizedMetaEvent coexistenceEvent, CancellationToken cancellationToken);
 }
 
 public interface IWhatsAppMessagingPolicy

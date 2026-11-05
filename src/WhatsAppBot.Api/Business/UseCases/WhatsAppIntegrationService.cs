@@ -20,12 +20,23 @@ public sealed class WhatsAppIntegrationService(
     public Task<WhatsAppIntegration> GetCurrentAsync(CancellationToken cancellationToken) =>
         repository.GetCurrentAsync(cancellationToken);
 
+    public async Task<HistoryImportStatusRecord?> GetHistoryImportStatusAsync(
+        CancellationToken cancellationToken)
+    {
+        var integration = await repository.GetCurrentAsync(cancellationToken);
+        return integration.TenantId is { } tenantId
+            ? await repository.GetLatestHistoryImportAsync(
+                tenantId, integration.IntegrationId, cancellationToken)
+            : null;
+    }
+
     public async Task<WhatsAppIntegration> CompleteSignupAsync(
         string authorizationCode,
         string wabaId,
         string? phoneNumberId,
         WhatsAppOnboardingType onboardingType,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool importHistory = false)
     {
         if (string.IsNullOrWhiteSpace(authorizationCode) ||
             string.IsNullOrWhiteSpace(wabaId) ||
@@ -55,7 +66,7 @@ public sealed class WhatsAppIntegrationService(
                     integration.IntegrationId, ConnectionState.Configuring, null, cancellationToken));
 
             var result = await signupAdapter.CompleteAsync(
-                authorizationCode, wabaId, phoneNumberId, onboardingType, cancellationToken);
+                authorizationCode, wabaId, phoneNumberId, onboardingType, cancellationToken, importHistory);
 
             await phaseLogger.RunAsync(
                 "IntegrationPersistence",

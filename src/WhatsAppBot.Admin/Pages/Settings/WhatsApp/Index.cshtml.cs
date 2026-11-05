@@ -32,6 +32,9 @@ public sealed class IndexModel(IWhatsAppBotApiClient apiClient) : PageModel
     [BindProperty, Required, EnumDataType(typeof(WhatsAppOnboardingType))]
     public WhatsAppOnboardingType? OnboardingType { get; set; }
 
+    [BindProperty]
+    public bool ImportHistory { get; set; }
+
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
         await LoadIntegrationAsync(cancellationToken);
@@ -55,7 +58,8 @@ public sealed class IndexModel(IWhatsAppBotApiClient apiClient) : PageModel
                     AuthorizationCode = AuthorizationCode,
                     WabaId = WabaId,
                     PhoneNumberId = string.IsNullOrWhiteSpace(PhoneNumberId) ? null : PhoneNumberId,
-                    OnboardingType = OnboardingType
+                    OnboardingType = OnboardingType,
+                    ImportHistory = ImportHistory
                 },
                 cancellationToken);
             if (response?.Success != true || response.Data is null)

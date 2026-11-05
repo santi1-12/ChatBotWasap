@@ -273,6 +273,9 @@ public sealed class InboundTextProcessingTests
             CancellationToken cancellationToken) => GetCurrentAsync(cancellationToken);
         public Task SaveSignupResultAsync(MetaSignupResult result, CancellationToken cancellationToken) =>
             throw new NotImplementedException();
+        public Task<HistoryImportStatusRecord?> GetLatestHistoryImportAsync(
+            Guid tenantId, Guid integrationId, CancellationToken cancellationToken) =>
+            Task.FromResult<HistoryImportStatusRecord?>(null);
         public Task SetConnectionStateAsync(
             Guid integrationId, ConnectionState state, string? safeErrorCode, CancellationToken cancellationToken) =>
             throw new NotImplementedException();
@@ -295,7 +298,11 @@ public sealed class InboundTextProcessingTests
         public Task<long> GetOrCreateAsync(
             Guid integrationId, Guid tenantId, long contactId, DateTimeOffset lastMessageAtUtc,
             bool isBotEnabled,
-            CancellationToken cancellationToken) => Task.FromResult(6L);
+             CancellationToken cancellationToken) => Task.FromResult(6L);
+
+        public Task<long> GetOrCreateCoexistenceAsync(
+            Guid integrationId, Guid tenantId, long contactId, DateTimeOffset lastMessageAtUtc,
+            bool isBotEnabled, bool humanActivity, CancellationToken cancellationToken) => Task.FromResult(6L);
 
         public Task<ConversationPage> ListAsync(
             Guid tenantId, Guid integrationId, int page, int pageSize, CancellationToken cancellationToken) =>
@@ -365,6 +372,11 @@ public sealed class InboundTextProcessingTests
             InboundPersisted++;
             return Task.FromResult(new InboundMessageInsertResult(Inserted, 9));
         }
+
+        public Task<InboundMessageInsertResult> InsertCoexistenceAsync(
+            Guid tenantId, Guid integrationId, long conversationId, NormalizedMetaEvent coexistenceEvent,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(new InboundMessageInsertResult(Inserted, 9));
 
         public Task SetProcessingOutcomeAsync(
             Guid tenantId,

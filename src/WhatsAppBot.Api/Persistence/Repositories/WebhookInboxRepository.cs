@@ -19,6 +19,10 @@ public sealed class WebhookInboxRepository(StoredProcedureExecutor executor) : I
                 new SqlParameter("@PhoneNumberId", SqlDbType.NVarChar, 64) { Value = webhookEvent.PhoneNumberId },
                 new SqlParameter("@WabaId", SqlDbType.NVarChar, 64)
                     { Value = (object?)webhookEvent.WabaId ?? DBNull.Value },
+                new SqlParameter("@HistoryImportKey", SqlDbType.NVarChar, 256)
+                    { Value = (object?)webhookEvent.HistoryImportKey ?? DBNull.Value },
+                new SqlParameter("@HistoryTotalCount", SqlDbType.Int)
+                    { Value = webhookEvent.HistoryTotalCount },
                 new SqlParameter("@NormalizedEventJson", SqlDbType.NVarChar, -1)
                     { Value = JsonSerializer.Serialize(webhookEvent) }
             ],
@@ -48,7 +52,8 @@ public sealed class WebhookInboxRepository(StoredProcedureExecutor executor) : I
         string eventKey,
         WebhookInboxState state,
         string? safeFailureCode,
-        CancellationToken cancellationToken) =>
+        CancellationToken cancellationToken,
+        string? historyOutcome = null) =>
         executor.ExecuteAsync(
             "dbo.sp_WebhookInbox_SetState",
             [
@@ -56,7 +61,9 @@ public sealed class WebhookInboxRepository(StoredProcedureExecutor executor) : I
                 new SqlParameter("@EventKey", SqlDbType.NVarChar, 256) { Value = eventKey },
                 new SqlParameter("@State", SqlDbType.NVarChar, 16) { Value = state.ToString() },
                 new SqlParameter("@SafeFailureCode", SqlDbType.NVarChar, 100)
-                    { Value = (object?)safeFailureCode ?? DBNull.Value }
+                    { Value = (object?)safeFailureCode ?? DBNull.Value },
+                new SqlParameter("@HistoryOutcome", SqlDbType.NVarChar, 24)
+                    { Value = (object?)historyOutcome ?? DBNull.Value }
             ],
             cancellationToken);
 }

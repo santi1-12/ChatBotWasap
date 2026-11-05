@@ -44,11 +44,12 @@ public sealed class MetaEmbeddedSignupTests
 
         var result = await adapter.CompleteAsync(
             "single-use-code", "waba-1", null,
-            WhatsAppOnboardingType.Coexistence, CancellationToken.None);
+            WhatsAppOnboardingType.Coexistence, CancellationToken.None, importHistory: true);
 
         Assert.Equal("phone-1", result.PhoneNumberId);
         Assert.Equal(WhatsAppOnboardingType.Coexistence, result.OnboardingType);
         Assert.Equal("coexistence-config", result.EffectiveEmbeddedSignupConfigId);
+        Assert.True(result.ImportHistory);
         Assert.Equal(
             ["exchange", "list-phone-numbers", "verify-waba", "lookup-phone", "subscribe-waba"],
             cloud.Calls);
@@ -263,6 +264,9 @@ public sealed class MetaEmbeddedSignupTests
             CancellationToken cancellationToken) => GetCurrentAsync(cancellationToken);
         public Task SaveSignupResultAsync(MetaSignupResult result, CancellationToken cancellationToken) =>
             throw new NotImplementedException();
+        public Task<HistoryImportStatusRecord?> GetLatestHistoryImportAsync(
+            Guid tenantId, Guid integrationId, CancellationToken cancellationToken) =>
+            Task.FromResult<HistoryImportStatusRecord?>(null);
         public Task SetConnectionStateAsync(
             Guid integrationId, ConnectionState state, string? safeErrorCode, CancellationToken cancellationToken) =>
             throw new NotImplementedException();

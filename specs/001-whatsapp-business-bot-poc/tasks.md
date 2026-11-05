@@ -6,18 +6,19 @@
 **Order**: `T001-T098` is preserved as the historical implementation baseline. The approved
 extension begins at `T099` with the Tenant/Company model, safe migration, conversation states,
 Bot/Humano concurrency, human actions, OpenAI, audio, image, private storage, complete
-conversations, and final validation. Standard and Coexistence remain supported for new messages;
-Coexistence history and `smb_*` synchronization are explicitly deferred.
+conversations, and final validation. Standard and Coexistence remain supported for new messages.
+T134 additionally covers the consented Coexistence history stream and `smb_message_echoes`;
+`smb_app_state_sync` remains outside scope.
 
 **Approved POC scope**: Tenant/Company and memberships; one active WhatsApp number per Tenant as
 an operational limit only; future multiple integrations per company; `AttentionMode` Bot/Humano;
 `LifecycleStatus` Abierta/Cerrada; human priority, handoff, manual replies, reopen, audit,
 OpenAI, text, audio, image, private media and initial 30-day retention.
 
-**Explicitly deferred**: `history`, `smb_app_state_sync`, `smb_message_echoes`, historical
-contact/conversation synchronization, video, documents, location, teams, queues, campaigns,
-operational templates, plans and operational feature flags. No task from `T099-T138` implements
-those deferred capabilities.
+**Explicitly deferred**: `smb_app_state_sync`, full historical contact/conversation
+synchronization, video, documents, location, teams, queues, campaigns, operational templates,
+plans and operational feature flags. T134 may persist only the messages delivered by Meta through
+the consented `history` stream and the human outbound `smb_message_echoes` stream.
 
 **Task format**: Every task has an ID, explicit `Dependencies`, expected file path(s), and
 an observable completion condition. `[P]` means the task can proceed concurrently with other
@@ -185,7 +186,7 @@ conversation history. Outside the permitted window, no free-form FAQ/AI response
 - [X] T104 [P] Bind independent configurable budgets for Admin, Meta, SQL, OpenAI, media storage and FFmpeg in `src/WhatsAppBot.Api/Infrastructure/Options/` and `src/WhatsAppBot.Admin/Configuration/`; Dependencies: T004, T008, T099; done when invalid required configuration fails explicitly and no model, timeout or budget value is hardcoded in an integration.
 - [X] T105 Propagate deadlines and contain provider/cancellation failures in `src/WhatsAppBot.Api/Integrations/`, `src/WhatsAppBot.Api/Business/Workers/`, and `tests/WhatsAppBot.Integrations.Tests/ProviderFailureTests.cs`; Dependencies: T104; done when Meta, SQL, OpenAI, storage and FFmpeg failures do not terminate workers or produce success-shaped results.
 - [X] T106 [SP] Persist and reconcile `CompletionStateUnknown` in `src/WhatsAppBot.Api/Helpers/CompletionExecutionContext.cs`, `CompletionPhaseLogger.cs`, `src/WhatsAppBot.Api/Business/UseCases/`, `src/WhatsAppBot.Api/Persistence/Repositories/`, and `src/WhatsAppBot.Api/Persistence/StoredProcedures/Procedures/`; Dependencies: T102, T103, T104; done when an indeterminate Embedded Signup result is persisted safely, its state can be queried/reconciled, and a single-use authorization code is never retried blindly.
-- [X] T107 [SP] Normalize and route new Meta message/status events in `src/WhatsAppBot.Api/Integrations/Meta/MetaWebhookEventParser.cs`, `src/WhatsAppBot.Api/Business/Workers/WebhookInboxWorker.cs`, and `src/WhatsAppBot.Api/Models/Contracts/`; Dependencies: T099, T102, T063, T064; done when text/audio/image/status events reach the correct worker, while `history`, `smb_app_state_sync` and `smb_message_echoes` are ignored safely without implementation tasks or fabricated messages.
+- [X] T107 [SP] Normalize and route new Meta message/status events in `src/WhatsAppBot.Api/Integrations/Meta/MetaWebhookEventParser.cs`, `src/WhatsAppBot.Api/Business/Workers/WebhookInboxWorker.cs`, and `src/WhatsAppBot.Api/Models/Contracts/`; Dependencies: T099, T102, T063, T064; done when text/audio/image/status events reach the correct worker, while `smb_app_state_sync` remains ignored and T134 owns the explicit Coexistence history/echo extension.
 
 ## Phase 11: Conversation Lifecycle and Human Attention
 
@@ -224,7 +225,7 @@ conversation history. Outside the permitted window, no free-form FAQ/AI response
 - [X] T131 [AI] [Storage] Add cross-provider failure and timeout tests in `tests/WhatsAppBot.Api.ContractTests/SecurityAndFailureTests.cs`, `tests/WhatsAppBot.Integrations.Tests/ProviderFailureTests.cs`, and completion tests; Dependencies: T105, T119, T123, T127; done when Meta, OpenAI, SQL, storage, FFmpeg and cancellation failures are bounded, redacted and non-success-shaped.
 - [X] T132 [US3] Extend the existing dashboard task `T092` with API-backed connection, bot, Tenant and recent activity data in `src/WhatsAppBot.Admin/Pages/Dashboard/`, API contracts and client services; Dependencies: T116, T117; done when the dashboard contains no hardcoded connection/activity values and respects the effective Tenant.
 - [ ] T133 [Meta] [US1] Validate Standard Embedded Signup with Meta real in `tests/WhatsAppBot.Integrations.Tests/LiveStandardValidation.md`; Dependencies: T105, T117, T118; done when authorization, Phone Number ID validation, registration, WABA subscription and truthful Connected state are evidenced.
-- [ ] T134 [Meta] [US1] Validate Coexistence Embedded Signup with Meta real in `tests/WhatsAppBot.Integrations.Tests/LiveCoexistenceValidation.md`; Dependencies: T105, T117, T118; done when an eligible WhatsApp Business App number completes onboarding without Standard `/register` and only new messages are in scope.
+- [ ] T134 [Meta] [US1] Implement and validate Coexistence Embedded Signup with Meta real in `src/WhatsAppBot.Api/Integrations/Meta/`, `src/WhatsAppBot.Api/Business/`, `src/WhatsAppBot.Api/Persistence/`, `src/WhatsAppBot.Admin/`, and `tests/WhatsAppBot.Integrations.Tests/LiveCoexistenceValidation.md`; Dependencies: T105, T107, T117, T118; done when an eligible WhatsApp Business App number completes onboarding without Standard `/register`, explicit history consent imports only Meta-delivered historical messages idempotently without bot/outbox processing, `smb_message_echoes` persists human outbound activity with Human priority, and live evidence covers same-number coexistence plus available history limits.
 - [ ] T135 [Meta] [AI] [US2] Validate live text and OpenAI processing in `tests/WhatsAppBot.Integrations.Tests/LiveTextAiValidation.md`; Dependencies: T122, T133, T134; done when an in-window customer message produces the correct FAQ/AI result, delivery state, safe outcome and audited handoff behavior.
 - [ ] T136 [Meta] [AI] [Storage] [US2] Validate live audio and image processing in `tests/WhatsAppBot.Integrations.Tests/LiveMediaValidation.md`; Dependencies: T129, T133, T134; done when real media is downloaded, privately stored, transcribed/analyzed, displayed with authorization and retained according to policy.
 - [ ] T137 [Meta] [AI] [Storage] Run the expanded final demonstration extending `T097` in `specs/001-whatsapp-business-bot-poc/demo-validation.md`; Dependencies: T115, T122, T129, T132, T135, T136; done when Tenant isolation, Bot/Humano actions, manual reply, Standard/Coexistence new messages, text, AI, audio, image and retention are evidenced with consented data.

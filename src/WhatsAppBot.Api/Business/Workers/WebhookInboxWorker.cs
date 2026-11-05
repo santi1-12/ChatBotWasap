@@ -60,15 +60,17 @@ public sealed class WebhookInboxWorker(
                         "A claimed webhook event must have server-assigned TenantId and IntegrationId.");
                 }
 
-                await processor.ProcessAsync(webhookEvent, itemDeadline.Token);
+                var processingResult = await processor.ProcessAsync(webhookEvent, itemDeadline.Token);
                 await inbox.SetStateAsync(
-                    tenantId, webhookEvent.EventKey, WebhookInboxState.Completed, null, cancellationToken);
+                    tenantId, webhookEvent.EventKey, WebhookInboxState.Completed, null, cancellationToken,
+                    processingResult.HistoryOutcome);
             }
             catch (BusinessValidationException)
             {
                 await TrySetStateAsync(
                     inbox, webhookEvent.TenantId, webhookEvent.EventKey,
-                    WebhookInboxState.Failed, "InvalidNormalizedEvent", cancellationToken);
+                    WebhookInboxState.Failed, "InvalidNormalizedEvent", cancellationToken,
+                    webhookEvent.IsHistorical ? HistoryImportOutcomes.Failed : null);
                 logger.LogWarning(
                     "A normalized webhook event was rejected. Event type: {EventType}.",
                     webhookEvent.EventType);
@@ -77,7 +79,8 @@ public sealed class WebhookInboxWorker(
             {
                 await TrySetStateAsync(
                     inbox, webhookEvent.TenantId, webhookEvent.EventKey,
-                    WebhookInboxState.Failed, "ProcessingTimedOut", cancellationToken);
+                    WebhookInboxState.Failed, "ProcessingTimedOut", cancellationToken,
+                    webhookEvent.IsHistorical ? HistoryImportOutcomes.Failed : null);
                 logger.LogWarning(
                     "Webhook event processing timed out. Event type: {EventType}.",
                     webhookEvent.EventType);
@@ -86,7 +89,8 @@ public sealed class WebhookInboxWorker(
             {
                 await TrySetStateAsync(
                     inbox, webhookEvent.TenantId, webhookEvent.EventKey,
-                    WebhookInboxState.Failed, "PersistenceFailure", cancellationToken);
+                    WebhookInboxState.Failed, "PersistenceFailure", cancellationToken,
+                    webhookEvent.IsHistorical ? HistoryImportOutcomes.Failed : null);
                 logger.LogError(
                     "Webhook event processing failed with SQL error number {SqlErrorNumber}.",
                     exception.Number);
@@ -95,14 +99,16 @@ public sealed class WebhookInboxWorker(
             {
                 await TrySetStateAsync(
                     inbox, webhookEvent.TenantId, webhookEvent.EventKey,
-                    WebhookInboxState.Failed, "ProcessingFailure", cancellationToken);
+                    WebhookInboxState.Failed, "ProcessingFailure", cancellationToken,
+                    webhookEvent.IsHistorical ? HistoryImportOutcomes.Failed : null);
                 logger.LogError("Webhook event processing failed due to an invalid application state.");
             }
             catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
             {
                 await TrySetStateAsync(
                     inbox, webhookEvent.TenantId, webhookEvent.EventKey,
-                    WebhookInboxState.Failed, "ProcessingFailure", cancellationToken);
+                    WebhookInboxState.Failed, "ProcessingFailure", cancellationToken,
+                    webhookEvent.IsHistorical ? HistoryImportOutcomes.Failed : null);
                 logger.LogError(
                     "Webhook event processing failed with {ExceptionType}.",
                     exception.GetType().Name);
@@ -116,7 +122,8 @@ public sealed class WebhookInboxWorker(
         string eventKey,
         WebhookInboxState state,
         string failureCode,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? historyOutcome)
     {
         if (tenantId is null)
         {
@@ -126,7 +133,8 @@ public sealed class WebhookInboxWorker(
 
         try
         {
-            await inbox.SetStateAsync(tenantId.Value, eventKey, state, failureCode, cancellationToken);
+            await inbox.SetStateAsync(
+                tenantId.Value, eventKey, state, failureCode, cancellationToken, historyOutcome);
         }
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {

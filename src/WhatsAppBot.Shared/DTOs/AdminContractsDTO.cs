@@ -22,6 +22,17 @@ public sealed class WhatsAppIntegrationDTO
     public string? CoexistenceEmbeddedSignupConfigId { get; init; }
     public string? EffectiveEmbeddedSignupConfigId { get; init; }
     public string? MetaGraphApiVersion { get; init; }
+    public bool HistoryImportRequested { get; init; }
+    public HistoryImportState HistoryImportState { get; init; } = HistoryImportState.NotRequested;
+    public int HistoryTotalCount { get; init; }
+    public int HistoryProcessedCount { get; init; }
+    public int HistoryImportedCount { get; init; }
+    public int HistoryDuplicateCount { get; init; }
+    public int HistorySkippedCount { get; init; }
+    public int HistoryFailedCount { get; init; }
+    public DateTimeOffset? HistoryStartedAtUtc { get; init; }
+    public DateTimeOffset? HistoryCompletedAtUtc { get; init; }
+    public string? HistoryErrorCode { get; init; }
 }
 
 public sealed class EmbeddedSignupCompletionRequestDTO
@@ -37,6 +48,8 @@ public sealed class EmbeddedSignupCompletionRequestDTO
 
     [Required, EnumDataType(typeof(WhatsAppOnboardingType))]
     public WhatsAppOnboardingType? OnboardingType { get; init; }
+
+    public bool ImportHistory { get; init; }
 }
 
 public sealed class BotConfigurationDTO
@@ -119,6 +132,7 @@ public sealed class MessageDTO
     public DeliveryState? DeliveryState { get; init; }
     public string? OutcomeCode { get; init; }
     public required DateTimeOffset CreatedAtUtc { get; init; }
+    public bool IsHistorical { get; init; }
 }
 
 public sealed class ConversationSummaryDTO

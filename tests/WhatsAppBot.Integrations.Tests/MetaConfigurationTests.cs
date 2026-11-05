@@ -17,14 +17,14 @@ public sealed class MetaConfigurationTests
     }
 
     [Fact]
-    public void CoexistenceConfig_FallsBackToStandardWhenDedicatedValueIsMissing()
+    public void CoexistenceConfig_DoesNotReuseStandardFlowWhenDedicatedValueIsMissing()
     {
         var options = new MetaOptions
         {
             EmbeddedSignupConfigId = "standard-config"
         };
 
-        Assert.Equal("standard-config", options.EffectiveCoexistenceEmbeddedSignupConfigId);
+        Assert.Null(options.EffectiveCoexistenceEmbeddedSignupConfigId);
     }
 
     [Fact]

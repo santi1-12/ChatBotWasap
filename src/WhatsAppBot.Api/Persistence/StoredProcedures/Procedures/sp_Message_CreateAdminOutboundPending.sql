@@ -77,9 +77,10 @@ BEGIN
     BEGIN
         SELECT @LastCustomerMessageAtUtc = MAX(message.ProviderTimestampUtc)
         FROM dbo.Message AS message
-        WHERE message.TenantId = @TenantId
-          AND message.ConversationId = @ConversationId
-          AND message.Direction = N'Inbound';
+         WHERE message.TenantId = @TenantId
+           AND message.ConversationId = @ConversationId
+           AND message.Direction = N'Inbound'
+           AND message.IsHistorical = 0;
 
         IF @LastCustomerMessageAtUtc IS NULL OR
            DATEDIFF_BIG(second, @LastCustomerMessageAtUtc, SYSUTCDATETIME()) NOT BETWEEN 0 AND 86399

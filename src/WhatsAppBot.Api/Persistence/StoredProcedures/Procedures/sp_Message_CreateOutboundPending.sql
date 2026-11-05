@@ -45,9 +45,10 @@ BEGIN
     SELECT @LastCustomerMessageAtUtc = MAX(ProviderTimestampUtc)
     FROM dbo.Message WITH (UPDLOCK, HOLDLOCK)
     WHERE TenantId = @TenantId
-      AND IntegrationId = @IntegrationId
-      AND ConversationId = @ConversationId
-      AND Direction = N'Inbound';
+       AND IntegrationId = @IntegrationId
+       AND ConversationId = @ConversationId
+       AND Direction = N'Inbound'
+       AND IsHistorical = 0;
 
     IF NOT EXISTS
        (SELECT 1 FROM dbo.Message

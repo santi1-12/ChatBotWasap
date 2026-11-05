@@ -52,6 +52,49 @@ public sealed class OutboundMessagePolicyTests(LocalDbFixture fixture)
         }
     }
 
+    [Fact]
+    public async Task HistoricalInbound_DoesNotOpenMessagingWindow()
+    {
+        var integrationId = Guid.NewGuid();
+        var contactId = 0L;
+        var conversationId = 0L;
+        var inboundMessageId = 0L;
+        var phoneNumberId = $"test-{Guid.NewGuid():N}";
+        var ownsIntegration = false;
+        var tenantId = Guid.Empty;
+        await using var connection = new SqlConnection(fixture.ConnectionString);
+        await connection.OpenAsync();
+
+        try
+        {
+            if (!await HasActiveIntegrationAsync(connection))
+            {
+                tenantId = await CreateConnectedTestIntegrationAsync(connection, integrationId, phoneNumberId);
+                ownsIntegration = true;
+            }
+            else
+            {
+                (integrationId, tenantId) = await GetActiveIntegrationAsync(connection);
+            }
+
+            (contactId, conversationId, inboundMessageId) =
+                await InsertInboundAsync(connection, integrationId, tenantId, DateTimeOffset.UtcNow, true);
+
+            var result = await fixture.OutboxRepository.CreatePendingAsync(
+                tenantId, inboundMessageId, integrationId, conversationId, "Must not be sent",
+                ReplySource.FrequentResponse, null, CancellationToken.None);
+
+            Assert.False(result.Inserted);
+            Assert.Equal(MessageOutcomeCodes.MessagingWindowClosed, result.OutcomeCode);
+            Assert.Equal(0, await CountOutboundForConversationAsync(connection, conversationId));
+        }
+        finally
+        {
+            await DeleteTestDataAsync(
+                connection, integrationId, contactId, conversationId, inboundMessageId, ownsIntegration);
+        }
+    }
+
     private static async Task<bool> HasActiveIntegrationAsync(SqlConnection connection)
     {
         await using var command = new SqlCommand(
@@ -101,6 +144,12 @@ public sealed class OutboundMessagePolicyTests(LocalDbFixture fixture)
 
     private static async Task<(long ContactId, long ConversationId, long MessageId)> InsertExpiredInboundAsync(
         SqlConnection connection, Guid integrationId, Guid tenantId)
+        => await InsertInboundAsync(
+            connection, integrationId, tenantId, DateTimeOffset.UtcNow.AddHours(-25), false);
+
+    private static async Task<(long ContactId, long ConversationId, long MessageId)> InsertInboundAsync(
+        SqlConnection connection, Guid integrationId, Guid tenantId,
+        DateTimeOffset providerTimestampUtc, bool isHistorical)
     {
         await using var command = new SqlCommand(
             """
@@ -112,11 +161,11 @@ public sealed class OutboundMessagePolicyTests(LocalDbFixture fixture)
             DECLARE @ConversationId bigint = CONVERT(bigint, SCOPE_IDENTITY());
             INSERT dbo.Message
                 (IntegrationId, ConversationId, ProviderMessageId, Direction, MessageType,
-                 ContentText, ProcessingState, ProviderTimestampUtc, TenantId, ActorType, Origin)
+                  ContentText, ProcessingState, ProviderTimestampUtc, TenantId, ActorType, Origin, IsHistorical)
             VALUES
                 (@IntegrationId, @ConversationId, @ProviderMessageId, N'Inbound', N'Text',
-                  N'expired test', N'Received', DATEADD(hour, -25, SYSUTCDATETIME()),
-                  @TenantId, N'Customer', N'MetaCloudApi');
+                  N'policy test', N'Received', @ProviderTimestampUtc,
+                  @TenantId, N'Customer', N'MetaCloudApi', @IsHistorical);
             SELECT @ContactId AS ContactId, @ConversationId AS ConversationId,
                    CONVERT(bigint, SCOPE_IDENTITY()) AS MessageId;
             """,
@@ -129,6 +178,9 @@ public sealed class OutboundMessagePolicyTests(LocalDbFixture fixture)
             { Value = $"test-{Guid.NewGuid():N}" });
         command.Parameters.Add(new SqlParameter("@ProviderMessageId", SqlDbType.NVarChar, 256)
             { Value = $"wamid.{Guid.NewGuid():N}" });
+        command.Parameters.Add(new SqlParameter("@ProviderTimestampUtc", SqlDbType.DateTime2)
+            { Scale = 3, Value = providerTimestampUtc.UtcDateTime });
+        command.Parameters.Add(new SqlParameter("@IsHistorical", SqlDbType.Bit) { Value = isHistorical });
         await using var reader = await command.ExecuteReaderAsync();
         if (!await reader.ReadAsync())
         {

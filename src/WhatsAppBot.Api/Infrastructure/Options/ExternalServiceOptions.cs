@@ -16,9 +16,7 @@ public sealed class MetaOptions
     public int MaxPhoneNumberPages { get; init; } = 10;
 
     public string? EffectiveCoexistenceEmbeddedSignupConfigId =>
-        string.IsNullOrWhiteSpace(CoexistenceEmbeddedSignupConfigId)
-            ? EmbeddedSignupConfigId
-            : CoexistenceEmbeddedSignupConfigId;
+        CoexistenceEmbeddedSignupConfigId;
 }
 
 public static class AiProviderNames

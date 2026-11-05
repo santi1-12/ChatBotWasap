@@ -65,6 +65,7 @@ extensions rather than current entities.
 | ConnectionState | enum/string | NotConnected, Configuring, Connected, Error |
 | ConnectedAtUtc | `datetime2`, nullable | Successful connection timestamp |
 | LastConnectionErrorCode | `nvarchar(100)`, nullable | Safe diagnostic identifier only |
+| HistoryImportRequested | `bit` | Explicit Coexistence history consent recorded during onboarding |
 | AccessTokenSecretRef | `nvarchar(512)`, nullable until connected | Opaque secret-store reference |
 | MetaAppSecretRef | `nvarchar(512)` | Secret reference; app-wide value may be held in deployment configuration instead |
 | WebhookVerifyTokenRef | `nvarchar(512)` | Secret reference; never sent to Admin |
@@ -74,8 +75,8 @@ extensions rather than current entities.
 The initial demonstration may enforce one active integration per tenant, but this is not a global
 singleton rule and does not exclude multiple tenants. Future integrations remain separated by both
 `TenantId` and `IntegrationId`. `OnboardingType` is persisted as the selected Standard or
-Coexistence flow. Coexistence uses the dedicated config ID when present and falls back to the
-Standard config ID; `PhoneNumberId` uses the received value or an unambiguous WABA discovery.
+Coexistence flow. Coexistence requires its dedicated config ID and never falls back to the Standard
+config; `PhoneNumberId` uses the received value or an unambiguous WABA discovery.
 Provision one unconnected `NotConnected` integration and its `FaqThenAi`/bot-disabled
 configuration as part of first-time setup when needed; this is a POC connection slot, not a
 global connected-number singleton.
@@ -208,6 +209,9 @@ who acted, what changed and why.
 | ProcessingState | enum | Received, Processing, Completed, Failed, NoReply |
 | DeliveryState | enum, nullable | Pending, Sent, Delivered, Read, Failed |
 | ProviderTimestampUtc | `datetime2`, nullable | Meta event timestamp |
+| IsHistorical | `bit` | Message came from the consented Coexistence history stream |
+| SourceEventKey | `nvarchar(256)`, unique within Tenant/integration | Stable event identity for replay/idempotency |
+| HistoryImportKey | `nvarchar(256)`, nullable | History batch/import identity |
 | CreatedAtUtc / UpdatedAtUtc | `datetime2` | Local audit |
 | FailureCode | `nvarchar(100)`, nullable | Safe diagnostic only; includes policy outcomes such as `MessagingWindowClosed` or `TemplateRequired` when no outbound message is sent |
 
@@ -219,7 +223,10 @@ requires to be sent as an approved template. The Admin `MessageDTO.outcomeCode` 
 allowlisted projection of this field, not the raw provider error. Manual Admin messages use
 `ActorType = Admin`, `Origin = AdminPanel` and `ReplySource = Admin`; automatic Bot messages
 identify their FAQ or AI source. `SourceInboundMessageId` is unique for an automatic reply where
-the workflow requires one reply per inbound message.
+  the workflow requires one reply per inbound message. Historical messages are marked
+  `IsHistorical = 1`, use `ProcessingState = NoReply`, and never create `MessageOutbox` rows.
+  Messages from `smb_message_echoes` use `Direction = Outbound`, `ActorType = Admin`,
+  `Origin = FutureWhatsAppBusinessApp`, and also never create an outbox row.
 
 ### MediaAttachment
 
@@ -264,13 +271,33 @@ transcript. Video, documents, location, contacts and other media are future exte
 | AttemptCount | `int` | Retry control |
 | ReceivedAtUtc / ProcessedAtUtc | `datetime2`, nullable | Audit |
 | LastFailureCode | `nvarchar(100)`, nullable | Safe diagnostic |
+| HistoryImportKey | `nvarchar(256)`, nullable | History import batch associated with the event |
+| HistoryTotalCount | `int` | Expected count when Meta supplies it |
+| HistoryOutcome | `nvarchar(24)`, nullable | Imported, Duplicate, Skipped or Failed |
 
 Validate Meta signature against raw bytes before parsing/storing. Do not retain the complete raw
 webhook body; store only the normalized fields needed by the worker, with size limits and short
-retention before the event is marked complete. For this POC, `history`, `smb_app_state_sync` and
-`smb_message_echoes` are outside processing scope and must be safely ignored or recorded as an
-unsupported future event without creating messages. If Meta does not provide an event ID for an
-event, derive an idempotency key from stable provider IDs and event type, not a random request ID.
+retention before the event is marked complete. History and echo events use stable provider/batch
+keys and record outcomes so retries cannot duplicate messages. `smb_app_state_sync` remains safely
+ignored. If Meta does not provide an event ID for an event, derive an idempotency key from stable
+provider IDs, batch identity and event type, not a random request ID.
+
+### HistoryImportStatus
+
+| Field | Type / rule | Purpose |
+|---|---|---|
+| HistoryImportStatusId | `bigint`, PK | Import status identity |
+| TenantId / IntegrationId | FK pair | Isolation and connection scope |
+| HistoryImportKey | `nvarchar(256)`, unique within Tenant/integration | Meta history session/batch |
+| State | enum/string | Pending, InProgress, Completed, Failed or Unavailable |
+| TotalCount / ProcessedCount | `int` | Progress when Meta supplies a total |
+| ImportedCount / DuplicateCount / SkippedCount / FailedCount | `int` | Outcome counters |
+| StartedAtUtc / CompletedAtUtc | `datetime2`, nullable | Progress audit |
+| ErrorCode | `nvarchar(100)`, nullable | Safe failure code |
+
+The status is updated transactionally with inbox outcome transitions. It is operational progress,
+not evidence that Meta delivered the complete historical account; live validation must report the
+provider's actual limit.
 
 ### MessageOutbox
 
@@ -299,6 +326,7 @@ failures known to be transient and preserve the Meta message ID once accepted.
 - `Message 1—0..1 MediaAttachment`, `Message 1—0..1 Transcript`,
   `Message 1—0..1 MessageOutbox`
 - `WhatsAppIntegration 1—* WebhookInboxEvent`
+- `WhatsAppIntegration 1—* HistoryImportStatus`
 - Unique: `(TenantId, IntegrationId)`, `(TenantId, WhatsAppUserId)`,
   `(TenantId, IntegrationId, ProviderMessageId)`, `(TenantId, IntegrationId, PhoneNumberId)`
   when active, `EventKey` within its tenant boundary, and
@@ -306,6 +334,8 @@ failures known to be transient and preserve the Meta message ID once accepted.
 - Query indexes: `(TenantId, IntegrationId, IsActive, Priority DESC, FrequentResponseId)` for
   FAQ candidates; `(TenantId, IntegrationId, LastMessageAtUtc DESC)` for conversation listing;
   `(TenantId, ConversationId, CreatedAtUtc, MessageId)` for message history;
+  `(TenantId, IntegrationId, SourceEventKey)` for Coexistence replay idempotency;
+  `(TenantId, IntegrationId, HistoryImportKey, State)` for import progress;
   `(TenantId, ConversationId, LifecycleStatus, AttentionMode)` for action guards;
   `(TenantId, AssignedAdminId, LifecycleStatus)` for simple assignment; and
   `(State, NextAttemptAtUtc)` for inbox/outbox workers.
@@ -324,6 +354,7 @@ where an operation spans parent/child rows.
 | `sp_WhatsAppIntegration_SaveSignupResult` | Persist WABA/phone IDs and secret reference after server-side exchange |
 | `sp_WhatsAppIntegration_SetConnectionState` | Set Configuring/Connected/Error and safe error code |
 | `sp_WhatsAppIntegration_Disconnect` | Disable connection/bot and clear active state without exposing provider secrets |
+| `sp_HistoryImport_GetLatest` | Read Tenant-scoped history import progress |
 | `sp_BotConfiguration_Get` | Read enable switch and response mode |
 | `sp_BotConfiguration_Upsert` | Save enable switch/mode |
 | `sp_FrequentResponse_List` | Paginated FAQ list |
@@ -340,7 +371,9 @@ where an operation spans parent/child rows.
 | `sp_Conversation_ApplyAction` | Atomically take, hand off, return to bot, close or reopen with expected-version guard |
 | `sp_Conversation_RecordAuditEvent` | Persist actor, reason, transition and resulting version |
 | `sp_Conversation_SetAssignment` | Set or clear the simple `AssignedAdminId` within a tenant |
+| `sp_Conversation_GetOrCreateCoexistence` | Resolve a conversation without reopening it; human echoes set Humano priority |
 | `sp_Message_InsertInbound` | Idempotently record inbound provider message |
+| `sp_Message_InsertCoexistence` | Insert a historical or human app echo message without bot/outbox side effects |
 | `sp_Message_CreateOutboundPending` | Persist outbound response and outbox item atomically |
 | `sp_Message_CreateAdminOutboundPending` | Persist a manual Admin reply and outbox item atomically |
 | `sp_Message_UpdateOutboundProviderResult` | Store provider message ID / send failure and delivery state |
@@ -356,7 +389,7 @@ where an operation spans parent/child rows.
 Tenant membership and tenant-scoped integration/configuration procedures are part of the future
 implementation breakdown. This document intentionally does not create tables, migrations or SQL;
 the inventory describes the logical persistence boundary only. The execution breakdown remains
-in `tasks.md`, which is not changed by this documentation update.
+in `tasks.md`, including the T134 Coexistence extension.
 
 If refresh tokens are selected instead of short-lived API tokens, add dedicated hashed refresh
 token procedures; the POC plan otherwise uses short-lived API access tokens and a protected

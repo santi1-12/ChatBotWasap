@@ -43,6 +43,8 @@ public sealed class WhatsAppIntegrationRepository(
                 new SqlParameter("@OnboardingType", SqlDbType.NVarChar, 16) { Value = result.OnboardingType.ToString() },
                 new SqlParameter("@EffectiveEmbeddedSignupConfigId", SqlDbType.NVarChar, 128)
                     { Value = result.EffectiveEmbeddedSignupConfigId },
+                new SqlParameter("@HistoryImportRequested", SqlDbType.Bit)
+                    { Value = result.ImportHistory },
                 new SqlParameter("@AccessTokenSecretRef", SqlDbType.NVarChar, 512)
                     { Value = result.AccessTokenSecretRef },
                 new SqlParameter("@MetaAppSecretRef", SqlDbType.NVarChar, 512)
@@ -67,6 +69,28 @@ public sealed class WhatsAppIntegrationRepository(
             ],
             cancellationToken);
     }
+
+    public async Task<HistoryImportStatusRecord?> GetLatestHistoryImportAsync(
+        Guid tenantId, Guid integrationId, CancellationToken cancellationToken) =>
+        await executor.QuerySingleAsync(
+            "dbo.sp_HistoryImport_GetLatest",
+            [
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId },
+                new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier) { Value = integrationId }
+            ],
+            reader => new HistoryImportStatusRecord(
+                reader.GetString(reader.GetOrdinal("HistoryImportKey")),
+                Enum.Parse<HistoryImportState>(reader.GetString(reader.GetOrdinal("State")), false),
+                reader.GetInt32(reader.GetOrdinal("TotalCount")),
+                reader.GetInt32(reader.GetOrdinal("ProcessedCount")),
+                reader.GetInt32(reader.GetOrdinal("ImportedCount")),
+                reader.GetInt32(reader.GetOrdinal("DuplicateCount")),
+                reader.GetInt32(reader.GetOrdinal("SkippedCount")),
+                reader.GetInt32(reader.GetOrdinal("FailedCount")),
+                GetNullableDateTime(reader, "StartedAtUtc"),
+                GetNullableDateTime(reader, "CompletedAtUtc"),
+                GetNullableString(reader, "ErrorCode")),
+            cancellationToken);
 
     public async Task DisconnectAsync(Guid integrationId, CancellationToken cancellationToken)
     {
@@ -96,6 +120,7 @@ public sealed class WhatsAppIntegrationRepository(
                 ? Enum.Parse<WhatsAppOnboardingType>(onboardingType, false)
                 : null,
             EffectiveEmbeddedSignupConfigId = GetNullableString(reader, "EffectiveEmbeddedSignupConfigId"),
+            HistoryImportRequested = reader.GetBoolean(reader.GetOrdinal("HistoryImportRequested")),
             LastConnectionErrorCode = GetNullableString(reader, "LastConnectionErrorCode"),
             AccessTokenSecretRef = GetNullableString(reader, "AccessTokenSecretRef"),
             MetaAppSecretRef = GetNullableString(reader, "MetaAppSecretRef"),

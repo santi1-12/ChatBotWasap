@@ -128,7 +128,7 @@ public sealed class MetaWebhookContractTests
     }
 
     [Fact]
-    public void Parser_IgnoresAdditionalCoexistenceFieldsAndStillProcessesMessagesAndStatuses()
+    public void Parser_ProcessesHistoryAndEchoFieldsAndStillIgnoresAppStateSync()
     {
         var parser = new MetaWebhookEventParser();
         const string body = """
@@ -139,11 +139,22 @@ public sealed class MetaWebhookContractTests
                 "changes":[
                   {
                     "field":"history",
-                    "value":{"messages":[{"unexpected":"historical payload"}]}
+                    "value":{
+                      "metadata":{"phone_number_id":"phone-test"},
+                      "history_id":"history-1",
+                      "messages":[
+                        {"from":"15551234567","id":"wamid.history-1","timestamp":"1790000000","type":"text","text":{"body":"Historical"}}
+                      ]
+                    }
                   },
                   {
                     "field":"smb_message_echoes",
-                    "value":{"events":[{"unexpected":"echo payload"}]}
+                    "value":{
+                      "metadata":{"phone_number_id":"phone-test"},
+                      "events":[
+                        {"from":"business-number","to":"15551234567","id":"wamid.echo-1","timestamp":"1790000001","type":"text","text":{"body":"Echo"}}
+                      ]
+                    }
                   },
                   {
                     "field":"smb_app_state_sync",
@@ -168,7 +179,14 @@ public sealed class MetaWebhookContractTests
 
         var parsed = parser.Parse(Encoding.UTF8.GetBytes(body));
 
-        Assert.Equal(2, parsed.Count);
+        Assert.Equal(4, parsed.Count);
+        var history = Assert.Single(parsed, item => item.EventType == MetaWebhookEventTypes.HistoricalMessage);
+        Assert.True(history.IsHistorical);
+        Assert.Equal(MessageDirection.Inbound, history.Direction);
+        Assert.Equal("history-1", history.HistoryImportKey);
+        var echo = Assert.Single(parsed, item => item.EventType == MetaWebhookEventTypes.OutboundAppMessage);
+        Assert.False(echo.IsHistorical);
+        Assert.Equal(MessageDirection.Outbound, echo.Direction);
         Assert.Contains(parsed, item => item.EventType == MetaWebhookEventTypes.InboundText);
         Assert.Contains(parsed, item => item.EventType == MetaWebhookEventTypes.DeliveryStatus);
     }
@@ -202,6 +220,35 @@ public sealed class MetaWebhookContractTests
         Assert.Equal("media-audio", audio.MediaId);
         Assert.Equal("audio/ogg", audio.MediaMimeType);
         Assert.Null(audio.Text);
+    }
+
+    [Fact]
+    public void Parser_MarksGroupHistoryForSafeSkip()
+    {
+        var parser = new MetaWebhookEventParser();
+        const string body = """
+            {
+              "object":"whatsapp_business_account",
+              "entry":[{
+                "id":"waba-test",
+                "changes":[{
+                  "field":"history",
+                  "value":{
+                    "metadata":{"phone_number_id":"phone-test"},
+                    "history_id":"history-group",
+                    "messages":[
+                      {"from":"15551234567","to":"group-1","group_id":"group-1","id":"wamid.group-1","timestamp":"1790000000","type":"text","text":{"body":"Group"}}
+                    ]
+                  }
+                }]
+              }]
+            }
+            """;
+
+        var group = Assert.Single(parser.Parse(Encoding.UTF8.GetBytes(body)));
+
+        Assert.True(group.IsGroup);
+        Assert.True(group.IsHistorical);
     }
 
     private sealed class FakeSecretResolver : ISecretReferenceResolver

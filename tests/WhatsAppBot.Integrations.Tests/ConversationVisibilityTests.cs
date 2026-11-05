@@ -249,6 +249,9 @@ public sealed class ConversationVisibilityTests
 
         public Task SaveSignupResultAsync(MetaSignupResult result, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
+        public Task<HistoryImportStatusRecord?> GetLatestHistoryImportAsync(
+            Guid tenantId, Guid integrationId, CancellationToken cancellationToken) =>
+            Task.FromResult<HistoryImportStatusRecord?>(null);
         public Task SetConnectionStateAsync(
             Guid integrationId, ConnectionState state, string? safeErrorCode,
             CancellationToken cancellationToken) => throw new NotSupportedException();
@@ -271,7 +274,12 @@ public sealed class ConversationVisibilityTests
         public Task<long> GetOrCreateAsync(
             Guid integrationId, Guid tenantId, long contactId, DateTimeOffset lastMessageAtUtc,
             bool isBotEnabled,
-            CancellationToken cancellationToken) => throw new NotSupportedException();
+             CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<long> GetOrCreateCoexistenceAsync(
+            Guid integrationId, Guid tenantId, long contactId, DateTimeOffset lastMessageAtUtc,
+            bool isBotEnabled, bool humanActivity, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
     }
 
     private sealed class FakeMessageRepository(
@@ -295,6 +303,9 @@ public sealed class ConversationVisibilityTests
 
         public Task<InboundMessageInsertResult> InsertInboundAsync(
             Guid tenantId, Guid integrationId, long conversationId, NormalizedMetaEvent inboundEvent,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<InboundMessageInsertResult> InsertCoexistenceAsync(
+            Guid tenantId, Guid integrationId, long conversationId, NormalizedMetaEvent coexistenceEvent,
             CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task SetProcessingOutcomeAsync(
             Guid tenantId, long messageId, ProcessingState state, string? safeOutcomeCode,

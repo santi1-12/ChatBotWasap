@@ -642,7 +642,11 @@ components:
         onboardingType:
           type: string
           enum: [Standard, Coexistence]
-          description: Explicitly selects the Standard Cloud API or WhatsApp Business App Coexistence onboarding flow. Standard uses Meta:EmbeddedSignupConfigId; Coexistence uses its dedicated config when present and otherwise falls back to the Standard config.
+          description: Explicitly selects the Standard Cloud API or WhatsApp Business App Coexistence onboarding flow. Standard uses Meta:EmbeddedSignupConfigId; Coexistence requires its dedicated config.
+        importHistory:
+          type: boolean
+          default: false
+          description: Explicit consent to import only the history messages delivered by Meta during Coexistence onboarding.
     WhatsAppIntegrationDTO:
       type: object
       required: [connectionState, botEnabled]
@@ -683,13 +687,38 @@ components:
           description: Public Embedded Signup configuration ID.
         coexistenceEmbeddedSignupConfigId:
           type: [string, 'null']
-          description: Optional public configuration ID dedicated to Coexistence; the Standard configuration ID is the fallback.
+          description: Public configuration ID dedicated to Coexistence; it is not replaced by the Standard configuration.
         effectiveEmbeddedSignupConfigId:
           type: [string, 'null']
           description: Effective public Embedded Signup configuration selected for the persisted modality.
         metaGraphApiVersion:
           type: string
           description: Configured Graph API version used by the Meta SDK.
+        historyImportRequested:
+          type: boolean
+        historyImportState:
+          type: string
+          enum: [NotRequested, Pending, InProgress, Completed, Failed, Unavailable]
+        historyTotalCount:
+          type: integer
+        historyProcessedCount:
+          type: integer
+        historyImportedCount:
+          type: integer
+        historyDuplicateCount:
+          type: integer
+        historySkippedCount:
+          type: integer
+        historyFailedCount:
+          type: integer
+        historyStartedAtUtc:
+          type: [string, 'null']
+          format: date-time
+        historyCompletedAtUtc:
+          type: [string, 'null']
+          format: date-time
+        historyErrorCode:
+          type: [string, 'null']
     TenantDTO:
       type: object
       required: [tenantId, legalName, isActive, createdAtUtc, updatedAtUtc]
@@ -921,6 +950,9 @@ components:
         sourceInboundMessageId:
           type: [integer, 'null']
           format: int64
+        isHistorical:
+          type: boolean
+          description: True only for a message imported from the consented Coexistence history stream.
         text:
           type: [string, 'null']
         transcription:
@@ -946,7 +978,7 @@ components:
         outcomeCode:
           type: [string, 'null']
           description: Safe non-secret reason for a no-reply or rejected transition, including messaging policy blocks.
-          enum: [MessagingWindowClosed, TemplateRequired, BotDisabled, NoFrequentResponse, AiFallbackNotConfigured, AiConfigurationMissing, AiProviderTimeout, AiProviderUnavailable, AiInvalidResponse, AiUnableToResolve, UnsupportedMessageType, MetaSendFailed, MetaDeliveryFailed, ConversationInHumanMode, ConversationClosed, ConversationVersionConflict, IntegrationUnavailable, ManualSendFailed, ManualReplyRequiresHuman, ManualReplyNotAuthorized, BlockingError, MediaExpired, MediaDownloadFailed, MediaStorageFailed, MediaInvalidMime, MediaTooLarge, TranscriptionFailed, ImageAnalysisUnavailable, HandoffToHuman, null]
+          enum: [MessagingWindowClosed, TemplateRequired, BotDisabled, NoFrequentResponse, AiFallbackNotConfigured, AiConfigurationMissing, AiProviderTimeout, AiProviderUnavailable, AiInvalidResponse, AiUnableToResolve, UnsupportedMessageType, MetaSendFailed, MetaDeliveryFailed, ConversationInHumanMode, ConversationClosed, ConversationVersionConflict, IntegrationUnavailable, ManualSendFailed, ManualReplyRequiresHuman, ManualReplyNotAuthorized, BlockingError, MediaExpired, MediaDownloadFailed, MediaStorageFailed, MediaInvalidMime, MediaTooLarge, TranscriptionFailed, ImageAnalysisUnavailable, HistoricalImport, OutboundAppEcho, HandoffToHuman, null]
         deliveryState:
           type: [string, 'null']
           enum: [Pending, Sent, Delivered, Read, Failed, null]

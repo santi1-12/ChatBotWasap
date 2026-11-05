@@ -50,6 +50,7 @@ public sealed record ConversationMessageRecord(
     public Origin? Origin { get; init; }
     public long? CreatedByAdminId { get; init; }
     public long? SourceInboundMessageId { get; init; }
+    public bool IsHistorical { get; init; }
 }
 
 public sealed record ConversationDetailRecord(

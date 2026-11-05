@@ -3,8 +3,8 @@
 This guide distinguishes the repository behavior currently implemented from the approved POC target.
 The current local slice covers solution/bootstrap, bot configuration/FAQ, Meta Embedded Signup,
 signed text/audio/image webhook processing, Admin conversation visibility, private media access,
-retention cleanup and provider-neutral AI text/audio/image adapters. Live media validation and
-Coexistence history synchronization remain future work.
+retention cleanup and provider-neutral AI text/audio/image adapters. T134 history/echo processing
+is implemented locally but still requires live Meta validation.
 
 ## Scope status
 
@@ -17,9 +17,9 @@ Coexistence history synchronization remain future work.
 - **Dentro de esta POC, pendiente de validación real**: audio/imagen con proveedores y datos
   consentidos, además de cualquier gate externo de Meta/OpenAI. La ausencia de proveedor no se
   presenta como procesamiento exitoso: transcript/análisis quedan en estado o outcome seguro.
-- **Fase posterior explícita**: `history`, `smb_app_state_sync`, `smb_message_echoes`,
-  sincronización de contactos, recuperación histórica, video, documentos, ubicación, contactos y
-  otros tipos multimedia.
+- **Fase posterior explícita**: `smb_app_state_sync`, full historical contact/conversation
+  synchronization, unavailable history, video, documents, location, contacts and other types of
+  multimedia.
 
 La documentación de objetivo no debe interpretarse como evidencia de que los elementos pendientes
 ya existan en el código.
@@ -191,7 +191,7 @@ FAQ/IA/ventana/outbox que texto.
    dotnet user-secrets set "Meta:AppSecret" "<secret>" --project .\src\WhatsAppBot.Api
    dotnet user-secrets set "Meta:VerifyToken" "<random-secret>" --project .\src\WhatsAppBot.Api
    dotnet user-secrets set "Meta:EmbeddedSignupConfigId" "<config-id>" --project .\src\WhatsAppBot.Api
-   dotnet user-secrets set "Meta:CoexistenceEmbeddedSignupConfigId" "<optional-config-id>" --project .\src\WhatsAppBot.Api
+    dotnet user-secrets set "Meta:CoexistenceEmbeddedSignupConfigId" "<coexistence-config-id>" --project .\src\WhatsAppBot.Api
    dotnet user-secrets set "Meta:GraphApiVersion" "<supported-version>" --project .\src\WhatsAppBot.Api
    dotnet user-secrets set "Meta:PhoneNumberRegistrationPin" "<six-digit-pin>" --project .\src\WhatsAppBot.Api
    ```
@@ -199,8 +199,8 @@ FAQ/IA/ventana/outbox que texto.
    Replace placeholders only in the local secret store. The business access token is exchanged
    server-to-server from Embedded Signup and written to User Secrets; SQL stores only its
    generated secret reference. Never paste values into source, screenshots, logs, or this guide.
-   `Meta:CoexistenceEmbeddedSignupConfigId` is optional; when absent, Coexistence uses the
-   configured Standard ID with its explicit onboarding feature option.
+    `Meta:CoexistenceEmbeddedSignupConfigId` is required for the Coexistence path and must be a
+    dedicated Meta configuration; it is never replaced with the Standard ID.
    The Meta `AppId`, Signup configuration ID, and Graph version are public SDK configuration;
    App Secret, Verify Token, registration PIN and business token stay server-side.
 8. Restore and build:
@@ -239,9 +239,10 @@ FAQ/IA/ventana/outbox que texto.
     Standard or Coexistence explicitly. The backend exchanges the one-time code, validates a
     supplied Phone Number ID or discovers it only when the WABA match is unambiguous, stores the
     token by secret reference, subscribes the app to the WABA, and only then reports Connected.
-    Standard performs number registration; Coexistence skips Standard `/register`. Coexistence
-    uses `Meta:CoexistenceEmbeddedSignupConfigId` when configured and otherwise falls back to
-    `Meta:EmbeddedSignupConfigId`. A canceled or incomplete flow is never reported as connected.
+    Standard performs number registration; Coexistence skips Standard `/register` and requires the
+    dedicated `Meta:CoexistenceEmbeddedSignupConfigId`. A canceled or incomplete flow is never
+    reported as connected. For Coexistence, optionally check `Importar historial existente` before
+    submitting the Meta flow; progress and provider-delivered limits appear in Settings.
 12. Use Configuración → Respuestas Frecuentes to create, edit, activate/deactivate, and delete
     FAQ responses. Put one literal word or phrase per line. The matcher applies Unicode Form KC,
     trims and collapses whitespace, compares invariant case-insensitive literal containment,
@@ -279,9 +280,10 @@ reported as complete until each implementation and evidence gate exists:
 5. Verify media expires after the initial 30-day policy without deleting the message, allowed
    metadata or available transcript. Keep the retention period configurable for future policy
    changes.
-6. Verify Coexistence processes connection and new messages only. `history`,
-   `smb_app_state_sync`, `smb_message_echoes`, contact synchronization and historical recovery
-   remain ignored/deferred and do not create fabricated messages or replies.
+6. Verify Coexistence keeps the number active in WhatsApp Business App, processes new messages,
+    imports only consented Meta-delivered `history`, and records human app messages from
+    `smb_message_echoes` without bot replies. `smb_app_state_sync`, full contact synchronization
+    and historical recovery beyond Meta's delivered limits remain ignored/deferred.
 
 ## Meta Developers setup
 
@@ -296,9 +298,7 @@ reported as complete until each implementation and evidence gate exists:
    `whatsapp_business_messaging`). Complete applicable business verification and App
    Review/Advanced Access. Record the public App ID and Standard configuration ID. To offer
    Coexistence, enable WhatsApp Business app user onboarding for the configuration in Meta and
-   optionally provide a dedicated configuration ID as
-   `Meta:CoexistenceEmbeddedSignupConfigId`; otherwise the existing
-   `Meta:EmbeddedSignupConfigId` is used with the Coexistence `featureType`.
+    provide the dedicated configuration ID as `Meta:CoexistenceEmbeddedSignupConfigId`.
    See Meta's [Embedded Signup v4](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/version-4)
    and [WhatsApp Business app user onboarding](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/onboarding-business-app-users)
    guidance for eligibility and feature enablement.
@@ -355,10 +355,12 @@ reported as complete until each implementation and evidence gate exists:
   selected Meta Login for Business configuration before live testing. The public guide does not
   show the exact JavaScript field casing/value in its sample; if Meta rejects this option, verify
   the current SDK/configuration instructions with Meta before retrying.
-- The POC does not request or process `history`, `smb_app_state_sync`, or `smb_message_echoes`
-  webhook data and does not synchronize WhatsApp Business App contacts/history. These events
-  are ignored safely; only new `messages` and status events are in scope. New text, audio and
-  image messages follow the approved POC pipeline; historical recovery remains deferred.
+- The POC requests `history` only when the administrator checks `Importar historial existente`.
+  The worker persists only messages Meta delivers, records progress/deduplication and never sends
+  bot replies or creates outbox items for them. Only 1:1 history is imported; groups are skipped.
+  `smb_message_echoes` records outbound human app activity and moves the conversation to Humano
+  priority. `smb_app_state_sync`, full contact synchronization and unavailable history remain
+  outside scope.
 - Meta documents a 20 messages-per-second fixed throughput for numbers shared by WhatsApp
   Business App and Cloud API, as well as Cloud API pricing and coexistence-specific limitations.
   Check the current Meta documentation before production use.

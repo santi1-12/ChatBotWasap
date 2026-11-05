@@ -12,7 +12,8 @@ CREATE OR ALTER PROCEDURE dbo.sp_WhatsAppIntegration_SaveSignupResult
     @EffectiveEmbeddedSignupConfigId nvarchar(128),
     @AccessTokenSecretRef nvarchar(512),
     @MetaAppSecretRef nvarchar(512),
-    @WebhookVerifyTokenRef nvarchar(512)
+    @WebhookVerifyTokenRef nvarchar(512),
+    @HistoryImportRequested bit = 0
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -23,8 +24,9 @@ BEGIN
         PhoneNumberId = @PhoneNumberId,
         BusinessPhoneNumber = @BusinessPhoneNumber,
         DisplayName = @DisplayName,
-        OnboardingType = @OnboardingType,
-        EffectiveEmbeddedSignupConfigId = @EffectiveEmbeddedSignupConfigId,
+         OnboardingType = @OnboardingType,
+         EffectiveEmbeddedSignupConfigId = @EffectiveEmbeddedSignupConfigId,
+         HistoryImportRequested = @HistoryImportRequested,
         ConnectionState = N'Connected',
         ConnectedAtUtc = SYSUTCDATETIME(),
         LastConnectionErrorCode = NULL,

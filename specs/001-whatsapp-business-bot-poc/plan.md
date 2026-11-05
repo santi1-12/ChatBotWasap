@@ -75,13 +75,14 @@ Never log or expose access tokens, App Secret, Verify Token, AI keys, raw media,
 payloads. Respect WhatsApp customer opt-in, messaging-window and approved-template policy.
 The FAQ feature is internal bot content, not a Meta message-template substitute.
 
-**Scale/Scope**: The POC validates Standard and Coexistence, new messages, text/audio/image,
+**Scale/Scope**: The POC validates Standard and Coexistence, new messages, consented available
+history and human app echoes, text/audio/image,
 OpenAI processing, conversations, Bot/Humano attention, manual Admin replies, lifecycle control,
 and a tenant/company boundary with multiple administrators and simple assignment. The initial
 demonstration may use one active integration per tenant; this is not a global singleton and does
 not exclude future multiple integrations per company. No teams, queues, billing, campaigns, CRM,
-advanced permissions, or advanced reporting are implemented. Coexistence history, contacts and
-`history`/`smb_app_state_sync`/`smb_message_echoes` remain a later extension.
+advanced permissions, or advanced reporting are implemented. Full Coexistence contact/state sync,
+`smb_app_state_sync` and history not delivered by Meta remain outside scope.
 
 ## Constitution Check
 
@@ -181,9 +182,8 @@ administrators and returns `ResponseE<T>` DTO contracts.
 
 **Meta onboarding**: The Admin launches Meta's Embedded Signup v4 JS flow and explicitly selects
 Standard or Coexistence. It sends the one-time authorization code and returned WABA ID / optional
-Phone Number ID to Api. Api uses `Meta:EmbeddedSignupConfigId` for Standard and
-`Meta:CoexistenceEmbeddedSignupConfigId` for Coexistence when present, falling back to the
-Standard config otherwise. A supplied Phone Number ID is validated; when absent, Api discovers
+Phone Number ID to Api. Api uses `Meta:EmbeddedSignupConfigId` for Standard and the dedicated
+`Meta:CoexistenceEmbeddedSignupConfigId` for Coexistence. A supplied Phone Number ID is validated; when absent, Api discovers
 it from the WABA and continues only for one unambiguous match. Standard performs the normal
 registration; Coexistence does not run Standard `/register`. Both flows subscribe the WABA to
 webhooks. The resulting customer business token is stored in the configured secret store; SQL
@@ -221,9 +221,10 @@ lifecycle, attention mode, assignment, actor/origin, audit events, transcription
 access, and whether the response source is FAQ, AI or Admin. Actions include take/handoff,
 manual text reply, return-to-bot, close and reopen. Teams and queues are not part of this POC.
 
-**Future Coexistence events**: The webhook envelope and normalized event dispatch must leave an
-extension point for `history`, `smb_app_state_sync` and `smb_message_echoes`, but the POC ignores
-those events safely and does not import historical conversations or synchronize contacts.
+**Coexistence history and echoes**: `history` is accepted only for an integration that recorded
+explicit import consent. Normalized historical messages use a separate persistence path with
+deduplication, progress and no bot/outbox side effects. `smb_message_echoes` is persisted as human
+outbound activity and changes attention priority to Humano. `smb_app_state_sync` remains ignored.
 
 ### Tenant and Conversation Control
 
@@ -342,11 +343,11 @@ Meta app access/review, and approved retention/consent policy.
 5. Implement bot configuration (enabled state and three modes) and frequent-response CRUD,
    matching and Admin screens. Validate these locally against SQL before any Meta or AI setup.
 6. Configure Meta Embedded Signup v4 with explicit Standard/Coexistence branching, server-side
-   code exchange, Phone Number ID validation/discovery, config-ID fallback, conditional number
-   registration, token references, WABA subscription and truthful connection status.
-7. Implement webhook verification/signature validation, durable idempotent inbox and status
-   ingestion. Parse only new `messages`/status events for this POC; retain extension points for
-   future `history`, `smb_app_state_sync` and `smb_message_echoes` without importing them now.
+    code exchange, Phone Number ID validation/discovery, dedicated config IDs, conditional number
+    registration, token references, WABA subscription and truthful connection status.
+ 7. Implement webhook verification/signature validation, durable idempotent inbox and status
+    ingestion. Parse new `messages`/status events plus consented `history` and human
+    `smb_message_echoes`; keep `smb_app_state_sync` ignored.
 8. Implement text ingestion and conversation/message persistence first. Apply closed-conversation
    reopen rules, `Humano > Bot`, automatic handoff reasons and audit events. Verify `FaqOnly`
    matching/no-reply and `FaqThenAi` matching locally using a fake sender/provider; then enable

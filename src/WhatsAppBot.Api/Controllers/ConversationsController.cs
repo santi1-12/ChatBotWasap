@@ -154,7 +154,8 @@ public sealed class ConversationsController(
         ProcessingState = record.ProcessingState,
         DeliveryState = record.DeliveryState,
         OutcomeCode = MapSafeOutcomeCode(record.OutcomeCode),
-        CreatedAtUtc = record.CreatedAtUtc
+        CreatedAtUtc = record.CreatedAtUtc,
+        IsHistorical = record.IsHistorical
     };
 
     private static string? MapSafeOutcomeCode(string? code) => code switch

@@ -198,9 +198,17 @@ comportamiento cuando no exista coincidencia.
   Meta la rechaza, la ventana expiró o una plantilla es obligatoria.
 - La expiración de un archivo de audio o imagen no elimina el mensaje ni su metadata permitida;
   la transcripción disponible se conserva según la política de retención.
-- Los eventos `history`, `smb_app_state_sync` y `smb_message_echoes` de Coexistence no se
-  procesan en esta POC; deben ignorarse de forma segura y dejar un punto de extensión para una
-  fase posterior.
+- En Coexistence, `history` MUST procesarse solo cuando el administrador haya otorgado el
+  consentimiento explícito `Importar historial existente` durante Embedded Signup. El sistema MUST
+  persistir únicamente los mensajes entregados por Meta, soportar reintentos, duplicados, chunks y
+  orden no garantizado, mostrar progreso y no crear respuestas del bot, outbox, handoff ni ventana
+  de servicio a partir del historial. Solo se importan conversaciones 1:1; grupos y contenido no
+  entregado o no soportado se registran como omitidos.
+- `smb_message_echoes` MUST persistir los mensajes humanos salientes enviados desde WhatsApp
+  Business App como `Outbound`, con actor/origen identificables y prioridad `Humano > Bot`; no debe
+  interpretarse como mensaje entrante ni generar una respuesta automática.
+- `smb_app_state_sync`, la sincronización completa de contactos y cualquier conversación histórica
+  no entregada por Meta permanecen fuera de esta POC y deben ignorarse de forma segura.
 - La POC no implementa equipos ni colas, pero el diseño permite múltiples administradores por
   empresa y asignación simple mediante un administrador responsable.
 
@@ -316,18 +324,18 @@ comportamiento cuando no exista coincidencia.
 - **FR-038**: Audio e imagen MUST almacenarse mediante referencias privadas con acceso autorizado,
   expiración inicial de 30 días y retención configurable a futuro. La expiración MUST conservar
   el mensaje, metadata permitida y transcripción disponible.
-- **FR-039**: Coexistence MUST soportar en esta POC la conexión y los mensajes nuevos. Los eventos
-  `history`, `smb_app_state_sync`, `smb_message_echoes`, la sincronización de contactos y la
-  recuperación histórica MUST quedar fuera de la ejecución actual y documentados como fase
-  posterior.
+- **FR-039**: Coexistence MUST soportar en esta POC la conexión, los mensajes nuevos, el historial
+  disponible cuando exista consentimiento explícito y los ecos salientes humanos de
+  `smb_message_echoes`, manteniendo idempotencia, aislamiento Tenant y ausencia de procesamiento
+  automático para eventos históricos o salientes.
 - **FR-040**: El modelo de mensajes y multimedia MUST permitir incorporar posteriormente video,
   documentos, ubicación, contactos y otros tipos sin rediseñar el flujo principal; esos tipos no
   forman parte de la validación funcional actual.
 - **FR-041**: Para `PhoneNumberId`, el sistema MUST usar el valor recibido cuando exista y, si
   falta, descubrirlo mediante el WABA; solo puede continuar ante una coincidencia inequívoca y
-  nunca elegir arbitrariamente. Coexistence MUST usar `Meta:CoexistenceEmbeddedSignupConfigId`
-  cuando exista y hacer fallback a `Meta:EmbeddedSignupConfigId`; Standard usa
-  `Meta:EmbeddedSignupConfigId`.
+  nunca elegir arbitrariamente. Coexistence MUST usar una configuración dedicada
+  `Meta:CoexistenceEmbeddedSignupConfigId`; no puede reutilizar la configuración Standard.
+  Standard usa `Meta:EmbeddedSignupConfigId`.
 
 ### Key Entities
 
@@ -404,8 +412,10 @@ comportamiento cuando no exista coincidencia.
 - **SC-015**: En una prueba de retención, los archivos de audio e imagen dejan de estar
   disponibles después de 30 días o la política configurada, mientras el mensaje, metadata
   permitida y transcripción disponible permanecen consultables.
-- **SC-016**: En una prueba Coexistence, la conexión y los mensajes nuevos siguen el flujo POC;
-  los eventos históricos y `smb_*` no se procesan y no generan respuestas fabricadas.
+- **SC-016**: En una prueba Coexistence, el mismo número permanece operativo en WhatsApp Business
+  App y Cloud API, la conexión omite Standard `/register`, los mensajes nuevos siguen el flujo POC,
+  el historial consentido se importa solo hasta el límite entregado por Meta sin respuestas del bot,
+  y cada `smb_message_echoes` saliente aparece como actividad humana sin respuesta automática.
 
 ## Assumptions
 

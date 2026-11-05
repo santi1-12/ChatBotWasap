@@ -26,8 +26,9 @@ public sealed class WhatsAppIntegrationController(
     {
         var integration = await integrationService.GetCurrentAsync(cancellationToken);
         var configuration = await botConfigurationService.GetAsync(cancellationToken);
+        var history = await integrationService.GetHistoryImportStatusAsync(cancellationToken);
         return Ok(ResponseE<WhatsAppIntegrationDTO>.Ok(
-            Map(integration, configuration.IsBotEnabled), HttpContext.TraceIdentifier));
+            Map(integration, configuration.IsBotEnabled, history), HttpContext.TraceIdentifier));
     }
 
     [HttpPost("embedded-signup")]
@@ -42,10 +43,12 @@ public sealed class WhatsAppIntegrationController(
             request.WabaId,
             string.IsNullOrWhiteSpace(request.PhoneNumberId) ? null : request.PhoneNumberId,
             request.OnboardingType!.Value,
-            cancellationToken);
+            cancellationToken,
+            request.ImportHistory);
         var configuration = await botConfigurationService.GetAsync(cancellationToken);
+        var history = await integrationService.GetHistoryImportStatusAsync(cancellationToken);
         return Ok(ResponseE<WhatsAppIntegrationDTO>.Ok(
-            Map(integration, configuration.IsBotEnabled), HttpContext.TraceIdentifier));
+            Map(integration, configuration.IsBotEnabled, history), HttpContext.TraceIdentifier));
     }
 
     [HttpDelete("integration")]
@@ -56,10 +59,16 @@ public sealed class WhatsAppIntegrationController(
         return NoContent();
     }
 
-    private WhatsAppIntegrationDTO Map(WhatsAppIntegration integration, bool botEnabled) =>
-        CreateDto(integration, botEnabled);
+    private WhatsAppIntegrationDTO Map(
+        WhatsAppIntegration integration,
+        bool botEnabled,
+        HistoryImportStatusRecord? history) =>
+        CreateDto(integration, botEnabled, history);
 
-    private WhatsAppIntegrationDTO CreateDto(WhatsAppIntegration integration, bool botEnabled)
+    private WhatsAppIntegrationDTO CreateDto(
+        WhatsAppIntegration integration,
+        bool botEnabled,
+        HistoryImportStatusRecord? history)
     {
         var completionStateUnknown = integration.ConnectionState == ConnectionState.Unknown ||
                                      string.Equals(
@@ -91,7 +100,20 @@ public sealed class WhatsAppIntegrationController(
             EmbeddedSignupConfigId = metaOptions.Value.EmbeddedSignupConfigId,
             CoexistenceEmbeddedSignupConfigId = metaOptions.Value.EffectiveCoexistenceEmbeddedSignupConfigId,
             EffectiveEmbeddedSignupConfigId = integration.EffectiveEmbeddedSignupConfigId,
-            MetaGraphApiVersion = metaOptions.Value.GraphApiVersion
+            MetaGraphApiVersion = metaOptions.Value.GraphApiVersion,
+            HistoryImportRequested = integration.HistoryImportRequested,
+            HistoryImportState = history?.State ?? (integration.HistoryImportRequested
+                ? HistoryImportState.Pending
+                : HistoryImportState.NotRequested),
+            HistoryTotalCount = history?.TotalCount ?? 0,
+            HistoryProcessedCount = history?.ProcessedCount ?? 0,
+            HistoryImportedCount = history?.ImportedCount ?? 0,
+            HistoryDuplicateCount = history?.DuplicateCount ?? 0,
+            HistorySkippedCount = history?.SkippedCount ?? 0,
+            HistoryFailedCount = history?.FailedCount ?? 0,
+            HistoryStartedAtUtc = history?.StartedAtUtc,
+            HistoryCompletedAtUtc = history?.CompletedAtUtc,
+            HistoryErrorCode = history?.ErrorCode
         };
     }
 }

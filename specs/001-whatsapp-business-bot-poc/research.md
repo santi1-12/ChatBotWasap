@@ -14,8 +14,8 @@ decisions; it does not implement the solution. Normative requirements are synchr
 explicitly between Standard and WhatsApp Business App Coexistence. The browser launches Meta's
 Facebook Login for Business SDK/configuration and returns the one-time authorization code plus
 WABA ID and an optional Phone Number ID to `WhatsAppBot.Api`. Api uses
-`Meta:EmbeddedSignupConfigId` for Standard and `Meta:CoexistenceEmbeddedSignupConfigId` for
-Coexistence when configured, otherwise falling back to the Standard config. A supplied Phone
+`Meta:EmbeddedSignupConfigId` for Standard and the dedicated
+`Meta:CoexistenceEmbeddedSignupConfigId` for Coexistence. A supplied Phone
 Number ID is validated; when absent, Api discovers it from the WABA and proceeds only when the
 match is unambiguous. Standard registers the number; Coexistence does not run Standard
 `/register`. Both flows subscribe the app to the WABA. Persist only IDs, states, onboarding type
@@ -39,8 +39,9 @@ and `whatsapp_business_messaging`; customer onboarding may require advanced acce
 Existing WhatsApp Business App numbers need the relevant Coexistence flow. Whether this
 organization is a Tech Provider, Solution Partner, or direct developer changes token, review,
 onboarding, and credit-line requirements and must be confirmed before a real customer demo. Do
-not assume partner credit-line features. Coexistence scope for this POC is connection plus new
-messages only.
+not assume partner credit-line features. Coexistence scope for this POC is connection, new
+messages, explicitly consented available history and human app echoes; full contact/state sync
+remains outside scope.
 
 ### 2. Webhook processing: verify, durably store, acknowledge, then process
 
@@ -48,9 +49,10 @@ messages only.
 challenge with the configured Verify Token. Validate POST `X-Hub-Signature-256` against the
 raw request bytes with the App Secret. Resolve the tenant/integration boundary, persist the
 normalized event idempotently, then acknowledge; a worker processes stored events and writes
-outbound work to a SQL-backed outbox. The POC processes new `messages` and status events. It
-ignores `history`, `smb_app_state_sync` and `smb_message_echoes` safely while preserving an
-event-dispatch extension point for a future synchronization phase.
+outbound work to a SQL-backed outbox. New `messages` and status events use the existing path.
+Consented `history` events use an idempotent import path with progress and no
+bot/outbox side effects; `smb_message_echoes` use a human outbound path. The `smb_app_state_sync`
+field remains safely ignored.
 
 **Rationale**: Meta webhooks include both inbound messages and outbound status updates.
 Media retrieval and AI calls are variable-latency work and should not run in the webhook
@@ -207,17 +209,18 @@ plans and feature flags without making them prerequisites for the current flow.
 global singleton redesign. Membership-based authorization also permits several administrators per
 company without expanding the POC into a full permission system.
 
-### 12. Coexistence future-event boundary
+### 12. Coexistence history and echo boundary
 
-**Decision**: The POC validates Coexistence connection and new messages only. It does not import
-`history`, process `smb_app_state_sync` or `smb_message_echoes`, synchronize contacts, or recover
-previous conversations. The normalized webhook envelope and dispatch registry must leave a stable
-extension point for those future event families.
+**Decision**: T134 validates Coexistence connection, new messages, Meta-delivered `history` only
+after explicit consent, and `smb_message_echoes` for human outbound activity. History processing is
+bounded to the payload Meta delivers, idempotent across retries/duplicates/chunks, and never enters
+the bot or outbox path. The import is limited to 1:1 messages; groups, full contact
+synchronization and unavailable history remain out of scope.
 
-**Future research**: Before implementing synchronization, confirm Meta's current payload schemas,
-event identifiers, ordering/replay behavior, retention rules, contact identity mapping and how
-messages authored in WhatsApp Business App should appear in the timeline. These questions are not
-required to validate the current POC flow.
+**Live evidence boundary**: Before final validation, confirm Meta's current payload schemas, event
+identifiers, ordering/replay behavior, retention limits, contact identity mapping and how messages
+authored in WhatsApp Business App appear in the timeline. Do not claim history coverage beyond the
+events and media references Meta actually delivers.
 
 ### 13. Extensible media and retention
 

@@ -72,6 +72,46 @@ public sealed class MessageRepository(StoredProcedureExecutor executor) : IMessa
         return result ?? throw new InvalidOperationException("The inbound WhatsApp message could not be persisted.");
     }
 
+    public async Task<InboundMessageInsertResult> InsertCoexistenceAsync(
+        Guid tenantId,
+        Guid integrationId,
+        long conversationId,
+        NormalizedMetaEvent coexistenceEvent,
+        CancellationToken cancellationToken)
+    {
+        var result = await executor.QuerySingleAsync(
+            "dbo.sp_Message_InsertCoexistence",
+            [
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId },
+                new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier) { Value = integrationId },
+                new SqlParameter("@ConversationId", SqlDbType.BigInt) { Value = conversationId },
+                new SqlParameter("@ProviderMessageId", SqlDbType.NVarChar, 256)
+                    { Value = (object?)coexistenceEvent.ProviderMessageId ?? DBNull.Value },
+                new SqlParameter("@SourceEventKey", SqlDbType.NVarChar, 256)
+                    { Value = coexistenceEvent.SourceEventKey ?? coexistenceEvent.EventKey },
+                new SqlParameter("@MessageType", SqlDbType.NVarChar, 24)
+                    { Value = (coexistenceEvent.MessageType ?? MessageType.Unsupported).ToString() },
+                new SqlParameter("@ContentText", SqlDbType.NVarChar, -1)
+                    { Value = (object?)(coexistenceEvent.Text ?? coexistenceEvent.MediaCaption) ?? DBNull.Value },
+                new SqlParameter("@ProviderTimestampUtc", SqlDbType.DateTime2)
+                    { Scale = 3, Value = coexistenceEvent.ProviderTimestampUtc!.Value.UtcDateTime },
+                new SqlParameter("@Direction", SqlDbType.NVarChar, 16)
+                    { Value = coexistenceEvent.Direction.ToString() },
+                new SqlParameter("@ActorType", SqlDbType.NVarChar, 16)
+                    { Value = coexistenceEvent.ActorType.ToString() },
+                new SqlParameter("@Origin", SqlDbType.NVarChar, 32)
+                    { Value = coexistenceEvent.Origin.ToString() },
+                new SqlParameter("@IsHistorical", SqlDbType.Bit) { Value = coexistenceEvent.IsHistorical },
+                new SqlParameter("@HistoryImportKey", SqlDbType.NVarChar, 256)
+                    { Value = (object?)coexistenceEvent.HistoryImportKey ?? DBNull.Value }
+            ],
+            reader => new InboundMessageInsertResult(
+                reader.GetBoolean(reader.GetOrdinal("Inserted")),
+                reader.GetInt64(reader.GetOrdinal("MessageId"))),
+            cancellationToken);
+        return result ?? throw new InvalidOperationException("The Coexistence message could not be persisted.");
+    }
+
     public Task SetProcessingOutcomeAsync(
         Guid tenantId,
         long messageId,
@@ -267,7 +307,8 @@ public sealed class MessageRepository(StoredProcedureExecutor executor) : IMessa
                 : reader.GetInt64(createdByAdminOrdinal),
             SourceInboundMessageId = reader.IsDBNull(sourceInboundOrdinal)
                 ? null
-                : reader.GetInt64(sourceInboundOrdinal)
+                : reader.GetInt64(sourceInboundOrdinal),
+            IsHistorical = reader.GetBoolean(reader.GetOrdinal("IsHistorical"))
         };
         return new DetailRow(summary, message);
     }

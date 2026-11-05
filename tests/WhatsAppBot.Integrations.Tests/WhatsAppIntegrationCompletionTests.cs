@@ -520,6 +520,10 @@ public sealed class WhatsAppIntegrationCompletionTests
             string phoneNumberId,
             CancellationToken cancellationToken) => GetCurrentAsync(cancellationToken);
 
+        public Task<HistoryImportStatusRecord?> GetLatestHistoryImportAsync(
+            Guid tenantId, Guid integrationId, CancellationToken cancellationToken) =>
+            Task.FromResult<HistoryImportStatusRecord?>(null);
+
         public Task SaveSignupResultAsync(MetaSignupResult result, CancellationToken cancellationToken)
         {
             if (!SkipSignupPersistence)
@@ -536,6 +540,7 @@ public sealed class WhatsAppIntegrationCompletionTests
                     TenantId = result.TenantId,
                     OnboardingType = result.OnboardingType,
                     EffectiveEmbeddedSignupConfigId = result.EffectiveEmbeddedSignupConfigId,
+                    HistoryImportRequested = result.ImportHistory,
                     AccessTokenSecretRef = result.AccessTokenSecretRef,
                     MetaAppSecretRef = result.MetaAppSecretRef,
                     WebhookVerifyTokenRef = result.WebhookVerifyTokenRef

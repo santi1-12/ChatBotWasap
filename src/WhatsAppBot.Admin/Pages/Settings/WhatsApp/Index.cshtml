@@ -5,8 +5,7 @@
     ViewData["Title"] = "WhatsApp Business";
     var integration = Model.Integration;
     var hasStandardSignup = !string.IsNullOrWhiteSpace(integration?.EmbeddedSignupConfigId);
-    var hasCoexistenceSignup = hasStandardSignup
-        || !string.IsNullOrWhiteSpace(integration?.CoexistenceEmbeddedSignupConfigId);
+    var hasCoexistenceSignup = !string.IsNullOrWhiteSpace(integration?.CoexistenceEmbeddedSignupConfigId);
     var canStartSignup = !string.IsNullOrWhiteSpace(integration?.MetaAppId)
         && (hasStandardSignup || hasCoexistenceSignup)
         && !string.IsNullOrWhiteSpace(integration.MetaGraphApiVersion)
@@ -71,8 +70,16 @@
             <dd class="col-sm-8">@(integration.OnboardingType?.ToString() ?? "No confirmada")</dd>
             <dt class="col-sm-4">Conectado desde</dt>
             <dd class="col-sm-8">@(integration.ConnectedAtUtc?.ToLocalTime().ToString("g") ?? "No confirmado")</dd>
-            <dt class="col-sm-4">Bot</dt>
-            <dd class="col-sm-8">@(integration.BotEnabled ? "Activo" : "Inactivo")</dd>
+             <dt class="col-sm-4">Bot</dt>
+             <dd class="col-sm-8">@(integration.BotEnabled ? "Activo" : "Inactivo")</dd>
+            @if (integration.HistoryImportRequested)
+            {
+                <dt class="col-sm-4">Importación de historial</dt>
+                <dd class="col-sm-8">
+                    @integration.HistoryImportState
+                    (@integration.HistoryProcessedCount/@integration.HistoryTotalCount)
+                </dd>
+            }
         </dl>
         <form method="post" asp-page-handler="Disconnect">
             <button type="submit" class="btn btn-outline-danger">Desconectar WhatsApp</button>
@@ -101,6 +108,15 @@
                     cuando Meta habilita esta opción para la empresa.
                 </div>
             </div>
+            <div id="historyImportOption" class="form-check mb-3 d-none">
+                <input id="historyImportConsent" class="form-check-input" type="checkbox" />
+                <label class="form-check-label" for="historyImportConsent">
+                    Importar historial existente
+                </label>
+                <div class="form-text">
+                    Solo se procesará el historial que Meta entregue durante este onboarding.
+                </div>
+            </div>
             <button id="connectMeta" type="button" class="btn btn-primary">Conectar WhatsApp Business</button>
             <p id="signupStatus" class="small text-muted mt-3" role="status"></p>
             <form id="completeSignup" method="post" asp-page-handler="CompleteSignup" class="d-none">
@@ -109,6 +125,7 @@
                 <input type="hidden" asp-for="WabaId" />
                 <input type="hidden" asp-for="PhoneNumberId" />
                 <input type="hidden" asp-for="OnboardingType" />
+                <input type="hidden" asp-for="ImportHistory" />
             </form>
         }
         else if (Model.ShowConfigurationMissing)
@@ -133,8 +150,14 @@
         const connectButton = document.getElementById("connectMeta");
         let authorizationCode = null;
         let selectedAssets = null;
-        let activeOnboardingType = null;
-        let completionSubmitted = false;
+         let activeOnboardingType = null;
+         let completionSubmitted = false;
+
+         function updateHistoryOption() {
+             const isCoexistence = signupTypeSelector.value === "@WhatsAppOnboardingType.Coexistence";
+             document.getElementById("historyImportOption").classList.toggle("d-none", !isCoexistence);
+             if (!isCoexistence) document.getElementById("historyImportConsent").checked = false;
+         }
 
         window.fbAsyncInit = function () {
             FB.init({ appId: metaAppId, cookie: true, xfbml: false, version: graphVersion });
@@ -152,8 +175,10 @@
             if (!authorizationCode || !selectedAssets || !selectedAssets.wabaId || completionSubmitted) return;
             document.getElementById("AuthorizationCode").value = authorizationCode;
             document.getElementById("WabaId").value = selectedAssets.wabaId;
-            document.getElementById("PhoneNumberId").value = selectedAssets.phoneNumberId || "";
-            document.getElementById("OnboardingType").value = activeOnboardingType;
+             document.getElementById("PhoneNumberId").value = selectedAssets.phoneNumberId || "";
+             document.getElementById("OnboardingType").value = activeOnboardingType;
+             document.getElementById("ImportHistory").value =
+                 document.getElementById("historyImportConsent").checked ? "true" : "false";
             document.getElementById("signupStatus").textContent = "Finalizando conexión segura con Meta…";
             completionSubmitted = true;
             document.getElementById("completeSignup").requestSubmit();
@@ -197,7 +222,7 @@
             finishSignupWhenReady();
         });
 
-        document.getElementById("connectMeta").addEventListener("click", function () {
+         document.getElementById("connectMeta").addEventListener("click", function () {
             if (!window.FB) {
                 document.getElementById("signupStatus").textContent = "No se pudo cargar el SDK de Meta.";
                 return;
@@ -224,6 +249,8 @@
                     ? { setup: {}, featureType: "whatsapp_business_app_onboarding" }
                     : { setup: {} }
             });
-        });
-    </script>
+         });
+         signupTypeSelector.addEventListener("change", updateHistoryOption);
+         updateHistoryOption();
+     </script>
 }

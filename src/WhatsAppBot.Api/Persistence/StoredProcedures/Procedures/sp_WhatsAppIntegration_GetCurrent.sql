@@ -17,8 +17,8 @@ BEGIN
 
     SELECT TOP (1)
         IntegrationId, TenantId, WabaId, PhoneNumberId, BusinessPhoneNumber, DisplayName,
-        ConnectionState, ConnectedAtUtc, LastConnectionErrorCode, OnboardingType,
-        EffectiveEmbeddedSignupConfigId,
+         ConnectionState, ConnectedAtUtc, LastConnectionErrorCode, OnboardingType,
+         EffectiveEmbeddedSignupConfigId, HistoryImportRequested,
         AccessTokenSecretRef, MetaAppSecretRef, WebhookVerifyTokenRef,
         CreatedAtUtc, UpdatedAtUtc, IsActive
     FROM dbo.WhatsAppIntegration

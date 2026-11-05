@@ -166,6 +166,9 @@ public sealed class ProviderFailureTests
 
         public Task SaveSignupResultAsync(MetaSignupResult result, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
+        public Task<HistoryImportStatusRecord?> GetLatestHistoryImportAsync(
+            Guid tenantId, Guid integrationId, CancellationToken cancellationToken) =>
+            Task.FromResult<HistoryImportStatusRecord?>(null);
 
         public Task SetConnectionStateAsync(
             Guid integrationId,
@@ -278,7 +281,8 @@ public sealed class ProviderFailureTests
             string eventKey,
             WebhookInboxState state,
             string? safeFailureCode,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            string? historyOutcome = null)
         {
             StateUpdates.Add((eventKey, state, safeFailureCode));
             return Task.CompletedTask;

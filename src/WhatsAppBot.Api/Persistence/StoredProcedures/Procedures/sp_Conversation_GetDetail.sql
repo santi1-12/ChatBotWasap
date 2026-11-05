@@ -29,9 +29,10 @@ BEGIN
             message.CreatedByAdminId,
             message.ReplySource,
             message.ProcessingState,
-            message.DeliveryState,
-            message.CreatedAtUtc,
-            message.FailureCode
+             message.DeliveryState,
+             message.CreatedAtUtc,
+             message.FailureCode,
+             message.IsHistorical
         FROM dbo.Message AS message
         WHERE message.TenantId = @TenantId
           AND message.IntegrationId = @IntegrationId
@@ -66,9 +67,10 @@ BEGIN
          media.ExpiresAtUtc AS MediaExpiresAtUtc,
         message_page.ReplySource,
         message_page.ProcessingState,
-        message_page.DeliveryState,
-        message_page.FailureCode AS OutcomeCode,
-        message_page.CreatedAtUtc
+             message_page.DeliveryState,
+             message_page.FailureCode AS OutcomeCode,
+         message_page.IsHistorical,
+             message_page.CreatedAtUtc
     FROM dbo.Conversation AS conversation
     INNER JOIN dbo.Contact AS contact
         ON contact.ContactId = conversation.ContactId

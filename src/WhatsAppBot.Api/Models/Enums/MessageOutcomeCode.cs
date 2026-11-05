@@ -45,6 +45,8 @@ public static class MessageOutcomeCodeRules
         MessageOutcomeCodes.MediaTooLarge => true,
         MessageOutcomeCodes.TranscriptionFailed => true,
         MessageOutcomeCodes.ImageAnalysisUnavailable => true,
+        MessageOutcomeCodes.HistoricalImport => true,
+        MessageOutcomeCodes.OutboundAppEcho => true,
         MessageOutcomeCodes.HandoffToHuman => true,
         _ => false
     };

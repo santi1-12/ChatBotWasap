@@ -56,9 +56,10 @@ BEGIN
     SELECT @LastCustomerMessageAtUtc = MAX(message.ProviderTimestampUtc)
     FROM dbo.Message AS message
     WHERE message.TenantId = @TenantId
-      AND message.IntegrationId = @IntegrationId
-      AND message.ConversationId = @ConversationId
-      AND message.Direction = N'Inbound';
+       AND message.IntegrationId = @IntegrationId
+       AND message.ConversationId = @ConversationId
+       AND message.Direction = N'Inbound'
+       AND message.IsHistorical = 0;
 
     IF @State IS NULL
         SET @OutcomeCode = N'ConversationVersionConflict';

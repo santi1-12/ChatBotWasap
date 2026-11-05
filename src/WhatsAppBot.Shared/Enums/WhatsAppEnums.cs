@@ -19,3 +19,4 @@ public enum LifecycleStatus { Abierta, Cerrada }
 public enum ConversationAction { Take, Handoff, ReturnToBot, Close, Reopen }
 public enum ActorType { Customer, Bot, Admin, System }
 public enum Origin { MetaCloudApi, AdminPanel, System, FutureWhatsAppBusinessApp }
+public enum HistoryImportState { NotRequested, Pending, InProgress, Completed, Failed, Unavailable }

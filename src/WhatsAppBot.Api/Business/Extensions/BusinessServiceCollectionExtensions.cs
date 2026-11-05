@@ -38,6 +38,7 @@ public static class BusinessServiceCollectionExtensions
         services.AddScoped<IProcessInboundMedia, ProcessInboundMedia>();
         services.AddScoped<IGetMessageMedia, GetMessageMedia>();
         services.AddScoped<IProcessMetaDeliveryStatus, ApplyMessageStatus>();
+        services.AddScoped<IProcessCoexistenceMessage, ProcessCoexistenceMessage>();
         services.AddScoped<MessageProcessingService>();
         services.AddHostedService<WebhookInboxWorker>();
         services.AddHostedService<MessageOutboxWorker>();

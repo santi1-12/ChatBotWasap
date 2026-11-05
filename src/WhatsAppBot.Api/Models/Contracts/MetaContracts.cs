@@ -20,6 +20,16 @@ public sealed record NormalizedMetaEvent(
     public string? MediaId { get; init; }
     public string? MediaMimeType { get; init; }
     public string? MediaCaption { get; init; }
+    public string SourceField { get; init; } = "messages";
+    public MessageDirection Direction { get; init; } = MessageDirection.Inbound;
+    public ActorType ActorType { get; init; } = ActorType.Customer;
+    public Origin Origin { get; init; } = Origin.MetaCloudApi;
+    public bool IsHistorical { get; init; }
+    public bool IsGroup { get; init; }
+    public string? HistoryImportKey { get; init; }
+    public int HistoryTotalCount { get; init; }
+    public string? RecipientWhatsAppUserId { get; init; }
+    public string? SourceEventKey { get; init; }
 }
 
 public sealed record MetaSignupResult(
@@ -35,6 +45,7 @@ public sealed record MetaSignupResult(
     public Guid TenantId { get; init; }
     public WhatsAppOnboardingType OnboardingType { get; init; }
     public string EffectiveEmbeddedSignupConfigId { get; init; } = string.Empty;
+    public bool ImportHistory { get; init; }
 }
 
 public sealed record MetaPhoneNumberSummary(string PhoneNumberId);
@@ -124,6 +135,8 @@ public static class MessageOutcomeCodes
     public const string MediaTooLarge = "MediaTooLarge";
     public const string TranscriptionFailed = "TranscriptionFailed";
     public const string ImageAnalysisUnavailable = "ImageAnalysisUnavailable";
+    public const string HistoricalImport = "HistoricalImport";
+    public const string OutboundAppEcho = "OutboundAppEcho";
 }
 
 public static class MetaWebhookEventTypes
@@ -133,4 +146,19 @@ public static class MetaWebhookEventTypes
     public const string InboundImage = "InboundImage";
     public const string DeliveryStatus = "DeliveryStatus";
     public const string UnsupportedMessage = "UnsupportedMessage";
+    public const string HistoricalMessage = "HistoricalMessage";
+    public const string OutboundAppMessage = "OutboundAppMessage";
+}
+
+public static class HistoryImportOutcomes
+{
+    public const string Imported = "Imported";
+    public const string Duplicate = "Duplicate";
+    public const string Skipped = "Skipped";
+    public const string Failed = "Failed";
+}
+
+public sealed record MetaEventProcessingResult(string? HistoryOutcome = null)
+{
+    public static readonly MetaEventProcessingResult None = new();
 }

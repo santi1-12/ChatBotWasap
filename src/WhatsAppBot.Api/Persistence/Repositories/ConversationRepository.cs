@@ -40,6 +40,33 @@ public sealed class ConversationRepository(StoredProcedureExecutor executor)
             : throw new InvalidOperationException("The WhatsApp conversation could not be persisted.");
     }
 
+    public async Task<long> GetOrCreateCoexistenceAsync(
+        Guid integrationId,
+        Guid tenantId,
+        long contactId,
+        DateTimeOffset lastMessageAtUtc,
+        bool isBotEnabled,
+        bool humanActivity,
+        CancellationToken cancellationToken)
+    {
+        var conversationId = await executor.QuerySingleAsync(
+            "dbo.sp_Conversation_GetOrCreateCoexistence",
+            [
+                new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier) { Value = integrationId },
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId },
+                new SqlParameter("@ContactId", SqlDbType.BigInt) { Value = contactId },
+                new SqlParameter("@LastMessageAtUtc", SqlDbType.DateTime2)
+                    { Scale = 3, Value = lastMessageAtUtc.UtcDateTime },
+                new SqlParameter("@IsBotEnabled", SqlDbType.Bit) { Value = isBotEnabled },
+                new SqlParameter("@HumanActivity", SqlDbType.Bit) { Value = humanActivity }
+            ],
+            reader => reader.GetInt64(reader.GetOrdinal("ConversationId")),
+            cancellationToken);
+        return conversationId > 0
+            ? conversationId
+            : throw new InvalidOperationException("The Coexistence conversation could not be persisted.");
+    }
+
     public async Task<ConversationPage> ListAsync(
         Guid tenantId, Guid integrationId, int page, int pageSize, CancellationToken cancellationToken)
     {

@@ -93,10 +93,8 @@ public sealed class ProcessInboundAudio(
         await messageRepository.SetProcessingOutcomeAsync(
             media.TenantId,
             media.MessageId,
-            ProcessingState.Completed,
-            outcomeCode == MessageOutcomeCodes.MediaTooLarge
-                ? outcomeCode
-                : MessageOutcomeCodes.TranscriptionFailed,
+            ProcessingState.Failed,
+            outcomeCode,
             cancellationToken);
     }
 }

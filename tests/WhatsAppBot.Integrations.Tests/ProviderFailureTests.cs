@@ -79,7 +79,7 @@ public sealed class ProviderFailureTests
             }));
 
         await worker.StartAsync(CancellationToken.None);
-        await Task.Delay(100);
+        await WaitUntilAsync(() => repository.StateUpdates.Count == 2);
         await worker.StopAsync(CancellationToken.None);
 
         Assert.Equal(2, repository.StateUpdates.Count);
@@ -88,6 +88,54 @@ public sealed class ProviderFailureTests
             Assert.Equal(WebhookInboxState.Failed, update.State);
             Assert.Equal("ProcessingFailure", update.SafeFailureCode);
         });
+    }
+
+    [Fact]
+    public async Task WebhookWorkerTimeoutMarksItemFailedAndContinuesBatch()
+    {
+        var repository = new RecordingWebhookInboxRepository();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddScoped<IWebhookInboxRepository>(_ => repository);
+        services.AddScoped<IProcessInboundText, DelayingInboundTextProcessor>();
+        services.AddScoped<IProcessInboundMedia, PreserveInboundMedia>();
+        services.AddScoped<IProcessMetaDeliveryStatus, PreserveMetaDeliveryStatus>();
+        services.AddScoped<MessageProcessingService>();
+        await using var provider = services.BuildServiceProvider();
+        var worker = new WebhookInboxWorker(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<WebhookInboxWorker>.Instance,
+            Options.Create(new MetaOptions { WorkerBatchSize = 2 }),
+            Options.Create(new WorkerOptions
+            {
+                PollIntervalSeconds = 1,
+                ItemTimeoutSeconds = 1,
+                MaximumAttempts = 2,
+                RetryBaseDelaySeconds = 1
+            }));
+
+        await worker.StartAsync(CancellationToken.None);
+        await WaitUntilAsync(() => repository.StateUpdates.Count == 2, TimeSpan.FromSeconds(5));
+        await worker.StopAsync(CancellationToken.None);
+
+        Assert.All(repository.StateUpdates, update =>
+        {
+            Assert.Equal(WebhookInboxState.Failed, update.State);
+            Assert.Equal("ProcessingTimedOut", update.SafeFailureCode);
+        });
+    }
+
+    private static async Task WaitUntilAsync(
+        Func<bool> condition,
+        TimeSpan? timeout = null)
+    {
+        var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(2));
+        while (!condition() && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(25);
+        }
+
+        Assert.True(condition(), "The worker did not publish the expected state updates before the timeout.");
     }
 
     private sealed class DelayingHandler : HttpMessageHandler
@@ -182,6 +230,12 @@ public sealed class ProviderFailureTests
     {
         public Task ProcessAsync(NormalizedMetaEvent inboundEvent, CancellationToken cancellationToken) =>
             throw new InvalidOperationException("simulated processing failure");
+    }
+
+    private sealed class DelayingInboundTextProcessor : IProcessInboundText
+    {
+        public Task ProcessAsync(NormalizedMetaEvent inboundEvent, CancellationToken cancellationToken) =>
+            Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
     }
 
     private sealed class RecordingWebhookInboxRepository : IWebhookInboxRepository

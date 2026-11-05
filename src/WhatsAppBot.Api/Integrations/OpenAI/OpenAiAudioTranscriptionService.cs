@@ -70,7 +70,19 @@ public sealed class OpenAiAudioTranscriptionService(
                     response.StatusCode is HttpStatusCode.TooManyRequests or >= HttpStatusCode.InternalServerError);
             }
 
-            var payload = await response.Content.ReadAsStringAsync(deadline.Token);
+            string payload;
+            try
+            {
+                payload = await response.Content.ReadAsStringAsync(deadline.Token);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                throw new MediaProcessingException(MessageOutcomeCodes.TranscriptionFailed, true);
+            }
+            catch (HttpRequestException)
+            {
+                throw new MediaProcessingException(MessageOutcomeCodes.TranscriptionFailed, true);
+            }
             if (payload.Length > 1_000_000)
             {
                 throw new MediaProcessingException(MessageOutcomeCodes.TranscriptionFailed);
@@ -86,7 +98,13 @@ public sealed class OpenAiAudioTranscriptionService(
                     throw new MediaProcessingException(MessageOutcomeCodes.TranscriptionFailed);
                 }
 
-                return text.GetString()!.Trim();
+                var result = text.GetString()!.Trim();
+                if (result.Length > ai.MaxOutputCharacters)
+                {
+                    throw new MediaProcessingException(MessageOutcomeCodes.TranscriptionFailed);
+                }
+
+                return result;
             }
             catch (JsonException)
             {

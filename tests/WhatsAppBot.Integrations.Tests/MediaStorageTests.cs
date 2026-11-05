@@ -84,6 +84,31 @@ public sealed class MediaStorageTests
         }
     }
 
+    [Fact]
+    public async Task LocalStorage_CancellationRemovesTemporaryFile()
+    {
+        var root = CreateTemporaryDirectory();
+        try
+        {
+            var storage = new LocalPrivateMediaStorage(Options.Create(new MediaStorageOptions
+            {
+                PrivateContainer = root,
+                MaxFileBytes = 1024
+            }));
+            using var cancellation = new CancellationTokenSource();
+            cancellation.Cancel();
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+                storage.StorePrivateAsync(new MemoryStream([1, 2, 3]), "image/jpeg", cancellation.Token));
+
+            Assert.Empty(Directory.GetFiles(root, "*", SearchOption.AllDirectories));
+        }
+        finally
+        {
+            DeleteTemporaryDirectory(root);
+        }
+    }
+
     private static string CreateTemporaryDirectory()
     {
         var path = Path.Combine(Path.GetTempPath(), "WhatsAppBotTests", Guid.NewGuid().ToString("N"));

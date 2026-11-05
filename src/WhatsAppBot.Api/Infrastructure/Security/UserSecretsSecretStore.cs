@@ -75,11 +75,18 @@ public sealed class UserSecretsSecretStore(
 
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             var temporaryPath = $"{path}.{Guid.NewGuid():N}.tmp";
-            await File.WriteAllTextAsync(
-                temporaryPath,
-                root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }),
-                cancellationToken);
-            File.Move(temporaryPath, path, overwrite: true);
+            try
+            {
+                await File.WriteAllTextAsync(
+                    temporaryPath,
+                    root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }),
+                    cancellationToken);
+                File.Move(temporaryPath, path, overwrite: true);
+            }
+            finally
+            {
+                TryDeleteTemporaryFile(temporaryPath);
+            }
         }
         finally
         {
@@ -129,11 +136,18 @@ public sealed class UserSecretsSecretStore(
             }
 
             var temporaryPath = $"{path}.{Guid.NewGuid():N}.tmp";
-            await File.WriteAllTextAsync(
-                temporaryPath,
-                root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }),
-                cancellationToken);
-            File.Move(temporaryPath, path, overwrite: true);
+            try
+            {
+                await File.WriteAllTextAsync(
+                    temporaryPath,
+                    root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }),
+                    cancellationToken);
+                File.Move(temporaryPath, path, overwrite: true);
+            }
+            finally
+            {
+                TryDeleteTemporaryFile(temporaryPath);
+            }
         }
         finally
         {
@@ -155,6 +169,25 @@ public sealed class UserSecretsSecretStore(
         await using var stream = File.OpenRead(path);
         return await JsonNode.ParseAsync(stream, cancellationToken: cancellationToken) as JsonObject
             ?? new JsonObject();
+    }
+
+    private static void TryDeleteTemporaryFile(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch (IOException)
+        {
+            // Cleanup must not replace the original secret-store failure.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Cleanup must not replace the original secret-store failure.
+        }
     }
 
     private static string GetSecretsPath()

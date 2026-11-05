@@ -137,9 +137,10 @@ public sealed class AudioNormalizationService(
     private static async Task StopProcessAsync(Process process, Task<string> errorTask)
     {
         TryKill(process);
+        using var cleanupTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
         try
         {
-            await process.WaitForExitAsync(CancellationToken.None);
+            await process.WaitForExitAsync(cleanupTimeout.Token);
         }
         catch (Exception)
         {
@@ -148,7 +149,7 @@ public sealed class AudioNormalizationService(
 
         try
         {
-            _ = await errorTask;
+            _ = await errorTask.WaitAsync(cleanupTimeout.Token);
         }
         catch (Exception)
         {

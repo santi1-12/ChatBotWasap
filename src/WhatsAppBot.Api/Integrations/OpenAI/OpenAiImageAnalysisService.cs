@@ -87,7 +87,19 @@ public sealed class OpenAiImageAnalysisService(
                     response.StatusCode is HttpStatusCode.TooManyRequests or >= HttpStatusCode.InternalServerError);
             }
 
-            var payload = await response.Content.ReadAsStringAsync(deadline.Token);
+            string payload;
+            try
+            {
+                payload = await response.Content.ReadAsStringAsync(deadline.Token);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                throw new MediaProcessingException(MessageOutcomeCodes.ImageAnalysisUnavailable, true);
+            }
+            catch (HttpRequestException)
+            {
+                throw new MediaProcessingException(MessageOutcomeCodes.ImageAnalysisUnavailable, true);
+            }
             if (payload.Length > 1_000_000)
             {
                 throw new MediaProcessingException(MessageOutcomeCodes.ImageAnalysisUnavailable);

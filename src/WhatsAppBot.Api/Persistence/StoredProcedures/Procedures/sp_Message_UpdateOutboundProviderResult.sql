@@ -24,6 +24,9 @@ BEGIN
 
     IF @Succeeded = 1
     BEGIN
+        IF NULLIF(LTRIM(RTRIM(@ProviderMessageId)), N'') IS NULL
+            THROW 51044, 'A successful outbound result requires a provider message ID.', 1;
+
         UPDATE dbo.Message
         SET ProviderMessageId = @ProviderMessageId,
             DeliveryState = CASE

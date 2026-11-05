@@ -28,13 +28,13 @@ public sealed class MetaMessageSender(
                 !string.Equals(integration.PhoneNumberId, phoneNumberId, StringComparison.Ordinal) ||
                 string.IsNullOrWhiteSpace(integration.AccessTokenSecretRef))
             {
-                return new MetaMessageSendResult(false, null, "MetaCredentialsMissing", false);
+                return new MetaMessageSendResult(false, null, MessageOutcomeCodes.MetaCredentialsMissing, false);
             }
 
             var accessToken = await secretResolver.ResolveAsync(integration.AccessTokenSecretRef, cancellationToken);
             if (string.IsNullOrWhiteSpace(accessToken))
             {
-                return new MetaMessageSendResult(false, null, "MetaCredentialsMissing", false);
+                return new MetaMessageSendResult(false, null, MessageOutcomeCodes.MetaCredentialsMissing, false);
             }
 
             return await cloudApiClient.SendTextAsync(
@@ -46,27 +46,27 @@ public sealed class MetaMessageSender(
         }
         catch (MetaConfigurationException)
         {
-            return new MetaMessageSendResult(false, null, "MetaConfigurationMissing", false);
+            return new MetaMessageSendResult(false, null, MessageOutcomeCodes.MetaConfigurationMissing, false);
         }
         catch (JsonException)
         {
-            return new MetaMessageSendResult(false, null, "MetaInvalidResponse", false);
+            return new MetaMessageSendResult(false, null, MessageOutcomeCodes.MetaInvalidResponse, false);
         }
         catch (HttpRequestException)
         {
-            return new MetaMessageSendResult(false, null, "MetaUnavailable", true);
+            return new MetaMessageSendResult(false, null, MessageOutcomeCodes.MetaUnavailable, true);
         }
         catch (InvalidOperationException)
         {
-            return new MetaMessageSendResult(false, null, "MetaSecretStoreUnavailable", true);
+            return new MetaMessageSendResult(false, null, MessageOutcomeCodes.MetaSecretStoreUnavailable, true);
         }
         catch (UnauthorizedAccessException)
         {
-            return new MetaMessageSendResult(false, null, "MetaSecretStoreUnavailable", true);
+            return new MetaMessageSendResult(false, null, MessageOutcomeCodes.MetaSecretStoreUnavailable, true);
         }
         catch (IOException)
         {
-            return new MetaMessageSendResult(false, null, "MetaSecretStoreUnavailable", true);
+            return new MetaMessageSendResult(false, null, MessageOutcomeCodes.MetaSecretStoreUnavailable, true);
         }
     }
 }

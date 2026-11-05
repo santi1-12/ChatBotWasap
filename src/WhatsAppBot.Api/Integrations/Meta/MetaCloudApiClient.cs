@@ -191,46 +191,58 @@ public sealed class MetaCloudApiClient(
         var metadataRequest = CreateRequest(Uri.EscapeDataString(mediaId), Method.Get);
         metadataRequest.AddHeader("Authorization", $"Bearer {accessToken}");
         var metadataResponse = await ExecuteAsync(metadataRequest, cancellationToken);
-        using var metadataDocument = JsonDocument.Parse(metadataResponse.Content!);
-        var metadataRoot = metadataDocument.RootElement;
-        var url = GetRequiredString(metadataRoot, "url");
-        var metadataMimeType = GetNullableString(metadataRoot, "mime_type");
-        long? declaredSize = metadataRoot.TryGetProperty("file_size", out var fileSize) &&
-                             fileSize.ValueKind == JsonValueKind.Number &&
-                             fileSize.TryGetInt64(out var parsedSize)
-            ? parsedSize
-            : null;
-        if (declaredSize is < 0 || declaredSize > maxBytes)
+        JsonDocument metadataDocument;
+        try
         {
-            throw new MediaProcessingException(MessageOutcomeCodes.MediaTooLarge);
+            metadataDocument = JsonDocument.Parse(metadataResponse.Content!);
         }
-
-        var mimeType = NormalizeMimeType(metadataMimeType ?? expectedMimeType);
-        ValidateMimeType(mediaKind, mimeType, expectedMimeType);
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var mediaUri) ||
-            mediaUri.Scheme != Uri.UriSchemeHttps ||
-            !IsAllowedMediaHost(mediaUri.Host))
+        catch (JsonException)
         {
             throw new MediaProcessingException(MessageOutcomeCodes.MediaDownloadFailed);
         }
 
-        var binaryRequest = new RestRequest(mediaUri, Method.Get);
-        binaryRequest.AddHeader("Authorization", $"Bearer {accessToken}");
-        var downloaded = await DownloadBoundedAsync(binaryRequest, maxBytes, cancellationToken);
-        var content = downloaded.Content;
-        var responseMimeType = downloaded.ResponseMimeType;
-        if (!string.IsNullOrWhiteSpace(responseMimeType))
+        using (metadataDocument)
         {
-            ValidateMimeType(mediaKind, responseMimeType, mimeType);
-            mimeType = responseMimeType;
-        }
+            var metadataRoot = metadataDocument.RootElement;
+            var url = GetRequiredString(metadataRoot, "url");
+            var metadataMimeType = GetNullableString(metadataRoot, "mime_type");
+            long? declaredSize = metadataRoot.TryGetProperty("file_size", out var fileSize) &&
+                                 fileSize.ValueKind == JsonValueKind.Number &&
+                                 fileSize.TryGetInt64(out var parsedSize)
+                ? parsedSize
+                : null;
+            if (declaredSize is < 0 || declaredSize > maxBytes)
+            {
+                throw new MediaProcessingException(MessageOutcomeCodes.MediaTooLarge);
+            }
 
-        if (content.Length == 0)
-        {
-            throw new MediaProcessingException(MessageOutcomeCodes.MediaDownloadFailed);
-        }
+            var mimeType = NormalizeMimeType(metadataMimeType ?? expectedMimeType);
+            ValidateMimeType(mediaKind, mimeType, expectedMimeType);
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var mediaUri) ||
+                mediaUri.Scheme != Uri.UriSchemeHttps ||
+                !IsAllowedMediaHost(mediaUri.Host))
+            {
+                throw new MediaProcessingException(MessageOutcomeCodes.MediaDownloadFailed);
+            }
 
-        return new MetaMediaDownload(mimeType!, declaredSize, content);
+            var binaryRequest = new RestRequest(mediaUri, Method.Get);
+            binaryRequest.AddHeader("Authorization", $"Bearer {accessToken}");
+            var downloaded = await DownloadBoundedAsync(binaryRequest, maxBytes, cancellationToken);
+            var content = downloaded.Content;
+            var responseMimeType = downloaded.ResponseMimeType;
+            if (!string.IsNullOrWhiteSpace(responseMimeType))
+            {
+                ValidateMimeType(mediaKind, responseMimeType, mimeType);
+                mimeType = responseMimeType;
+            }
+
+            if (content.Length == 0)
+            {
+                throw new MediaProcessingException(MessageOutcomeCodes.MediaDownloadFailed);
+            }
+
+            return new MetaMediaDownload(mimeType!, declaredSize, content);
+        }
     }
 
     public async Task<MetaMessageSendResult> SendTextAsync(

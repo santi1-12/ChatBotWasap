@@ -167,6 +167,23 @@ public sealed class MetaCloudApiClientTests
     }
 
     [Fact]
+    public async Task DownloadMedia_MapsMalformedMetadataToSafeMediaFailure()
+    {
+        var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("not-json")
+        });
+        var client = CreateClient(handler);
+
+        var exception = await Assert.ThrowsAsync<MediaProcessingException>(() =>
+            client.DownloadMediaAsync(
+                "business-token", "media-123", MediaKind.Image, "image/jpeg", 10, CancellationToken.None));
+
+        Assert.Equal(MessageOutcomeCodes.MediaDownloadFailed, exception.SafeCode);
+        Assert.DoesNotContain("not-json", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task DownloadMedia_RejectsNonMetaMediaHostBeforeSendingBearerToken()
     {
         var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)

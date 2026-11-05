@@ -96,6 +96,17 @@ public static class MessageOutcomeCodes
     public const string AiUnableToResolve = "AiUnableToResolve";
     public const string UnsupportedMessageType = "UnsupportedMessageType";
     public const string MetaSendFailed = "MetaSendFailed";
+    public const string MetaRequestTimedOut = "MetaRequestTimedOut";
+    public const string MetaUnavailable = "MetaUnavailable";
+    public const string MetaCredentialsMissing = "MetaCredentialsMissing";
+    public const string MetaConfigurationMissing = "MetaConfigurationMissing";
+    public const string MetaInvalidResponse = "MetaInvalidResponse";
+    public const string MetaSecretStoreUnavailable = "MetaSecretStoreUnavailable";
+    public const string MetaRateLimited = "MetaRateLimited";
+    public const string MetaAuthorizationFailed = "MetaAuthorizationFailed";
+    public const string MetaRequestRejected = "MetaRequestRejected";
+    public const string MetaRequestFailed = "MetaRequestFailed";
+    public const string MetaEmptyResponse = "MetaEmptyResponse";
     public const string ConversationInHumanMode = "ConversationInHumanMode";
     public const string ConversationClosed = "ConversationClosed";
     public const string ConversationVersionConflict = "ConversationVersionConflict";

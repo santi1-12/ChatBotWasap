@@ -16,6 +16,10 @@ public sealed class GlobalExceptionMiddleware(
         {
             await next(context);
         }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+            // The caller disconnected; do not turn request cancellation into a server error.
+        }
         catch (Exception exception) when (!context.Response.HasStarted)
         {
             var traceId = context.TraceIdentifier;

@@ -50,6 +50,31 @@ public sealed class ImageAnalysisTests
         Assert.Equal(MessageOutcomeCodes.ImageAnalysisUnavailable, exception.SafeCode);
     }
 
+    [Fact]
+    public async Task OpenAiImageAnalysis_ResponseBodyCancellationBecomesSafeTransientFailure()
+    {
+        var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new FailingContent(new OperationCanceledException())
+        });
+        var service = new OpenAiImageAnalysisService(
+            new HttpClient(handler),
+            Options.Create(new AiOptions { RequestTimeoutSeconds = 5 }),
+            Options.Create(new OpenAiOptions
+            {
+                ApiKeyReference = "OpenAI:ApiKey",
+                ImageModel = "vision-test",
+                Endpoint = "https://api.openai.com/v1/chat/completions"
+            }),
+            new FakeSecretResolver());
+
+        var exception = await Assert.ThrowsAsync<MediaProcessingException>(() =>
+            service.AnalyzeAsync(new MemoryStream([255, 216, 255]), "image/jpeg", CancellationToken.None));
+
+        Assert.Equal(MessageOutcomeCodes.ImageAnalysisUnavailable, exception.SafeCode);
+        Assert.True(exception.IsTransient);
+    }
+
     private sealed class FakeSecretResolver : ISecretReferenceResolver
     {
         public ValueTask<string?> ResolveAsync(string secretReference, CancellationToken cancellationToken) =>
@@ -72,6 +97,18 @@ public sealed class ImageAnalysisTests
                 ? string.Empty
                 : await request.Content.ReadAsStringAsync(cancellationToken);
             return responseFactory(request);
+        }
+    }
+
+    private sealed class FailingContent(Exception exception) : HttpContent
+    {
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) =>
+            Task.FromException(exception);
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return true;
         }
     }
 }

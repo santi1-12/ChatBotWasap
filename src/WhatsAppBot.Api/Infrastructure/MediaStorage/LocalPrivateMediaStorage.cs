@@ -29,6 +29,8 @@ public sealed class LocalPrivateMediaStorage(
         var temporaryPath = Path.Combine(root, $".{identifier}.tmp");
         var finalPath = GetFilePath(storageReference, root);
         long size = 0;
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(TimeSpan.FromSeconds(options.Value.RequestTimeoutSeconds));
         try
         {
             await using (var output = new FileStream(
@@ -42,7 +44,7 @@ public sealed class LocalPrivateMediaStorage(
                 var buffer = new byte[64 * 1024];
                 while (true)
                 {
-                    var read = await content.ReadAsync(buffer, cancellationToken);
+                    var read = await content.ReadAsync(buffer, deadline.Token);
                     if (read == 0)
                     {
                         break;
@@ -54,20 +56,35 @@ public sealed class LocalPrivateMediaStorage(
                         throw new MediaProcessingException("MediaTooLarge");
                     }
 
-                    await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+                    await output.WriteAsync(buffer.AsMemory(0, read), deadline.Token);
                 }
 
-                await output.FlushAsync(cancellationToken);
+                await output.FlushAsync(deadline.Token);
             }
 
             File.Move(temporaryPath, finalPath);
             return new MediaStorageObject(storageReference, size);
         }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new MediaProcessingException("MediaStorageFailed", true);
+        }
         finally
         {
             if (File.Exists(temporaryPath))
             {
-                File.Delete(temporaryPath);
+                try
+                {
+                    File.Delete(temporaryPath);
+                }
+                catch (IOException)
+                {
+                    // Cleanup must not replace the original provider/storage failure.
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    // Cleanup must not replace the original provider/storage failure.
+                }
             }
         }
     }

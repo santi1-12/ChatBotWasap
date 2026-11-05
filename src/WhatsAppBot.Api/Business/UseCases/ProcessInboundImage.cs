@@ -81,12 +81,12 @@ public sealed class ProcessInboundImage(
         }
         catch (MediaProcessingException exception) when (!cancellationToken.IsCancellationRequested)
         {
-            await CompleteAsync(media, exception.SafeCode, cancellationToken);
+            await FailAsync(media, exception.SafeCode, cancellationToken);
             return;
         }
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
-            await CompleteAsync(media, MessageOutcomeCodes.ImageAnalysisUnavailable, cancellationToken);
+            await FailAsync(media, MessageOutcomeCodes.ImageAnalysisUnavailable, cancellationToken);
             logger.LogError(
                 "Inbound image analysis failed with {ExceptionType}.",
                 exception.GetType().Name);
@@ -109,4 +109,11 @@ public sealed class ProcessInboundImage(
         CancellationToken cancellationToken) =>
         messageRepository.SetProcessingOutcomeAsync(
             media.TenantId, media.MessageId, ProcessingState.Completed, outcomeCode, cancellationToken);
+
+    private Task FailAsync(
+        InboundMediaContext media,
+        string outcomeCode,
+        CancellationToken cancellationToken) =>
+        messageRepository.SetProcessingOutcomeAsync(
+            media.TenantId, media.MessageId, ProcessingState.Failed, outcomeCode, cancellationToken);
 }

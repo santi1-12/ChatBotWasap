@@ -79,7 +79,7 @@ public sealed class MessageOutboxWorker(
                 await PersistResultAsync(
                     messages,
                     item,
-                    new MetaMessageSendResult(false, null, "MetaRequestTimedOut", true),
+                    new MetaMessageSendResult(false, null, MessageOutcomeCodes.MetaRequestTimedOut, true),
                     workerOptions,
                     cancellationToken);
             }
@@ -94,7 +94,7 @@ public sealed class MessageOutboxWorker(
                 await PersistResultAsync(
                     messages,
                     item,
-                    new MetaMessageSendResult(false, null, "OutboundProcessingFailed", true),
+                    new MetaMessageSendResult(false, null, MessageOutcomeCodes.MetaSendFailed, true),
                     workerOptions,
                     cancellationToken);
                 logger.LogError(

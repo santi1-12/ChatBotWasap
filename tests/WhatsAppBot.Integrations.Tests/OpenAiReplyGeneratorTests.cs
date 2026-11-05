@@ -71,6 +71,24 @@ public sealed class OpenAiReplyGeneratorTests
         Assert.Equal(MessageOutcomeCodes.AiUnableToResolve, exception.SafeCode);
     }
 
+    [Fact]
+    public async Task GenerateReply_ResponseBodyCancellationBecomesSafeTransientTimeout()
+    {
+        var handler = new FailingResponseHandler();
+        using var client = new HttpClient(handler);
+        var generator = new OpenAiReplyGenerator(
+            client,
+            Options.Create(new AiOptions { RequestTimeoutSeconds = 5 }),
+            Options.Create(new OpenAiOptions { TextModel = "configured-model" }),
+            new FakeSecretResolver("secret-value"));
+
+        var exception = await Assert.ThrowsAsync<AiGenerationException>(() =>
+            generator.GenerateReplyAsync("contexto permitido", CancellationToken.None));
+
+        Assert.Equal(MessageOutcomeCodes.AiProviderTimeout, exception.SafeCode);
+        Assert.True(exception.IsTransient);
+    }
+
     private sealed class FakeSecretResolver(string? value) : ISecretReferenceResolver
     {
         public ValueTask<string?> ResolveAsync(string secretReference, CancellationToken cancellationToken) =>
@@ -96,5 +114,27 @@ public sealed class OpenAiReplyGeneratorTests
                 Content = new StringContent(responseBody, Encoding.UTF8, "application/json")
             };
         }
+    }
+
+    private sealed class FailingContent(Exception exception) : HttpContent
+    {
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) =>
+            Task.FromException(exception);
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return true;
+        }
+    }
+
+    private sealed class FailingResponseHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new FailingContent(new OperationCanceledException())
+            });
     }
 }

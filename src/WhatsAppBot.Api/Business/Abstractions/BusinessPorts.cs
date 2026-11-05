@@ -39,18 +39,19 @@ public interface IAdministratorBootstrapper
 
 public interface IBotConfigurationRepository
 {
-    Task<BotConfiguration> GetCurrentAsync(CancellationToken cancellationToken);
+    Task<BotConfiguration> GetCurrentAsync(Guid tenantId, CancellationToken cancellationToken);
     Task<BotConfiguration> GetForIntegrationAsync(
-        Guid integrationId, CancellationToken cancellationToken);
+        Guid tenantId, Guid integrationId, CancellationToken cancellationToken);
     Task<BotConfiguration> UpdateAsync(
-        Guid integrationId, bool isBotEnabled, BotReplyMode replyMode, CancellationToken cancellationToken);
+        Guid tenantId, Guid integrationId, bool isBotEnabled, BotReplyMode replyMode,
+        CancellationToken cancellationToken);
 }
 
 public interface IBotConfigurationService
 {
     Task<BotConfiguration> GetAsync(CancellationToken cancellationToken);
     Task<BotConfiguration> GetForIntegrationAsync(
-        Guid integrationId, CancellationToken cancellationToken);
+        Guid tenantId, Guid integrationId, CancellationToken cancellationToken);
     Task<BotConfiguration> UpdateAsync(
         bool isBotEnabled, BotReplyMode replyMode, CancellationToken cancellationToken);
 }
@@ -58,19 +59,21 @@ public interface IBotConfigurationService
 public interface IFrequentResponseRepository
 {
     Task<FrequentResponsePage> ListAsync(
-        Guid integrationId, int page, int pageSize, CancellationToken cancellationToken);
+        Guid tenantId, Guid integrationId, int page, int pageSize, CancellationToken cancellationToken);
     Task<FrequentResponseRecord?> GetAsync(
-        Guid integrationId, long frequentResponseId, CancellationToken cancellationToken);
+        Guid tenantId, Guid integrationId, long frequentResponseId, CancellationToken cancellationToken);
     Task<FrequentResponseRecord> CreateAsync(
-        Guid integrationId, FrequentResponseCommand command, CancellationToken cancellationToken);
+        Guid tenantId, Guid integrationId, FrequentResponseCommand command, CancellationToken cancellationToken);
     Task<FrequentResponseRecord?> UpdateAsync(
-        Guid integrationId, long frequentResponseId, FrequentResponseCommand command,
+        Guid tenantId, Guid integrationId, long frequentResponseId, FrequentResponseCommand command,
         CancellationToken cancellationToken);
     Task<bool> SetActiveAsync(
-        Guid integrationId, long frequentResponseId, bool isActive, CancellationToken cancellationToken);
-    Task<bool> DeleteAsync(Guid integrationId, long frequentResponseId, CancellationToken cancellationToken);
+        Guid tenantId, Guid integrationId, long frequentResponseId, bool isActive,
+        CancellationToken cancellationToken);
+    Task<bool> DeleteAsync(
+        Guid tenantId, Guid integrationId, long frequentResponseId, CancellationToken cancellationToken);
     Task<IReadOnlyList<FrequentResponseRecord>> ListActiveCandidatesAsync(
-        Guid integrationId, CancellationToken cancellationToken);
+        Guid tenantId, Guid integrationId, CancellationToken cancellationToken);
 }
 
 public interface IFrequentResponseService

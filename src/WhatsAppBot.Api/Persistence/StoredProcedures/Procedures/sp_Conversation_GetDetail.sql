@@ -5,6 +5,7 @@ GO
 USE [WhatsAppBot];
 GO
 CREATE OR ALTER PROCEDURE dbo.sp_Conversation_GetDetail
+    @TenantId uniqueidentifier,
     @IntegrationId uniqueidentifier,
     @ConversationId bigint,
     @BeforeMessageId bigint = NULL,
@@ -32,7 +33,8 @@ BEGIN
             message.CreatedAtUtc,
             message.FailureCode
         FROM dbo.Message AS message
-        WHERE message.IntegrationId = @IntegrationId
+        WHERE message.TenantId = @TenantId
+          AND message.IntegrationId = @IntegrationId
           AND message.ConversationId = @ConversationId
           AND (@BeforeMessageId IS NULL OR message.MessageId < @BeforeMessageId)
         ORDER BY message.CreatedAtUtc DESC, message.MessageId DESC
@@ -70,6 +72,7 @@ BEGIN
     FROM dbo.Conversation AS conversation
     INNER JOIN dbo.Contact AS contact
         ON contact.ContactId = conversation.ContactId
+       AND contact.TenantId = @TenantId
        AND contact.IntegrationId = @IntegrationId
     OUTER APPLY
     (
@@ -81,7 +84,8 @@ BEGIN
                 ELSE message.ContentText
             END AS LastMessagePreview
         FROM dbo.Message AS message
-        WHERE message.IntegrationId = @IntegrationId
+         WHERE message.TenantId = @TenantId
+           AND message.IntegrationId = @IntegrationId
           AND message.ConversationId = conversation.ConversationId
         ORDER BY message.CreatedAtUtc DESC, message.MessageId DESC
     ) AS lastMessage
@@ -89,11 +93,15 @@ BEGIN
         ON 1 = 1
     LEFT JOIN dbo.MessageOutbox AS outbox
         ON outbox.MessageId = message_page.MessageId
+       AND outbox.TenantId = conversation.TenantId
     LEFT JOIN dbo.MediaAttachment AS media
          ON media.MessageId = message_page.MessageId
+        AND media.TenantId = conversation.TenantId
     LEFT JOIN dbo.Transcript AS transcript
         ON transcript.MessageId = message_page.MessageId
-    WHERE conversation.IntegrationId = @IntegrationId
+       AND transcript.TenantId = conversation.TenantId
+    WHERE conversation.TenantId = @TenantId
+      AND conversation.IntegrationId = @IntegrationId
       AND conversation.ConversationId = @ConversationId
     ORDER BY
         CASE WHEN message_page.MessageId IS NULL THEN 1 ELSE 0 END,

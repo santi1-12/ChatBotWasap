@@ -37,7 +37,17 @@ BEGIN
         WHERE conversation.TenantId = @TenantId
           AND conversation.ConversationId = @ConversationId
     )
-        THROW 51040, 'The conversation is not available in the Tenant.', 1;
+         THROW 51040, 'The conversation is not available in the Tenant.', 1;
+
+    IF @ActorAdminId IS NOT NULL AND NOT EXISTS
+    (
+        SELECT 1
+        FROM dbo.TenantMembership AS membership
+        WHERE membership.TenantId = @TenantId
+          AND membership.AdminId = @ActorAdminId
+          AND membership.IsActive = 1
+    )
+        THROW 51041, 'The audit actor is not an active member of the Tenant.', 1;
 
     INSERT dbo.ConversationAuditEvent
         (TenantId, ConversationId, EventType, PreviousAttentionMode, NewAttentionMode,

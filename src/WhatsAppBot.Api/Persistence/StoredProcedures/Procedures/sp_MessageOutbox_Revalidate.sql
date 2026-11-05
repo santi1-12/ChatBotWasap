@@ -32,11 +32,17 @@ BEGIN
         @LifecycleStatus = conversation.LifecycleStatus,
         @ReplySource = message.ReplySource
     FROM dbo.MessageOutbox AS outbox WITH (UPDLOCK, HOLDLOCK)
-    INNER JOIN dbo.Message AS message ON message.MessageId = outbox.MessageId
+    INNER JOIN dbo.Message AS message
+        ON message.MessageId = outbox.MessageId
+       AND message.TenantId = outbox.TenantId
+       AND message.IntegrationId = outbox.IntegrationId
     INNER JOIN dbo.Conversation AS conversation WITH (UPDLOCK, HOLDLOCK)
         ON conversation.ConversationId = message.ConversationId
+       AND conversation.TenantId = outbox.TenantId
+       AND conversation.IntegrationId = outbox.IntegrationId
     INNER JOIN dbo.WhatsAppIntegration AS integration
         ON integration.IntegrationId = outbox.IntegrationId
+       AND integration.TenantId = outbox.TenantId
     WHERE outbox.MessageId = @MessageId
       AND outbox.TenantId = @TenantId
       AND outbox.IntegrationId = @IntegrationId
@@ -89,12 +95,18 @@ BEGIN
             DeliveryState = NULL,
             FailureCode = @OutcomeCode,
             UpdatedAtUtc = SYSUTCDATETIME()
-        WHERE MessageId = @MessageId AND Direction = N'Outbound';
+        WHERE TenantId = @TenantId
+          AND IntegrationId = @IntegrationId
+          AND MessageId = @MessageId
+          AND Direction = N'Outbound';
 
         UPDATE dbo.MessageOutbox
         SET State = N'Failed',
             UpdatedAtUtc = SYSUTCDATETIME()
-        WHERE MessageId = @MessageId AND State = N'Sending';
+        WHERE TenantId = @TenantId
+          AND IntegrationId = @IntegrationId
+          AND MessageId = @MessageId
+          AND State = N'Sending';
     END;
 
     COMMIT TRANSACTION;

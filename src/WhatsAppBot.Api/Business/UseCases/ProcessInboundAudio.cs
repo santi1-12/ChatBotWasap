@@ -91,6 +91,7 @@ public sealed class ProcessInboundAudio(
             TranscriptState.Failed,
             cancellationToken);
         await messageRepository.SetProcessingOutcomeAsync(
+            media.TenantId,
             media.MessageId,
             ProcessingState.Completed,
             outcomeCode == MessageOutcomeCodes.MediaTooLarge

@@ -27,7 +27,10 @@ public sealed class BotReplyResolver(
         }
 
         var candidates = await repository.ListActiveCandidatesAsync(
-            configuration.IntegrationId, cancellationToken);
+            configuration.TenantId
+                ?? throw new InvalidOperationException("Bot configuration is not assigned to a Tenant."),
+            configuration.IntegrationId,
+            cancellationToken);
         var match = matcher.Match(message, candidates);
         if (match is not null)
         {

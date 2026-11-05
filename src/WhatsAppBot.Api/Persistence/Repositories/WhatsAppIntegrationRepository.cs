@@ -15,13 +15,19 @@ public sealed class WhatsAppIntegrationRepository(
 {
     public async Task<WhatsAppIntegration> GetCurrentAsync(CancellationToken cancellationToken) =>
         await QueryCurrentAsync(
-            null, (await tenantContext.GetRequiredAsync(cancellationToken)).TenantId, cancellationToken)
+            null,
+            (await tenantContext.GetRequiredAsync(cancellationToken)).TenantId,
+            null,
+            cancellationToken)
         ?? throw new InvalidOperationException("The initial WhatsApp integration slot has not been provisioned.");
 
     public async Task<WhatsAppIntegration> GetByPhoneNumberIdAsync(
-        string phoneNumberId, CancellationToken cancellationToken) =>
-        await QueryCurrentAsync(phoneNumberId, null, cancellationToken)
-        ?? throw new InvalidOperationException("The webhook phone number is not connected to an integration.");
+        Guid tenantId,
+        Guid integrationId,
+        string phoneNumberId,
+        CancellationToken cancellationToken) =>
+        await QueryCurrentAsync(phoneNumberId, tenantId, integrationId, cancellationToken)
+            ?? throw new InvalidOperationException("The webhook phone number is not connected to an integration.");
 
     public Task SaveSignupResultAsync(MetaSignupResult result, CancellationToken cancellationToken) =>
         executor.ExecuteAsync(
@@ -99,7 +105,10 @@ public sealed class WhatsAppIntegrationRepository(
         };
 
     private Task<WhatsAppIntegration?> QueryCurrentAsync(
-        string? phoneNumberId, Guid? tenantId, CancellationToken cancellationToken) =>
+        string? phoneNumberId,
+        Guid? tenantId,
+        Guid? integrationId,
+        CancellationToken cancellationToken) =>
         executor.QuerySingleAsync(
             "dbo.sp_WhatsAppIntegration_GetCurrent",
             [
@@ -110,6 +119,10 @@ public sealed class WhatsAppIntegrationRepository(
                 new SqlParameter("@PhoneNumberId", SqlDbType.NVarChar, 64)
                 {
                     Value = (object?)phoneNumberId ?? DBNull.Value
+                },
+                new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier)
+                {
+                    Value = (object?)integrationId ?? DBNull.Value
                 }
             ],
             Map,

@@ -16,9 +16,12 @@ BEGIN
         StorageReference = @StorageReference,
         SizeBytes = NULL
     FROM dbo.MediaAttachment AS media
-    INNER JOIN dbo.Message AS message ON message.MessageId = media.MessageId
+    INNER JOIN dbo.Message AS message
+        ON message.MessageId = media.MessageId
+       AND message.TenantId = media.TenantId
     WHERE media.TenantId = @TenantId
       AND media.MessageId = @MessageId
+      AND message.TenantId = @TenantId
       AND message.ConversationId = @ConversationId;
 
     IF @@ROWCOUNT = 0

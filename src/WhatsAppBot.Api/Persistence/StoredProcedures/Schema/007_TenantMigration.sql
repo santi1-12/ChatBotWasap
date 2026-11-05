@@ -210,13 +210,6 @@ IF EXISTS (
       AND name = N'UX_WhatsAppIntegration_Tenant_PhoneNumberId_Active'
 )
     DROP INDEX UX_WhatsAppIntegration_Tenant_PhoneNumberId_Active ON dbo.WhatsAppIntegration;
-IF EXISTS (
-    SELECT 1 FROM sys.key_constraints
-    WHERE parent_object_id = OBJECT_ID(N'dbo.WhatsAppIntegration')
-      AND name = N'UQ_WhatsAppIntegration_Tenant_Integration'
-)
-    ALTER TABLE dbo.WhatsAppIntegration DROP CONSTRAINT UQ_WhatsAppIntegration_Tenant_Integration;
-
 ALTER TABLE dbo.WhatsAppIntegration ALTER COLUMN TenantId uniqueidentifier NOT NULL;
 
 IF NOT EXISTS (

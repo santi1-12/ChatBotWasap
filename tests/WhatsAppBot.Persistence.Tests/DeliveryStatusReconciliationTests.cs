@@ -114,13 +114,15 @@ public sealed class DeliveryStatusReconciliationTests(LocalDbFixture fixture)
                 connection, tenantId, integrationId, phoneNumberId, providerMessageId);
 
             var failed = await ApplyStatusAsync(
-                connection, phoneNumberId, providerMessageId, "failed", statusBase);
-            var failureEvidence = await ReadMessageStateAsync(connection, providerMessageId);
+                connection, tenantId, integrationId, phoneNumberId, providerMessageId, "failed", statusBase);
+            var failureEvidence = await ReadMessageStateAsync(connection, tenantId, providerMessageId);
             Assert.Equal("MetaDeliveryFailed", failureEvidence.FailureCode);
             var delivered = await ApplyStatusAsync(
-                connection, phoneNumberId, providerMessageId, "delivered", statusBase.AddSeconds(1));
+                connection, tenantId, integrationId, phoneNumberId, providerMessageId,
+                "delivered", statusBase.AddSeconds(1));
             var read = await ApplyStatusAsync(
-                connection, phoneNumberId, providerMessageId, "read", statusBase.AddSeconds(2));
+                connection, tenantId, integrationId, phoneNumberId, providerMessageId,
+                "read", statusBase.AddSeconds(2));
 
             Assert.True(failed.Applied);
             Assert.Equal("Failed", failed.DeliveryState);
@@ -129,7 +131,7 @@ public sealed class DeliveryStatusReconciliationTests(LocalDbFixture fixture)
             Assert.True(read.Applied);
             Assert.Equal("Read", read.DeliveryState);
 
-            var evidence = await ReadMessageStateAsync(connection, providerMessageId);
+            var evidence = await ReadMessageStateAsync(connection, tenantId, providerMessageId);
             Assert.Equal("Read", evidence.DeliveryState);
             Assert.Equal("MetaDeliveryFailed", evidence.FailureCode);
         }
@@ -157,11 +159,12 @@ public sealed class DeliveryStatusReconciliationTests(LocalDbFixture fixture)
                 deliveryState: "Sent", statusAtUtc: statusAt);
 
             var result = await ApplyStatusAsync(
-                connection, phoneNumberId, providerMessageId, "failed", statusAt.AddSeconds(-1));
+                connection, tenantId, integrationId, phoneNumberId, providerMessageId,
+                "failed", statusAt.AddSeconds(-1));
 
             Assert.False(result.Applied);
             Assert.Equal("Sent", result.DeliveryState);
-            var evidence = await ReadMessageStateAsync(connection, providerMessageId);
+            var evidence = await ReadMessageStateAsync(connection, tenantId, providerMessageId);
             Assert.Equal("Sent", evidence.DeliveryState);
             Assert.Null(evidence.FailureCode);
         }
@@ -256,6 +259,8 @@ public sealed class DeliveryStatusReconciliationTests(LocalDbFixture fixture)
             {
                 var result = await ApplyStatusAsync(
                     connection,
+                    tenantId,
+                    integrationId,
                     phoneNumberId,
                     providerMessageId,
                     deliveryEvent.Status,
@@ -263,7 +268,7 @@ public sealed class DeliveryStatusReconciliationTests(LocalDbFixture fixture)
                 Assert.Equal(deliveryEvent.Applied, result.Applied);
             }
 
-            var finalState = await ReadMessageStateAsync(connection, providerMessageId);
+            var finalState = await ReadMessageStateAsync(connection, tenantId, providerMessageId);
             Assert.Equal(expectedFinalState, finalState.DeliveryState);
             Assert.Equal(expectedFailureCode, finalState.FailureCode);
         }
@@ -275,6 +280,8 @@ public sealed class DeliveryStatusReconciliationTests(LocalDbFixture fixture)
 
     private static async Task<(bool Applied, string? DeliveryState)> ApplyStatusAsync(
         SqlConnection connection,
+        Guid tenantId,
+        Guid integrationId,
         string phoneNumberId,
         string providerMessageId,
         string status,
@@ -284,6 +291,8 @@ public sealed class DeliveryStatusReconciliationTests(LocalDbFixture fixture)
         {
             CommandType = CommandType.StoredProcedure
         };
+        command.Parameters.Add(new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId });
+        command.Parameters.Add(new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier) { Value = integrationId });
         command.Parameters.Add(new SqlParameter("@PhoneNumberId", SqlDbType.NVarChar, 64) { Value = phoneNumberId });
         command.Parameters.Add(new SqlParameter("@ProviderMessageId", SqlDbType.NVarChar, 256)
             { Value = providerMessageId });
@@ -300,11 +309,12 @@ public sealed class DeliveryStatusReconciliationTests(LocalDbFixture fixture)
     }
 
     private static async Task<(string DeliveryState, string? FailureCode)> ReadMessageStateAsync(
-        SqlConnection connection, string providerMessageId)
+        SqlConnection connection, Guid tenantId, string providerMessageId)
     {
         await using var command = new SqlCommand(
-            "SELECT DeliveryState, FailureCode FROM dbo.Message WHERE ProviderMessageId = @ProviderMessageId;",
+            "SELECT DeliveryState, FailureCode FROM dbo.Message WHERE TenantId = @TenantId AND ProviderMessageId = @ProviderMessageId;",
             connection);
+        command.Parameters.Add(new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId });
         command.Parameters.Add(new SqlParameter("@ProviderMessageId", SqlDbType.NVarChar, 256)
             { Value = providerMessageId });
         await using var reader = await command.ExecuteReaderAsync();
@@ -325,13 +335,15 @@ public sealed class DeliveryStatusReconciliationTests(LocalDbFixture fixture)
         await using var command = new SqlCommand(
             """
             DECLARE @ConversationId bigint =
-                (SELECT TOP (1) ConversationId FROM dbo.Message WHERE ProviderMessageId = @ProviderMessageId);
+                (SELECT TOP (1) ConversationId FROM dbo.Message
+                 WHERE TenantId = @TenantId AND ProviderMessageId = @ProviderMessageId);
             DECLARE @ContactId bigint =
-                (SELECT TOP (1) ContactId FROM dbo.Conversation WHERE ConversationId = @ConversationId);
-            DELETE dbo.Message WHERE ProviderMessageId = @ProviderMessageId;
-            IF @ConversationId IS NOT NULL DELETE dbo.Conversation WHERE ConversationId = @ConversationId;
-            IF @ContactId IS NOT NULL DELETE dbo.Contact WHERE ContactId = @ContactId;
-            DELETE dbo.WhatsAppIntegration WHERE IntegrationId = @IntegrationId;
+                (SELECT TOP (1) ContactId FROM dbo.Conversation
+                 WHERE TenantId = @TenantId AND ConversationId = @ConversationId);
+            DELETE dbo.Message WHERE TenantId = @TenantId AND ProviderMessageId = @ProviderMessageId;
+            IF @ConversationId IS NOT NULL DELETE dbo.Conversation WHERE TenantId = @TenantId AND ConversationId = @ConversationId;
+            IF @ContactId IS NOT NULL DELETE dbo.Contact WHERE TenantId = @TenantId AND ContactId = @ContactId;
+            DELETE dbo.WhatsAppIntegration WHERE TenantId = @TenantId AND IntegrationId = @IntegrationId;
             DELETE dbo.Tenant WHERE TenantId = @TenantId;
             """,
             connection);

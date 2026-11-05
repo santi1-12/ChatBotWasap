@@ -29,7 +29,8 @@ BEGIN
     DECLARE @MediaAttachmentId bigint;
     SELECT @MediaAttachmentId = MediaAttachmentId
     FROM dbo.MediaAttachment WITH (UPDLOCK, SERIALIZABLE)
-    WHERE MessageId = @MessageId;
+    WHERE MessageId = @MessageId
+      AND TenantId = @TenantId;
 
     IF @MediaAttachmentId IS NULL
     BEGIN
@@ -55,7 +56,8 @@ BEGIN
             StorageReference = NULL,
             AvailabilityState = N'Pending',
             ExpiresAtUtc = @ExpiresAtUtc
-        WHERE MediaAttachmentId = @MediaAttachmentId;
+        WHERE MediaAttachmentId = @MediaAttachmentId
+          AND TenantId = @TenantId;
     END;
 
     COMMIT TRANSACTION;
@@ -74,7 +76,10 @@ BEGIN
         media.CreatedAtUtc,
         media.ExpiresAtUtc
     FROM dbo.MediaAttachment AS media
-    INNER JOIN dbo.Message AS message ON message.MessageId = media.MessageId
-    WHERE media.MediaAttachmentId = @MediaAttachmentId;
+    INNER JOIN dbo.Message AS message
+        ON message.MessageId = media.MessageId
+       AND message.TenantId = media.TenantId
+    WHERE media.TenantId = @TenantId
+      AND media.MediaAttachmentId = @MediaAttachmentId;
 END;
 GO

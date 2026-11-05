@@ -29,6 +29,13 @@ public sealed class LocalDbFixture
         ConnectionString = connectionString;
         Executor = new StoredProcedureExecutor(
             new SqlConnectionFactory(connectionString), Options.Create(new SqlOptions()));
+        using var connection = new SqlConnection(connectionString);
+        connection.Open();
+        using var command = new SqlCommand(
+            "SELECT TOP (1) TenantId FROM dbo.BotConfiguration ORDER BY CreatedAtUtc, IntegrationId;",
+            connection);
+        TenantId = (Guid)(command.ExecuteScalar()
+            ?? throw new InvalidOperationException("The LocalDB test configuration has no TenantId."));
         ConfigurationRepository = new BotConfigurationRepository(Executor);
         FrequentResponseRepository = new FrequentResponseRepository(Executor);
         WebhookInboxRepository = new WebhookInboxRepository(Executor);
@@ -36,6 +43,7 @@ public sealed class LocalDbFixture
     }
 
     public string ConnectionString { get; }
+    public Guid TenantId { get; }
     public StoredProcedureExecutor Executor { get; }
     public BotConfigurationRepository ConfigurationRepository { get; }
     public FrequentResponseRepository FrequentResponseRepository { get; }

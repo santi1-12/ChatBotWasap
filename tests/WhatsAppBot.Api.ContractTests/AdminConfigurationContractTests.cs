@@ -208,7 +208,7 @@ internal sealed class FakeBotConfigurationService : IBotConfigurationService
         Task.FromResult(_configuration);
 
     public Task<BotConfiguration> GetForIntegrationAsync(
-        Guid integrationId, CancellationToken cancellationToken) => GetAsync(cancellationToken);
+        Guid tenantId, Guid integrationId, CancellationToken cancellationToken) => GetAsync(cancellationToken);
 
     public Task<BotConfiguration> UpdateAsync(
         bool isBotEnabled, BotReplyMode replyMode, CancellationToken cancellationToken)

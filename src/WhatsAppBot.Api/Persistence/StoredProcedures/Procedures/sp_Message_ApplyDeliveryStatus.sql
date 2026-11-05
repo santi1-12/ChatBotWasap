@@ -5,6 +5,8 @@ GO
 USE [WhatsAppBot];
 GO
 CREATE OR ALTER PROCEDURE dbo.sp_Message_ApplyDeliveryStatus
+    @TenantId uniqueidentifier,
+    @IntegrationId uniqueidentifier,
     @PhoneNumberId nvarchar(64),
     @ProviderMessageId nvarchar(256),
     @DeliveryStatus nvarchar(24),
@@ -31,9 +33,13 @@ BEGIN
         @CurrentStatusAtUtc = message.DeliveryStatusAtUtc,
         @CurrentFailureCode = message.FailureCode
     FROM dbo.Message AS message WITH (UPDLOCK, HOLDLOCK)
-    INNER JOIN dbo.WhatsAppIntegration AS integration
+        INNER JOIN dbo.WhatsAppIntegration AS integration
         ON integration.IntegrationId = message.IntegrationId
-    WHERE integration.PhoneNumberId = @PhoneNumberId
+       AND integration.TenantId = message.TenantId
+    WHERE message.TenantId = @TenantId
+      AND message.IntegrationId = @IntegrationId
+      AND integration.TenantId = @TenantId
+      AND integration.PhoneNumberId = @PhoneNumberId
       AND message.ProviderMessageId = @ProviderMessageId
       AND message.Direction = N'Outbound'
     ORDER BY message.MessageId DESC;
@@ -95,7 +101,9 @@ BEGIN
             END,
             DeliveryStatusAtUtc = @ProviderTimestampUtc,
             UpdatedAtUtc = SYSUTCDATETIME()
-        WHERE MessageId = @MessageId;
+        WHERE TenantId = @TenantId
+          AND IntegrationId = @IntegrationId
+          AND MessageId = @MessageId;
     END
     ELSE
         SET @NewState = @CurrentState;

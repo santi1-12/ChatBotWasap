@@ -34,8 +34,12 @@ public sealed class InboundMediaIngestionService(
             throw new BusinessValidationException("Only complete inbound media events can be ingested.");
         }
 
+        var tenantId = inboundEvent.TenantId
+            ?? throw new BusinessValidationException("The claimed webhook event has no TenantId.");
+        var integrationId = inboundEvent.IntegrationId
+            ?? throw new BusinessValidationException("The claimed webhook event has no IntegrationId.");
         var integration = await integrationRepository.GetByPhoneNumberIdAsync(
-            inboundEvent.PhoneNumberId, cancellationToken);
+            tenantId, integrationId, inboundEvent.PhoneNumberId, cancellationToken);
         if (!integration.IsActive ||
             integration.ConnectionState != ConnectionState.Connected ||
             !string.Equals(integration.PhoneNumberId, inboundEvent.PhoneNumberId, StringComparison.Ordinal))
@@ -43,8 +47,10 @@ public sealed class InboundMediaIngestionService(
             return null;
         }
 
-        var tenantId = integration.TenantId
-            ?? throw new InvalidOperationException("The WhatsApp integration is not assigned to a Tenant.");
+        if (integration.TenantId != tenantId)
+        {
+            throw new InvalidOperationException("The WhatsApp integration does not belong to the claimed Tenant.");
+        }
         var contactId = await contactRepository.UpsertWhatsAppAsync(
             integration.IntegrationId,
             tenantId,
@@ -52,7 +58,7 @@ public sealed class InboundMediaIngestionService(
             inboundEvent.ContactDisplayName,
             cancellationToken);
         var configuration = await botConfigurationService.GetForIntegrationAsync(
-            integration.IntegrationId, cancellationToken);
+            tenantId, integration.IntegrationId, cancellationToken);
         var conversationId = await conversationRepository.GetOrCreateAsync(
             integration.IntegrationId,
             tenantId,
@@ -61,7 +67,7 @@ public sealed class InboundMediaIngestionService(
             configuration.IsBotEnabled,
             cancellationToken);
         var inboundMessage = await messageRepository.InsertInboundAsync(
-            integration.IntegrationId, conversationId, inboundEvent, cancellationToken);
+            tenantId, integration.IntegrationId, conversationId, inboundEvent, cancellationToken);
         if (!inboundMessage.Inserted)
         {
             return null;
@@ -193,7 +199,7 @@ public sealed class InboundMediaIngestionService(
             cleanupSucceeded ? null : stored?.StorageReference,
             cancellationToken);
         await messageRepository.SetProcessingOutcomeAsync(
-            messageId, ProcessingState.Failed, outcomeCode, cancellationToken);
+            tenantId, messageId, ProcessingState.Failed, outcomeCode, cancellationToken);
     }
 
     private static bool TryGetMediaKind(

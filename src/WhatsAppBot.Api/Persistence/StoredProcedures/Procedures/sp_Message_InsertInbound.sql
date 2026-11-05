@@ -2,6 +2,7 @@ SET ANSI_NULLS ON;
 SET QUOTED_IDENTIFIER ON;
 GO
 CREATE OR ALTER PROCEDURE dbo.sp_Message_InsertInbound
+    @TenantId uniqueidentifier,
     @IntegrationId uniqueidentifier,
     @ConversationId bigint,
     @ProviderMessageId nvarchar(256),
@@ -16,7 +17,9 @@ BEGIN
     DECLARE @MessageId bigint;
     SELECT @MessageId = MessageId
     FROM dbo.Message WITH (UPDLOCK, SERIALIZABLE)
-    WHERE IntegrationId = @IntegrationId AND ProviderMessageId = @ProviderMessageId;
+    WHERE TenantId = @TenantId
+      AND IntegrationId = @IntegrationId
+      AND ProviderMessageId = @ProviderMessageId;
     IF @MessageId IS NOT NULL
     BEGIN
         COMMIT TRANSACTION;
@@ -32,12 +35,17 @@ BEGIN
         N'Received', @ProviderTimestampUtc, conversation.TenantId, N'Customer', N'MetaCloudApi'
     FROM dbo.Conversation AS conversation
     WHERE conversation.ConversationId = @ConversationId
+      AND conversation.TenantId = @TenantId
       AND conversation.IntegrationId = @IntegrationId;
     SET @MessageId = CONVERT(bigint, SCOPE_IDENTITY());
+    IF @MessageId IS NULL
+        THROW 51031, 'The inbound message conversation does not belong to the requested Tenant.', 1;
     UPDATE dbo.Conversation
     SET LastMessageAtUtc = CASE WHEN LastMessageAtUtc < @ProviderTimestampUtc
                                 THEN @ProviderTimestampUtc ELSE LastMessageAtUtc END
-    WHERE ConversationId = @ConversationId;
+    WHERE TenantId = @TenantId
+      AND IntegrationId = @IntegrationId
+      AND ConversationId = @ConversationId;
     COMMIT TRANSACTION;
     SELECT CONVERT(bit, 1) AS Inserted, @MessageId AS MessageId;
 END;

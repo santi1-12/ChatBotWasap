@@ -2,6 +2,7 @@ SET ANSI_NULLS ON;
 SET QUOTED_IDENTIFIER ON;
 GO
 CREATE OR ALTER PROCEDURE dbo.sp_MessageOutbox_SetState
+    @TenantId uniqueidentifier,
     @MessageId bigint,
     @State nvarchar(16),
     @RetryDelaySeconds int = 0
@@ -13,6 +14,7 @@ BEGIN
         NextAttemptAtUtc = DATEADD(second, CASE WHEN @RetryDelaySeconds BETWEEN 0 AND 3600
                                                 THEN @RetryDelaySeconds ELSE 3600 END, SYSUTCDATETIME()),
         UpdatedAtUtc = SYSUTCDATETIME()
-    WHERE MessageId = @MessageId;
+    WHERE TenantId = @TenantId
+      AND MessageId = @MessageId;
 END;
 GO

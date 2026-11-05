@@ -22,13 +22,20 @@ BEGIN
     )
         THROW 51044, 'The transcript message does not belong to the requested Tenant and Conversation.', 1;
 
-    IF EXISTS (SELECT 1 FROM dbo.Transcript WHERE MessageId = @MessageId)
+    IF EXISTS
+    (
+        SELECT 1
+        FROM dbo.Transcript
+        WHERE MessageId = @MessageId
+          AND TenantId = @TenantId
+    )
         UPDATE dbo.Transcript
         SET TenantId = @TenantId,
             TranscriptText = NULL,
             State = N'Pending',
             UpdatedAtUtc = SYSUTCDATETIME()
-        WHERE MessageId = @MessageId;
+        WHERE MessageId = @MessageId
+          AND TenantId = @TenantId;
     ELSE
         INSERT dbo.Transcript(MessageId, TenantId, TranscriptText, State)
         VALUES (@MessageId, @TenantId, NULL, N'Pending');

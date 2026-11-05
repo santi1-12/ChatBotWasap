@@ -12,12 +12,17 @@ public sealed class MetaMessageSender(
     IMetaCloudApiClient cloudApiClient) : IMetaWhatsAppClient
 {
     public async Task<MetaMessageSendResult> SendTextAsync(
-        string phoneNumberId, string recipient, string text, CancellationToken cancellationToken)
+        Guid tenantId,
+        Guid integrationId,
+        string phoneNumberId,
+        string recipient,
+        string text,
+        CancellationToken cancellationToken)
     {
         try
         {
             var integration = await integrationRepository.GetByPhoneNumberIdAsync(
-                phoneNumberId, cancellationToken);
+                tenantId, integrationId, phoneNumberId, cancellationToken);
             if (!integration.IsActive ||
                 integration.ConnectionState != ConnectionState.Connected ||
                 !string.Equals(integration.PhoneNumberId, phoneNumberId, StringComparison.Ordinal) ||

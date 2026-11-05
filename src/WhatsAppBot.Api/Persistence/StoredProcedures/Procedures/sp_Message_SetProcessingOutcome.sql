@@ -2,6 +2,7 @@ SET ANSI_NULLS ON;
 SET QUOTED_IDENTIFIER ON;
 GO
 CREATE OR ALTER PROCEDURE dbo.sp_Message_SetProcessingOutcome
+    @TenantId uniqueidentifier,
     @MessageId bigint,
     @ProcessingState nvarchar(24),
     @SafeOutcomeCode nvarchar(100) = NULL
@@ -12,6 +13,8 @@ BEGIN
     SET ProcessingState = @ProcessingState,
         FailureCode = @SafeOutcomeCode,
         UpdatedAtUtc = SYSUTCDATETIME()
-    WHERE MessageId = @MessageId AND Direction = N'Inbound';
+    WHERE TenantId = @TenantId
+      AND MessageId = @MessageId
+      AND Direction = N'Inbound';
 END;
 GO

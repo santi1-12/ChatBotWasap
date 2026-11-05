@@ -9,6 +9,7 @@ namespace WhatsAppBot.Api.Persistence.Repositories;
 public sealed class MessageOutboxRepository(StoredProcedureExecutor executor) : IMessageOutboxRepository
 {
     public async Task<OutboundMessageInsertResult> CreatePendingAsync(
+        Guid tenantId,
         long inboundMessageId,
         Guid integrationId,
         long conversationId,
@@ -19,6 +20,7 @@ public sealed class MessageOutboxRepository(StoredProcedureExecutor executor) : 
         await executor.QuerySingleAsync(
             "dbo.sp_Message_CreateOutboundPending",
             [
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId },
                 new SqlParameter("@InboundMessageId", SqlDbType.BigInt) { Value = inboundMessageId },
                 new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier) { Value = integrationId },
                 new SqlParameter("@ConversationId", SqlDbType.BigInt) { Value = conversationId },

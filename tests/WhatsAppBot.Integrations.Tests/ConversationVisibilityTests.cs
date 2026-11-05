@@ -21,6 +21,8 @@ namespace WhatsAppBot.Integrations.Tests;
 
 public sealed class ConversationVisibilityTests
 {
+    private static readonly Guid TenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+
     [Fact]
     public async Task ListConversations_ReturnsEmptyPageForActiveIntegration()
     {
@@ -30,7 +32,7 @@ public sealed class ConversationVisibilityTests
             Page = new ConversationPage([], 1, 25, 0)
         };
         var useCase = new ListConversations(
-            new FakeIntegrationRepository(integrationId), repository);
+            new FakeIntegrationRepository(integrationId), repository, new FakeTenantContext(TenantId));
 
         var result = await useCase.ExecuteAsync(1, 25, CancellationToken.None);
 
@@ -49,7 +51,7 @@ public sealed class ConversationVisibilityTests
                 [CreateSummary(42, "Customer", "Latest question")], 2, 25, 26)
         };
         var useCase = new ListConversations(
-            new FakeIntegrationRepository(integrationId), repository);
+            new FakeIntegrationRepository(integrationId), repository, new FakeTenantContext(TenantId));
 
         var result = await useCase.ExecuteAsync(2, 25, CancellationToken.None);
 
@@ -73,7 +75,7 @@ public sealed class ConversationVisibilityTests
             ]);
         var repository = new FakeMessageRepository(integrationId, detail);
         var useCase = new GetConversationDetail(
-            new FakeIntegrationRepository(integrationId), repository);
+            new FakeIntegrationRepository(integrationId), repository, new FakeTenantContext(TenantId));
 
         var result = await useCase.ExecuteAsync(42, null, CancellationToken.None);
 
@@ -91,7 +93,8 @@ public sealed class ConversationVisibilityTests
         var integrationId = Guid.NewGuid();
         var useCase = new GetConversationDetail(
             new FakeIntegrationRepository(integrationId),
-            new FakeMessageRepository(integrationId, null));
+            new FakeMessageRepository(integrationId, null),
+            new FakeTenantContext(TenantId));
 
         await Assert.ThrowsAsync<BusinessNotFoundException>(() =>
             useCase.ExecuteAsync(404, null, CancellationToken.None));
@@ -106,7 +109,7 @@ public sealed class ConversationVisibilityTests
             otherIntegrationId,
             new ConversationDetailRecord(CreateSummary(99, "Other tenant", null), []));
         var useCase = new GetConversationDetail(
-            new FakeIntegrationRepository(currentIntegrationId), repository);
+            new FakeIntegrationRepository(currentIntegrationId), repository, new FakeTenantContext(TenantId));
 
         await Assert.ThrowsAsync<BusinessNotFoundException>(() =>
             useCase.ExecuteAsync(99, null, CancellationToken.None));
@@ -221,6 +224,16 @@ public sealed class ConversationVisibilityTests
         null,
         DateTimeOffset.Parse($"2026-10-22T12:0{id}:00Z"));
 
+    private sealed class FakeTenantContext(Guid tenantId) : ITenantContext
+    {
+        public TenantScope? Current => null;
+
+        public Task<TenantScope> GetRequiredAsync(CancellationToken cancellationToken) =>
+            Task.FromResult(new TenantScope(
+                new TenantRecord(tenantId, "Test", true, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow),
+                new TenantMembershipRecord(1, tenantId, 1, true, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)));
+    }
+
     private sealed class FakeIntegrationRepository(Guid integrationId) : IWhatsAppIntegrationRepository
     {
         public Task<WhatsAppIntegration> GetCurrentAsync(CancellationToken cancellationToken) =>
@@ -229,7 +242,10 @@ public sealed class ConversationVisibilityTests
                 DateTimeOffset.UtcNow, true));
 
         public Task<WhatsAppIntegration> GetByPhoneNumberIdAsync(
-            string phoneNumberId, CancellationToken cancellationToken) => GetCurrentAsync(cancellationToken);
+            Guid tenantId,
+            Guid integrationId,
+            string phoneNumberId,
+            CancellationToken cancellationToken) => GetCurrentAsync(cancellationToken);
 
         public Task SaveSignupResultAsync(MetaSignupResult result, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
@@ -246,7 +262,7 @@ public sealed class ConversationVisibilityTests
         public Guid? RequestedIntegrationId { get; private set; }
 
         public Task<ConversationPage> ListAsync(
-            Guid integrationId, int page, int pageSize, CancellationToken cancellationToken)
+            Guid tenantId, Guid integrationId, int page, int pageSize, CancellationToken cancellationToken)
         {
             RequestedIntegrationId = integrationId;
             return Task.FromResult(Page);
@@ -265,6 +281,7 @@ public sealed class ConversationVisibilityTests
         public int RequestedPageSize { get; private set; }
 
         public Task<ConversationDetailRecord?> GetHistoryAsync(
+            Guid tenantId,
             Guid integrationId,
             long conversationId,
             long? beforeMessageId,
@@ -277,13 +294,14 @@ public sealed class ConversationVisibilityTests
         }
 
         public Task<InboundMessageInsertResult> InsertInboundAsync(
-            Guid integrationId, long conversationId, NormalizedMetaEvent inboundEvent,
+            Guid tenantId, Guid integrationId, long conversationId, NormalizedMetaEvent inboundEvent,
             CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task SetProcessingOutcomeAsync(
-            long messageId, ProcessingState state, string? safeOutcomeCode,
+            Guid tenantId, long messageId, ProcessingState state, string? safeOutcomeCode,
             CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<DeliveryStatusApplyResult> ApplyDeliveryStatusAsync(
-            NormalizedMetaEvent statusEvent, CancellationToken cancellationToken) =>
+            Guid tenantId, Guid integrationId, NormalizedMetaEvent statusEvent,
+            CancellationToken cancellationToken) =>
             throw new NotSupportedException();
         public Task<IReadOnlyList<OutboundMessageWorkItem>> ClaimOutboxBatchAsync(
             int batchSize, CancellationToken cancellationToken) => throw new NotSupportedException();
@@ -291,10 +309,10 @@ public sealed class ConversationVisibilityTests
             OutboundMessageWorkItem item, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
         public Task SetOutboxResultAsync(
-            long messageId, MetaMessageSendResult result, bool isTerminal,
+            Guid tenantId, long messageId, MetaMessageSendResult result, bool isTerminal,
             CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task SetOutboxStateAsync(
-            long messageId, MessageOutboxState state, int retryDelaySeconds,
+            Guid tenantId, long messageId, MessageOutboxState state, int retryDelaySeconds,
             CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 

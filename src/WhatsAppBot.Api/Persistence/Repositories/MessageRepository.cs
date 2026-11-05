@@ -13,6 +13,7 @@ public sealed class MessageRepository(StoredProcedureExecutor executor) : IMessa
         ConversationMessageRecord? Message);
 
     public async Task<ConversationDetailRecord?> GetHistoryAsync(
+        Guid tenantId,
         Guid integrationId,
         long conversationId,
         long? beforeMessageId,
@@ -22,6 +23,7 @@ public sealed class MessageRepository(StoredProcedureExecutor executor) : IMessa
         var rows = await executor.QueryAsync(
             "dbo.sp_Conversation_GetDetail",
             [
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId },
                 new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier) { Value = integrationId },
                 new SqlParameter("@ConversationId", SqlDbType.BigInt) { Value = conversationId },
                 new SqlParameter("@BeforeMessageId", SqlDbType.BigInt)
@@ -42,6 +44,7 @@ public sealed class MessageRepository(StoredProcedureExecutor executor) : IMessa
     }
 
     public async Task<InboundMessageInsertResult> InsertInboundAsync(
+        Guid tenantId,
         Guid integrationId,
         long conversationId,
         NormalizedMetaEvent inboundEvent,
@@ -50,6 +53,7 @@ public sealed class MessageRepository(StoredProcedureExecutor executor) : IMessa
         var result = await executor.QuerySingleAsync(
             "dbo.sp_Message_InsertInbound",
             [
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId },
                 new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier) { Value = integrationId },
                 new SqlParameter("@ConversationId", SqlDbType.BigInt) { Value = conversationId },
                 new SqlParameter("@ProviderMessageId", SqlDbType.NVarChar, 256)
@@ -69,6 +73,7 @@ public sealed class MessageRepository(StoredProcedureExecutor executor) : IMessa
     }
 
     public Task SetProcessingOutcomeAsync(
+        Guid tenantId,
         long messageId,
         ProcessingState state,
         string? safeOutcomeCode,
@@ -76,6 +81,7 @@ public sealed class MessageRepository(StoredProcedureExecutor executor) : IMessa
         executor.ExecuteAsync(
             "dbo.sp_Message_SetProcessingOutcome",
             [
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId },
                 new SqlParameter("@MessageId", SqlDbType.BigInt) { Value = messageId },
                 new SqlParameter("@ProcessingState", SqlDbType.NVarChar, 24) { Value = state.ToString() },
                 new SqlParameter("@SafeOutcomeCode", SqlDbType.NVarChar, 100)
@@ -123,6 +129,7 @@ public sealed class MessageRepository(StoredProcedureExecutor executor) : IMessa
         ?? throw new InvalidOperationException("The outbox revalidation did not return a result.");
 
     public Task SetOutboxResultAsync(
+        Guid tenantId,
         long messageId,
         MetaMessageSendResult result,
         bool isTerminal,
@@ -130,6 +137,7 @@ public sealed class MessageRepository(StoredProcedureExecutor executor) : IMessa
         executor.ExecuteAsync(
             "dbo.sp_Message_UpdateOutboundProviderResult",
             [
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId },
                 new SqlParameter("@MessageId", SqlDbType.BigInt) { Value = messageId },
                 new SqlParameter("@Succeeded", SqlDbType.Bit) { Value = result.Succeeded },
                 new SqlParameter("@ProviderMessageId", SqlDbType.NVarChar, 256)
@@ -141,6 +149,7 @@ public sealed class MessageRepository(StoredProcedureExecutor executor) : IMessa
             cancellationToken);
 
     public Task SetOutboxStateAsync(
+        Guid tenantId,
         long messageId,
         MessageOutboxState state,
         int retryDelaySeconds,
@@ -148,6 +157,7 @@ public sealed class MessageRepository(StoredProcedureExecutor executor) : IMessa
         executor.ExecuteAsync(
             "dbo.sp_MessageOutbox_SetState",
             [
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId },
                 new SqlParameter("@MessageId", SqlDbType.BigInt) { Value = messageId },
                 new SqlParameter("@State", SqlDbType.NVarChar, 16) { Value = state.ToString() },
                 new SqlParameter("@RetryDelaySeconds", SqlDbType.Int) { Value = retryDelaySeconds }
@@ -155,10 +165,14 @@ public sealed class MessageRepository(StoredProcedureExecutor executor) : IMessa
             cancellationToken);
 
     public async Task<DeliveryStatusApplyResult> ApplyDeliveryStatusAsync(
+        Guid tenantId,
+        Guid integrationId,
         NormalizedMetaEvent statusEvent, CancellationToken cancellationToken) =>
         await executor.QuerySingleAsync(
             "dbo.sp_Message_ApplyDeliveryStatus",
             [
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId },
+                new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier) { Value = integrationId },
                 new SqlParameter("@PhoneNumberId", SqlDbType.NVarChar, 64)
                     { Value = statusEvent.PhoneNumberId },
                 new SqlParameter("@ProviderMessageId", SqlDbType.NVarChar, 256)

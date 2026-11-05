@@ -209,7 +209,10 @@ public sealed class InboundTextProcessingTests
             bool inboundAlreadyPersisted = false)
         {
             var integrationId = Guid.NewGuid();
-            Configuration = new FakeBotConfigurationService(new BotConfiguration(integrationId, botEnabled, mode));
+            Configuration = new FakeBotConfigurationService(new BotConfiguration(integrationId, botEnabled, mode)
+            {
+                TenantId = TenantId
+            });
             Integration = new FakeIntegrationRepository(new WhatsAppIntegration(
                 integrationId, "waba-1", "phone-1", "+15551234567", "Test", ConnectionState.Connected,
                 DateTimeOffset.UtcNow, true)
@@ -233,7 +236,11 @@ public sealed class InboundTextProcessingTests
                 Integration, Contacts, Conversations, Messages, Conversations, Configuration, resolver,
                 Ai, new AiContextBuilder(), Options.Create(new AiOptions()), Outbox,
                 new WhatsAppMessagingPolicy(), new FakeClock(Now), Handoff);
-            Inbound = InboundEvent(Now.AddHours(-hoursAgo));
+            Inbound = InboundEvent(Now.AddHours(-hoursAgo)) with
+            {
+                IntegrationId = integrationId,
+                TenantId = TenantId
+            };
         }
 
         public FakeIntegrationRepository Integration { get; }
@@ -260,7 +267,10 @@ public sealed class InboundTextProcessingTests
         public Task<WhatsAppIntegration> GetCurrentAsync(CancellationToken cancellationToken) =>
             Task.FromResult(integration);
         public Task<WhatsAppIntegration> GetByPhoneNumberIdAsync(
-            string phoneNumberId, CancellationToken cancellationToken) => GetCurrentAsync(cancellationToken);
+            Guid tenantId,
+            Guid integrationId,
+            string phoneNumberId,
+            CancellationToken cancellationToken) => GetCurrentAsync(cancellationToken);
         public Task SaveSignupResultAsync(MetaSignupResult result, CancellationToken cancellationToken) =>
             throw new NotImplementedException();
         public Task SetConnectionStateAsync(
@@ -288,7 +298,7 @@ public sealed class InboundTextProcessingTests
             CancellationToken cancellationToken) => Task.FromResult(6L);
 
         public Task<ConversationPage> ListAsync(
-            Guid integrationId, int page, int pageSize, CancellationToken cancellationToken) =>
+            Guid tenantId, Guid integrationId, int page, int pageSize, CancellationToken cancellationToken) =>
             throw new NotImplementedException();
 
         public Task<ConversationStateRecord?> GetStateAsync(
@@ -340,6 +350,7 @@ public sealed class InboundTextProcessingTests
         public bool Inserted { get; init; } = true;
 
         public Task<ConversationDetailRecord?> GetHistoryAsync(
+            Guid tenantId,
             Guid integrationId,
             long conversationId,
             long? beforeMessageId,
@@ -348,7 +359,7 @@ public sealed class InboundTextProcessingTests
             Task.FromResult<ConversationDetailRecord?>(null);
 
         public Task<InboundMessageInsertResult> InsertInboundAsync(
-            Guid integrationId, long conversationId, NormalizedMetaEvent inboundEvent,
+            Guid tenantId, Guid integrationId, long conversationId, NormalizedMetaEvent inboundEvent,
             CancellationToken cancellationToken)
         {
             InboundPersisted++;
@@ -356,6 +367,7 @@ public sealed class InboundTextProcessingTests
         }
 
         public Task SetProcessingOutcomeAsync(
+            Guid tenantId,
             long messageId, ProcessingState state, string? safeOutcomeCode, CancellationToken cancellationToken)
         {
             OutcomeCode = safeOutcomeCode;
@@ -363,6 +375,8 @@ public sealed class InboundTextProcessingTests
         }
 
         public Task<DeliveryStatusApplyResult> ApplyDeliveryStatusAsync(
+            Guid tenantId,
+            Guid integrationId,
             NormalizedMetaEvent statusEvent, CancellationToken cancellationToken) =>
             throw new NotImplementedException();
 
@@ -372,9 +386,11 @@ public sealed class InboundTextProcessingTests
             OutboundMessageWorkItem item, CancellationToken cancellationToken) =>
             throw new NotImplementedException();
         public Task SetOutboxResultAsync(
+            Guid tenantId,
             long messageId, MetaMessageSendResult result, bool isTerminal, CancellationToken cancellationToken) =>
             throw new NotImplementedException();
         public Task SetOutboxStateAsync(
+            Guid tenantId,
             long messageId, MessageOutboxState state, int retryDelaySeconds, CancellationToken cancellationToken) =>
             throw new NotImplementedException();
     }
@@ -386,6 +402,7 @@ public sealed class InboundTextProcessingTests
         public List<string> Texts { get; } = [];
 
         public Task<OutboundMessageInsertResult> CreatePendingAsync(
+            Guid tenantId,
             long inboundMessageId, Guid integrationId, long conversationId, string text,
             ReplySource source, long? frequentResponseId, CancellationToken cancellationToken)
         {
@@ -406,7 +423,7 @@ public sealed class InboundTextProcessingTests
         public Task<BotConfiguration> GetAsync(CancellationToken cancellationToken) =>
             Task.FromResult(configuration);
         public Task<BotConfiguration> GetForIntegrationAsync(
-            Guid integrationId, CancellationToken cancellationToken) => GetAsync(cancellationToken);
+            Guid tenantId, Guid integrationId, CancellationToken cancellationToken) => GetAsync(cancellationToken);
         public Task<BotConfiguration> UpdateAsync(
             bool isBotEnabled, BotReplyMode replyMode, CancellationToken cancellationToken) =>
             throw new NotImplementedException();
@@ -418,28 +435,30 @@ public sealed class InboundTextProcessingTests
         public int CandidateQueries { get; private set; }
 
         public Task<IReadOnlyList<FrequentResponseRecord>> ListActiveCandidatesAsync(
-            Guid integrationId, CancellationToken cancellationToken)
+            Guid tenantId, Guid integrationId, CancellationToken cancellationToken)
         {
             CandidateQueries++;
             return Task.FromResult(candidates);
         }
         public Task<FrequentResponsePage> ListAsync(
-            Guid integrationId, int page, int pageSize, CancellationToken cancellationToken) =>
+            Guid tenantId, Guid integrationId, int page, int pageSize, CancellationToken cancellationToken) =>
             throw new NotImplementedException();
         public Task<FrequentResponseRecord?> GetAsync(
-            Guid integrationId, long frequentResponseId, CancellationToken cancellationToken) =>
+            Guid tenantId, Guid integrationId, long frequentResponseId, CancellationToken cancellationToken) =>
             throw new NotImplementedException();
         public Task<FrequentResponseRecord> CreateAsync(
-            Guid integrationId, FrequentResponseCommand command, CancellationToken cancellationToken) =>
+            Guid tenantId, Guid integrationId, FrequentResponseCommand command,
+            CancellationToken cancellationToken) =>
             throw new NotImplementedException();
         public Task<FrequentResponseRecord?> UpdateAsync(
-            Guid integrationId, long frequentResponseId, FrequentResponseCommand command,
+            Guid tenantId, Guid integrationId, long frequentResponseId, FrequentResponseCommand command,
             CancellationToken cancellationToken) => throw new NotImplementedException();
         public Task<bool> SetActiveAsync(
-            Guid integrationId, long frequentResponseId, bool isActive, CancellationToken cancellationToken) =>
+            Guid tenantId, Guid integrationId, long frequentResponseId, bool isActive,
+            CancellationToken cancellationToken) =>
             throw new NotImplementedException();
         public Task<bool> DeleteAsync(
-            Guid integrationId, long frequentResponseId, CancellationToken cancellationToken) =>
+            Guid tenantId, Guid integrationId, long frequentResponseId, CancellationToken cancellationToken) =>
             throw new NotImplementedException();
     }
 }

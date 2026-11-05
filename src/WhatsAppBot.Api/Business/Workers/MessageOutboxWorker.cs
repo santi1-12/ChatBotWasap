@@ -64,7 +64,13 @@ public sealed class MessageOutboxWorker(
 
                 var decision = policy.Evaluate(item.LastCustomerMessageAtUtc, clock.UtcNow);
                 var result = decision.IsAllowed
-                    ? await sender.SendTextAsync(item.PhoneNumberId, item.Recipient, item.Text, itemDeadline.Token)
+                    ? await sender.SendTextAsync(
+                        item.TenantId,
+                        item.IntegrationId,
+                        item.PhoneNumberId,
+                        item.Recipient,
+                        item.Text,
+                        itemDeadline.Token)
                     : new MetaMessageSendResult(false, null, decision.OutcomeCode, false);
                 await PersistResultAsync(messages, item, result, workerOptions, cancellationToken);
             }
@@ -109,7 +115,8 @@ public sealed class MessageOutboxWorker(
                        item.AttemptCount >= workerOptions.MaximumAttempts;
         try
         {
-            await messages.SetOutboxResultAsync(item.MessageId, result, terminal, cancellationToken);
+            await messages.SetOutboxResultAsync(
+                item.TenantId, item.MessageId, result, terminal, cancellationToken);
             if (!terminal)
             {
                 var exponent = Math.Min(item.AttemptCount - 1, 9);
@@ -117,7 +124,7 @@ public sealed class MessageOutboxWorker(
                     3600,
                     workerOptions.RetryBaseDelaySeconds * (1 << Math.Max(exponent, 0)));
                 await messages.SetOutboxStateAsync(
-                    item.MessageId, MessageOutboxState.Pending, delay, cancellationToken);
+                    item.TenantId, item.MessageId, MessageOutboxState.Pending, delay, cancellationToken);
             }
         }
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested)

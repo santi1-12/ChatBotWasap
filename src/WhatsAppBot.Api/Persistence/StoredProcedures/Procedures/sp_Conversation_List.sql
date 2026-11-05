@@ -5,6 +5,7 @@ GO
 USE [WhatsAppBot];
 GO
 CREATE OR ALTER PROCEDURE dbo.sp_Conversation_List
+    @TenantId uniqueidentifier,
     @IntegrationId uniqueidentifier,
     @Page int,
     @PageSize int
@@ -43,6 +44,7 @@ BEGIN
         FROM dbo.Conversation AS conversation
         INNER JOIN dbo.Contact AS contact
             ON contact.ContactId = conversation.ContactId
+           AND contact.TenantId = @TenantId
            AND contact.IntegrationId = @IntegrationId
         OUTER APPLY
         (
@@ -54,11 +56,13 @@ BEGIN
                     ELSE message.ContentText
                 END AS LastMessagePreview
             FROM dbo.Message AS message
-            WHERE message.IntegrationId = @IntegrationId
+             WHERE message.TenantId = @TenantId
+               AND message.IntegrationId = @IntegrationId
               AND message.ConversationId = conversation.ConversationId
             ORDER BY message.CreatedAtUtc DESC, message.MessageId DESC
         ) AS lastMessage
-        WHERE conversation.IntegrationId = @IntegrationId
+         WHERE conversation.TenantId = @TenantId
+           AND conversation.IntegrationId = @IntegrationId
         ORDER BY conversation.LastMessageAtUtc DESC, conversation.ConversationId DESC
         OFFSET (@Page - 1) * @PageSize ROWS FETCH NEXT @PageSize ROWS ONLY
     ) AS page
@@ -68,8 +72,10 @@ BEGIN
         FROM dbo.Conversation AS conversation
         INNER JOIN dbo.Contact AS contact
             ON contact.ContactId = conversation.ContactId
+           AND contact.TenantId = @TenantId
            AND contact.IntegrationId = @IntegrationId
-        WHERE conversation.IntegrationId = @IntegrationId
+         WHERE conversation.TenantId = @TenantId
+           AND conversation.IntegrationId = @IntegrationId
     ) AS totals ON 1 = 1;
 END;
 GO

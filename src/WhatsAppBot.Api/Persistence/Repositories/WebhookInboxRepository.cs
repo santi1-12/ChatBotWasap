@@ -28,14 +28,23 @@ public sealed class WebhookInboxRepository(StoredProcedureExecutor executor) : I
     public async Task<IReadOnlyList<NormalizedMetaEvent>> ClaimBatchAsync(
         int batchSize, CancellationToken cancellationToken) =>
         (await executor.QueryAsync(
-            "dbo.sp_WebhookInbox_ClaimBatch",
-            [new SqlParameter("@BatchSize", SqlDbType.Int) { Value = batchSize }],
-            reader => JsonSerializer.Deserialize<NormalizedMetaEvent>(
-                          reader.GetString(reader.GetOrdinal("NormalizedEventJson")))
-                      ?? throw new InvalidDataException("A normalized webhook event could not be read."),
-            cancellationToken)).ToArray();
+             "dbo.sp_WebhookInbox_ClaimBatch",
+             [new SqlParameter("@BatchSize", SqlDbType.Int) { Value = batchSize }],
+             reader =>
+             {
+                 var webhookEvent = JsonSerializer.Deserialize<NormalizedMetaEvent>(
+                     reader.GetString(reader.GetOrdinal("NormalizedEventJson")))
+                     ?? throw new InvalidDataException("A normalized webhook event could not be read.");
+                 return webhookEvent with
+                 {
+                     IntegrationId = reader.GetGuid(reader.GetOrdinal("IntegrationId")),
+                     TenantId = reader.GetGuid(reader.GetOrdinal("TenantId"))
+                 };
+             },
+             cancellationToken)).ToArray();
 
     public Task SetStateAsync(
+        Guid tenantId,
         string eventKey,
         WebhookInboxState state,
         string? safeFailureCode,
@@ -43,6 +52,7 @@ public sealed class WebhookInboxRepository(StoredProcedureExecutor executor) : I
         executor.ExecuteAsync(
             "dbo.sp_WebhookInbox_SetState",
             [
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId },
                 new SqlParameter("@EventKey", SqlDbType.NVarChar, 256) { Value = eventKey },
                 new SqlParameter("@State", SqlDbType.NVarChar, 16) { Value = state.ToString() },
                 new SqlParameter("@SafeFailureCode", SqlDbType.NVarChar, 100)

@@ -20,6 +20,7 @@ BEGIN
     INNER JOIN dbo.Message AS message ON message.MessageId = transcript.MessageId
     WHERE transcript.TenantId = @TenantId
       AND transcript.MessageId = @MessageId
+      AND message.TenantId = @TenantId
       AND message.ConversationId = @ConversationId;
 
     IF @@ROWCOUNT = 0

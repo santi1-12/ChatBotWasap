@@ -108,5 +108,5 @@ public sealed class ProcessInboundImage(
         string? outcomeCode,
         CancellationToken cancellationToken) =>
         messageRepository.SetProcessingOutcomeAsync(
-            media.MessageId, ProcessingState.Completed, outcomeCode, cancellationToken);
+            media.TenantId, media.MessageId, ProcessingState.Completed, outcomeCode, cancellationToken);
 }

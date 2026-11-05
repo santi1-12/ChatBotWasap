@@ -14,6 +14,8 @@ public sealed record NormalizedMetaEvent(
     DateTimeOffset? ProviderTimestampUtc,
     string? DeliveryStatus)
 {
+    public Guid? IntegrationId { get; init; }
+    public Guid? TenantId { get; init; }
     public MessageType? MessageType { get; init; }
     public string? MediaId { get; init; }
     public string? MediaMimeType { get; init; }

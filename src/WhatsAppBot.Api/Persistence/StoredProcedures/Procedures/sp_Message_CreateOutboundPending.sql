@@ -2,6 +2,7 @@ SET ANSI_NULLS ON;
 SET QUOTED_IDENTIFIER ON;
 GO
 CREATE OR ALTER PROCEDURE dbo.sp_Message_CreateOutboundPending
+    @TenantId uniqueidentifier,
     @InboundMessageId bigint,
     @IntegrationId uniqueidentifier,
     @ConversationId bigint,
@@ -17,7 +18,8 @@ BEGIN
     DECLARE @ExistingOutboundMessageId bigint;
     SELECT @ExistingOutboundMessageId = MessageId
     FROM dbo.MessageOutbox WITH (UPDLOCK, SERIALIZABLE)
-    WHERE SourceInboundMessageId = @InboundMessageId;
+    WHERE TenantId = @TenantId
+      AND SourceInboundMessageId = @InboundMessageId;
     IF @ExistingOutboundMessageId IS NOT NULL
     BEGIN
         COMMIT TRANSACTION;
@@ -27,35 +29,34 @@ BEGIN
     END;
 
     DECLARE @LastCustomerMessageAtUtc datetime2(3);
-    DECLARE @TenantId uniqueidentifier;
     DECLARE @ConversationVersion binary(8);
     DECLARE @AttentionMode nvarchar(16);
     DECLARE @LifecycleStatus nvarchar(16);
     DECLARE @OutcomeCode nvarchar(100) = NULL;
     SELECT
-        @TenantId = conversation.TenantId,
         @ConversationVersion = conversation.Version,
         @AttentionMode = conversation.AttentionMode,
         @LifecycleStatus = conversation.LifecycleStatus
     FROM dbo.Conversation AS conversation WITH (UPDLOCK, HOLDLOCK)
-    WHERE conversation.TenantId IS NOT NULL
+    WHERE conversation.TenantId = @TenantId
       AND conversation.IntegrationId = @IntegrationId
       AND conversation.ConversationId = @ConversationId;
 
     SELECT @LastCustomerMessageAtUtc = MAX(ProviderTimestampUtc)
     FROM dbo.Message WITH (UPDLOCK, HOLDLOCK)
-    WHERE IntegrationId = @IntegrationId
+    WHERE TenantId = @TenantId
+      AND IntegrationId = @IntegrationId
       AND ConversationId = @ConversationId
       AND Direction = N'Inbound';
 
     IF NOT EXISTS
        (SELECT 1 FROM dbo.Message
-        WHERE MessageId = @InboundMessageId
-          AND IntegrationId = @IntegrationId
+         WHERE MessageId = @InboundMessageId
+           AND TenantId = @TenantId
+           AND IntegrationId = @IntegrationId
           AND ConversationId = @ConversationId
           AND Direction = N'Inbound')
-         OR @TenantId IS NULL
-         OR @ConversationVersion IS NULL
+           OR @ConversationVersion IS NULL
     BEGIN
         SET @OutcomeCode = N'ConversationVersionConflict';
     END
@@ -66,6 +67,17 @@ BEGIN
     ELSE IF @LifecycleStatus <> N'Abierta'
     BEGIN
         SET @OutcomeCode = N'ConversationClosed';
+    END
+    ELSE IF @FrequentResponseId IS NOT NULL AND NOT EXISTS
+    (
+        SELECT 1
+        FROM dbo.FrequentResponse
+        WHERE FrequentResponseId = @FrequentResponseId
+          AND TenantId = @TenantId
+          AND IntegrationId = @IntegrationId
+    )
+    BEGIN
+        SET @OutcomeCode = N'FrequentResponseNotFound';
     END
     ELSE IF NOT EXISTS
     (
@@ -105,7 +117,9 @@ BEGIN
         (@OutboundMessageId, @IntegrationId, @InboundMessageId, @TenantId, @ConversationVersion);
     UPDATE dbo.Message
     SET ProcessingState = N'Completed', UpdatedAtUtc = SYSUTCDATETIME()
-    WHERE MessageId = @InboundMessageId;
+    WHERE TenantId = @TenantId
+      AND IntegrationId = @IntegrationId
+      AND MessageId = @InboundMessageId;
 
     COMMIT TRANSACTION;
     SELECT CONVERT(bit, 1) AS Inserted, @OutboundMessageId AS MessageId, CONVERT(nvarchar(100), NULL) AS OutcomeCode;

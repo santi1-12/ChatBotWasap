@@ -6,22 +6,27 @@ namespace WhatsAppBot.Api.Business.UseCases.FrequentResponses;
 
 public sealed class FrequentResponseService(
     IBotConfigurationRepository botConfigurationRepository,
-    IFrequentResponseRepository repository) : IFrequentResponseService
+    IFrequentResponseRepository repository,
+    ITenantContext tenantContext) : IFrequentResponseService
 {
     public async Task<FrequentResponsePage> ListAsync(
         int page, int pageSize, CancellationToken cancellationToken)
     {
         ValidatePaging(page, pageSize);
-        var configuration = await botConfigurationRepository.GetCurrentAsync(cancellationToken);
-        return await repository.ListAsync(configuration.IntegrationId, page, pageSize, cancellationToken);
+        var tenant = await tenantContext.GetRequiredAsync(cancellationToken);
+        var configuration = await botConfigurationRepository.GetCurrentAsync(tenant.TenantId, cancellationToken);
+        return await repository.ListAsync(
+            tenant.TenantId, configuration.IntegrationId, page, pageSize, cancellationToken);
     }
 
     public async Task<FrequentResponseRecord> GetAsync(
         long frequentResponseId, CancellationToken cancellationToken)
     {
         ValidateId(frequentResponseId);
-        var configuration = await botConfigurationRepository.GetCurrentAsync(cancellationToken);
-        return await repository.GetAsync(configuration.IntegrationId, frequentResponseId, cancellationToken)
+        var tenant = await tenantContext.GetRequiredAsync(cancellationToken);
+        var configuration = await botConfigurationRepository.GetCurrentAsync(tenant.TenantId, cancellationToken);
+        return await repository.GetAsync(
+                tenant.TenantId, configuration.IntegrationId, frequentResponseId, cancellationToken)
             ?? throw new BusinessNotFoundException("Frequent response");
     }
 
@@ -29,8 +34,10 @@ public sealed class FrequentResponseService(
         FrequentResponseCommand command, CancellationToken cancellationToken)
     {
         var validCommand = Validate(command);
-        var configuration = await botConfigurationRepository.GetCurrentAsync(cancellationToken);
-        return await repository.CreateAsync(configuration.IntegrationId, validCommand, cancellationToken);
+        var tenant = await tenantContext.GetRequiredAsync(cancellationToken);
+        var configuration = await botConfigurationRepository.GetCurrentAsync(tenant.TenantId, cancellationToken);
+        return await repository.CreateAsync(
+            tenant.TenantId, configuration.IntegrationId, validCommand, cancellationToken);
     }
 
     public async Task<FrequentResponseRecord> UpdateAsync(
@@ -38,9 +45,10 @@ public sealed class FrequentResponseService(
     {
         ValidateId(frequentResponseId);
         var validCommand = Validate(command);
-        var configuration = await botConfigurationRepository.GetCurrentAsync(cancellationToken);
+        var tenant = await tenantContext.GetRequiredAsync(cancellationToken);
+        var configuration = await botConfigurationRepository.GetCurrentAsync(tenant.TenantId, cancellationToken);
         return await repository.UpdateAsync(
-            configuration.IntegrationId, frequentResponseId, validCommand, cancellationToken)
+                tenant.TenantId, configuration.IntegrationId, frequentResponseId, validCommand, cancellationToken)
             ?? throw new BusinessNotFoundException("Frequent response");
     }
 
@@ -48,9 +56,10 @@ public sealed class FrequentResponseService(
         long frequentResponseId, bool isActive, CancellationToken cancellationToken)
     {
         ValidateId(frequentResponseId);
-        var configuration = await botConfigurationRepository.GetCurrentAsync(cancellationToken);
+        var tenant = await tenantContext.GetRequiredAsync(cancellationToken);
+        var configuration = await botConfigurationRepository.GetCurrentAsync(tenant.TenantId, cancellationToken);
         if (!await repository.SetActiveAsync(
-                configuration.IntegrationId, frequentResponseId, isActive, cancellationToken))
+                tenant.TenantId, configuration.IntegrationId, frequentResponseId, isActive, cancellationToken))
         {
             throw new BusinessNotFoundException("Frequent response");
         }
@@ -61,8 +70,10 @@ public sealed class FrequentResponseService(
     public async Task<bool> DeleteAsync(long frequentResponseId, CancellationToken cancellationToken)
     {
         ValidateId(frequentResponseId);
-        var configuration = await botConfigurationRepository.GetCurrentAsync(cancellationToken);
-        if (!await repository.DeleteAsync(configuration.IntegrationId, frequentResponseId, cancellationToken))
+        var tenant = await tenantContext.GetRequiredAsync(cancellationToken);
+        var configuration = await botConfigurationRepository.GetCurrentAsync(tenant.TenantId, cancellationToken);
+        if (!await repository.DeleteAsync(
+                tenant.TenantId, configuration.IntegrationId, frequentResponseId, cancellationToken))
         {
             throw new BusinessNotFoundException("Frequent response");
         }

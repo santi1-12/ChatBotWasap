@@ -37,8 +37,12 @@ public sealed class ProcessInboundText(
             throw new BusinessValidationException("Only complete inbound text events can be processed.");
         }
 
+        var tenantId = inboundEvent.TenantId
+            ?? throw new BusinessValidationException("The claimed webhook event has no TenantId.");
+        var integrationId = inboundEvent.IntegrationId
+            ?? throw new BusinessValidationException("The claimed webhook event has no IntegrationId.");
         var integration = await integrationRepository.GetByPhoneNumberIdAsync(
-            inboundEvent.PhoneNumberId, cancellationToken);
+            tenantId, integrationId, inboundEvent.PhoneNumberId, cancellationToken);
         if (!integration.IsActive ||
             integration.ConnectionState != ConnectionState.Connected ||
             !string.Equals(integration.PhoneNumberId, inboundEvent.PhoneNumberId, StringComparison.Ordinal))
@@ -46,8 +50,10 @@ public sealed class ProcessInboundText(
             return;
         }
 
-        var tenantId = integration.TenantId
-            ?? throw new InvalidOperationException("The WhatsApp integration is not assigned to a Tenant.");
+        if (integration.TenantId != tenantId)
+        {
+            throw new InvalidOperationException("The WhatsApp integration does not belong to the claimed Tenant.");
+        }
         var contactId = await contactRepository.UpsertWhatsAppAsync(
             integration.IntegrationId,
             tenantId,
@@ -55,7 +61,7 @@ public sealed class ProcessInboundText(
             inboundEvent.ContactDisplayName,
             cancellationToken);
         var configuration = await botConfigurationService.GetForIntegrationAsync(
-            integration.IntegrationId, cancellationToken);
+            tenantId, integration.IntegrationId, cancellationToken);
         var conversationId = await conversationRepository.GetOrCreateAsync(
             integration.IntegrationId,
             tenantId,
@@ -65,7 +71,7 @@ public sealed class ProcessInboundText(
             cancellationToken);
 
         var inboundMessage = await messageRepository.InsertInboundAsync(
-            integration.IntegrationId, conversationId, inboundEvent, cancellationToken);
+            tenantId, integration.IntegrationId, conversationId, inboundEvent, cancellationToken);
         if (!inboundMessage.Inserted)
         {
             return;
@@ -95,14 +101,14 @@ public sealed class ProcessInboundText(
         if (state is null)
         {
             await messageRepository.SetProcessingOutcomeAsync(
-                messageId, ProcessingState.NoReply, MessageOutcomeCodes.BlockingError, cancellationToken);
+                tenantId, messageId, ProcessingState.NoReply, MessageOutcomeCodes.BlockingError, cancellationToken);
             return;
         }
 
         if (state.AttentionMode == AttentionMode.Humano)
         {
             await messageRepository.SetProcessingOutcomeAsync(
-                messageId, ProcessingState.NoReply,
+                tenantId, messageId, ProcessingState.NoReply,
                 MessageOutcomeCodes.ConversationInHumanMode, cancellationToken);
             return;
         }
@@ -110,20 +116,20 @@ public sealed class ProcessInboundText(
         if (state.LifecycleStatus == LifecycleStatus.Cerrada)
         {
             await messageRepository.SetProcessingOutcomeAsync(
-                messageId, ProcessingState.NoReply,
+                tenantId, messageId, ProcessingState.NoReply,
                 MessageOutcomeCodes.ConversationClosed, cancellationToken);
             return;
         }
 
         var configuration = await botConfigurationService.GetForIntegrationAsync(
-            integration.IntegrationId, cancellationToken);
+            tenantId, integration.IntegrationId, cancellationToken);
         if (!configuration.IsBotEnabled)
         {
             await handoffService.TryHandoffAsync(
                 tenantId, conversationId,
                 ConversationHandoffReasonCodes.BusinessRule, cancellationToken);
             await messageRepository.SetProcessingOutcomeAsync(
-                messageId, ProcessingState.NoReply, MessageOutcomeCodes.BotDisabled, cancellationToken);
+                tenantId, messageId, ProcessingState.NoReply, MessageOutcomeCodes.BotDisabled, cancellationToken);
             return;
         }
 
@@ -133,7 +139,7 @@ public sealed class ProcessInboundText(
                 tenantId, conversationId,
                 ConversationHandoffReasonCodes.CustomerRequestedHuman, cancellationToken);
             await messageRepository.SetProcessingOutcomeAsync(
-                messageId, ProcessingState.NoReply,
+                tenantId, messageId, ProcessingState.NoReply,
                 MessageOutcomeCodes.ConversationInHumanMode, cancellationToken);
             return;
         }
@@ -149,7 +155,7 @@ public sealed class ProcessInboundText(
                 tenantId, conversationId,
                 ConversationHandoffReasonCodes.BlockingError, cancellationToken);
             await messageRepository.SetProcessingOutcomeAsync(
-                messageId, ProcessingState.NoReply,
+                tenantId, messageId, ProcessingState.NoReply,
                 MessageOutcomeCodes.BlockingError, cancellationToken);
             return;
         }
@@ -160,7 +166,7 @@ public sealed class ProcessInboundText(
                 tenantId, conversationId,
                 ConversationHandoffReasonCodes.BotUnableToResolve, cancellationToken);
             await messageRepository.SetProcessingOutcomeAsync(
-                messageId,
+                tenantId, messageId,
                 ProcessingState.NoReply,
                 MessageOutcomeCodes.NoFrequentResponse,
                 cancellationToken);
@@ -173,7 +179,7 @@ public sealed class ProcessInboundText(
             try
             {
                 var history = await messageRepository.GetHistoryAsync(
-                    integration.IntegrationId, conversationId, messageId, 50, cancellationToken);
+                    tenantId, integration.IntegrationId, conversationId, messageId, 50, cancellationToken);
                 var prompt = aiContextBuilder.Build(text, history, aiOptions.Value.MaxInputCharacters);
                 aiAnswer = await aiReplyGenerator.GenerateReplyAsync(prompt, cancellationToken);
             }
@@ -182,7 +188,7 @@ public sealed class ProcessInboundText(
                 await handoffService.TryHandoffAsync(
                     tenantId, conversationId, exception.HandoffReasonCode, cancellationToken);
                 await messageRepository.SetProcessingOutcomeAsync(
-                    messageId, ProcessingState.NoReply, exception.SafeCode, cancellationToken);
+                    tenantId, messageId, ProcessingState.NoReply, exception.SafeCode, cancellationToken);
                 return;
             }
             catch (Exception) when (!cancellationToken.IsCancellationRequested)
@@ -191,7 +197,7 @@ public sealed class ProcessInboundText(
                     tenantId, conversationId,
                     ConversationHandoffReasonCodes.BlockingError, cancellationToken);
                 await messageRepository.SetProcessingOutcomeAsync(
-                    messageId, ProcessingState.NoReply,
+                    tenantId, messageId, ProcessingState.NoReply,
                     MessageOutcomeCodes.BlockingError, cancellationToken);
                 return;
             }
@@ -201,7 +207,7 @@ public sealed class ProcessInboundText(
             if (currentState is null)
             {
                 await messageRepository.SetProcessingOutcomeAsync(
-                    messageId, ProcessingState.NoReply,
+                    tenantId, messageId, ProcessingState.NoReply,
                     MessageOutcomeCodes.BlockingError, cancellationToken);
                 return;
             }
@@ -209,7 +215,7 @@ public sealed class ProcessInboundText(
             if (currentState.AttentionMode == AttentionMode.Humano)
             {
                 await messageRepository.SetProcessingOutcomeAsync(
-                    messageId, ProcessingState.NoReply,
+                    tenantId, messageId, ProcessingState.NoReply,
                     MessageOutcomeCodes.ConversationInHumanMode, cancellationToken);
                 return;
             }
@@ -217,7 +223,7 @@ public sealed class ProcessInboundText(
             if (currentState.LifecycleStatus == LifecycleStatus.Cerrada)
             {
                 await messageRepository.SetProcessingOutcomeAsync(
-                    messageId, ProcessingState.NoReply,
+                    tenantId, messageId, ProcessingState.NoReply,
                     MessageOutcomeCodes.ConversationClosed, cancellationToken);
                 return;
             }
@@ -228,7 +234,7 @@ public sealed class ProcessInboundText(
                     tenantId, conversationId,
                     ConversationHandoffReasonCodes.BotUnableToResolve, cancellationToken);
                 await messageRepository.SetProcessingOutcomeAsync(
-                    messageId, ProcessingState.NoReply,
+                    tenantId, messageId, ProcessingState.NoReply,
                     MessageOutcomeCodes.AiUnableToResolve, cancellationToken);
                 return;
             }
@@ -240,11 +246,12 @@ public sealed class ProcessInboundText(
                     tenantId, conversationId,
                     ConversationHandoffReasonCodes.BusinessRule, cancellationToken);
                 await messageRepository.SetProcessingOutcomeAsync(
-                    messageId, ProcessingState.NoReply, aiPolicy.OutcomeCode, cancellationToken);
+                    tenantId, messageId, ProcessingState.NoReply, aiPolicy.OutcomeCode, cancellationToken);
                 return;
             }
 
             var aiOutbound = await outboxRepository.CreatePendingAsync(
+                tenantId,
                 messageId,
                 integration.IntegrationId,
                 conversationId,
@@ -255,6 +262,7 @@ public sealed class ProcessInboundText(
             if (!aiOutbound.Inserted && aiOutbound.MessageId is null)
             {
                 await messageRepository.SetProcessingOutcomeAsync(
+                    tenantId,
                     messageId,
                     ProcessingState.NoReply,
                     aiOutbound.OutcomeCode ?? MessageOutcomeCodes.MessagingWindowClosed,
@@ -279,11 +287,12 @@ public sealed class ProcessInboundText(
                 tenantId, conversationId,
                 ConversationHandoffReasonCodes.BusinessRule, cancellationToken);
             await messageRepository.SetProcessingOutcomeAsync(
-                messageId, ProcessingState.NoReply, policy.OutcomeCode, cancellationToken);
+                tenantId, messageId, ProcessingState.NoReply, policy.OutcomeCode, cancellationToken);
             return;
         }
 
         var outbound = await outboxRepository.CreatePendingAsync(
+            tenantId,
             messageId,
             integration.IntegrationId,
             conversationId,
@@ -294,6 +303,7 @@ public sealed class ProcessInboundText(
         if (!outbound.Inserted && outbound.MessageId is null)
         {
             await messageRepository.SetProcessingOutcomeAsync(
+                tenantId,
                 messageId,
                 ProcessingState.NoReply,
                 outbound.OutcomeCode ?? MessageOutcomeCodes.MessagingWindowClosed,

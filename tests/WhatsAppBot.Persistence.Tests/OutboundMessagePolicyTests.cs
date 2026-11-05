@@ -37,7 +37,7 @@ public sealed class OutboundMessagePolicyTests(LocalDbFixture fixture)
                 await InsertExpiredInboundAsync(connection, integrationId, tenantId);
 
             var result = await fixture.OutboxRepository.CreatePendingAsync(
-                inboundMessageId, integrationId, conversationId, "Must not be sent",
+                tenantId, inboundMessageId, integrationId, conversationId, "Must not be sent",
                 ReplySource.FrequentResponse, null, CancellationToken.None);
 
             Assert.False(result.Inserted);

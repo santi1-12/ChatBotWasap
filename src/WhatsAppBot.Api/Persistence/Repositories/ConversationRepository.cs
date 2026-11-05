@@ -41,11 +41,12 @@ public sealed class ConversationRepository(StoredProcedureExecutor executor)
     }
 
     public async Task<ConversationPage> ListAsync(
-        Guid integrationId, int page, int pageSize, CancellationToken cancellationToken)
+        Guid tenantId, Guid integrationId, int page, int pageSize, CancellationToken cancellationToken)
     {
         var rows = await executor.QueryAsync(
             "dbo.sp_Conversation_List",
             [
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId },
                 new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier) { Value = integrationId },
                 new SqlParameter("@Page", SqlDbType.Int) { Value = page },
                 new SqlParameter("@PageSize", SqlDbType.Int) { Value = pageSize }

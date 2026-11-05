@@ -47,7 +47,7 @@ public sealed class ProviderFailureTests
             new FailingMetaCloudClient());
 
         var result = await sender.SendTextAsync(
-            "phone-1", "15551234567", "Hello", CancellationToken.None);
+            Guid.Empty, Guid.Empty, "phone-1", "15551234567", "Hello", CancellationToken.None);
 
         Assert.False(result.Succeeded);
         Assert.Equal("MetaUnavailable", result.SafeFailureCode);
@@ -111,7 +111,10 @@ public sealed class ProviderFailureTests
             });
 
         public Task<WhatsAppIntegration> GetByPhoneNumberIdAsync(
-            string phoneNumberId, CancellationToken cancellationToken) => GetCurrentAsync(cancellationToken);
+            Guid tenantId,
+            Guid integrationId,
+            string phoneNumberId,
+            CancellationToken cancellationToken) => GetCurrentAsync(cancellationToken);
 
         public Task SaveSignupResultAsync(MetaSignupResult result, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
@@ -199,6 +202,7 @@ public sealed class ProviderFailureTests
             int batchSize, CancellationToken cancellationToken) => Task.FromResult(events);
 
         public Task SetStateAsync(
+            Guid tenantId,
             string eventKey,
             WebhookInboxState state,
             string? safeFailureCode,
@@ -218,6 +222,10 @@ public sealed class ProviderFailureTests
             key,
             "hello",
             DateTimeOffset.UtcNow,
-            null);
+            null)
+        {
+            IntegrationId = Guid.Empty,
+            TenantId = Guid.Empty
+        };
     }
 }

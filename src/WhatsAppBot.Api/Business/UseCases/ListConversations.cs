@@ -5,15 +5,17 @@ namespace WhatsAppBot.Api.Business.UseCases;
 
 public sealed class ListConversations(
     IWhatsAppIntegrationRepository integrationRepository,
-    IConversationRepository conversationRepository) : IListConversations
+    IConversationRepository conversationRepository,
+    ITenantContext tenantContext) : IListConversations
 {
     public async Task<ConversationPage> ExecuteAsync(
         int page, int pageSize, CancellationToken cancellationToken)
     {
         ValidatePaging(page, pageSize);
+        var tenant = await tenantContext.GetRequiredAsync(cancellationToken);
         var integration = await integrationRepository.GetCurrentAsync(cancellationToken);
         return await conversationRepository.ListAsync(
-            integration.IntegrationId, page, pageSize, cancellationToken);
+            tenant.TenantId, integration.IntegrationId, page, pageSize, cancellationToken);
     }
 
     private static void ValidatePaging(int page, int pageSize)

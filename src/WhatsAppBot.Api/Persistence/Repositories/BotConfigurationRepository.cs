@@ -7,23 +7,25 @@ using WhatsAppBot.Shared.Enums;
 namespace WhatsAppBot.Api.Persistence.Repositories;
 
 public sealed class BotConfigurationRepository(
-    StoredProcedureExecutor executor,
-    ITenantContext? tenantContext = null) : IBotConfigurationRepository
+    StoredProcedureExecutor executor) : IBotConfigurationRepository
 {
-    public async Task<BotConfiguration> GetCurrentAsync(CancellationToken cancellationToken) =>
-        await QueryAsync(await TryGetTenantIdAsync(cancellationToken), null, cancellationToken)
-        ?? throw new InvalidOperationException("The initial bot configuration has not been provisioned.");
+    public async Task<BotConfiguration> GetCurrentAsync(
+        Guid tenantId, CancellationToken cancellationToken) =>
+        await QueryAsync(tenantId, null, cancellationToken)
+            ?? throw new InvalidOperationException("The initial bot configuration has not been provisioned.");
 
     public async Task<BotConfiguration> GetForIntegrationAsync(
-        Guid integrationId, CancellationToken cancellationToken) =>
-        await QueryAsync(null, integrationId, cancellationToken)
-        ?? throw new InvalidOperationException("The bot configuration has not been provisioned for the integration.");
+        Guid tenantId, Guid integrationId, CancellationToken cancellationToken) =>
+        await QueryAsync(tenantId, integrationId, cancellationToken)
+            ?? throw new InvalidOperationException("The bot configuration has not been provisioned for the integration.");
 
     public async Task<BotConfiguration> UpdateAsync(
-        Guid integrationId, bool isBotEnabled, BotReplyMode replyMode, CancellationToken cancellationToken) =>
+        Guid tenantId, Guid integrationId, bool isBotEnabled, BotReplyMode replyMode,
+        CancellationToken cancellationToken) =>
         await executor.QuerySingleAsync(
             "dbo.sp_BotConfiguration_Upsert",
             [
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId },
                 new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier) { Value = integrationId },
                 new SqlParameter("@IsBotEnabled", SqlDbType.Bit) { Value = isBotEnabled },
                 new SqlParameter("@ReplyMode", SqlDbType.NVarChar, 32) { Value = replyMode.ToString() }
@@ -37,6 +39,9 @@ public sealed class BotConfigurationRepository(
         reader.GetBoolean(reader.GetOrdinal("IsBotEnabled")),
         Enum.Parse<BotReplyMode>(reader.GetString(reader.GetOrdinal("ReplyMode")), ignoreCase: false))
     {
+        TenantId = reader.IsDBNull(reader.GetOrdinal("TenantId"))
+            ? null
+            : reader.GetGuid(reader.GetOrdinal("TenantId")),
         CreatedAtUtc = new DateTimeOffset(DateTime.SpecifyKind(
             reader.GetDateTime(reader.GetOrdinal("CreatedAtUtc")), DateTimeKind.Utc)),
         UpdatedAtUtc = new DateTimeOffset(DateTime.SpecifyKind(
@@ -44,13 +49,13 @@ public sealed class BotConfigurationRepository(
     };
 
     private Task<BotConfiguration?> QueryAsync(
-        Guid? tenantId, Guid? integrationId, CancellationToken cancellationToken) =>
+        Guid tenantId, Guid? integrationId, CancellationToken cancellationToken) =>
         executor.QuerySingleAsync(
             "dbo.sp_BotConfiguration_Get",
             [
                 new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier)
                 {
-                    Value = (object?)tenantId ?? DBNull.Value
+                    Value = tenantId
                 },
                 new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier)
                 {
@@ -60,8 +65,4 @@ public sealed class BotConfigurationRepository(
             Map,
             cancellationToken);
 
-    private async Task<Guid?> TryGetTenantIdAsync(CancellationToken cancellationToken) =>
-        tenantContext is null
-            ? null
-            : (await tenantContext.GetRequiredAsync(cancellationToken)).TenantId;
 }

@@ -105,7 +105,8 @@ BEGIN
     DECLARE @CreatedAtUtc datetime2(3);
     SELECT @CreatedAtUtc = CreatedAtUtc
     FROM dbo.Message
-    WHERE MessageId = @MessageId;
+    WHERE TenantId = @TenantId
+      AND MessageId = @MessageId;
 
     UPDATE dbo.Conversation
     SET LastMessageAtUtc = CASE

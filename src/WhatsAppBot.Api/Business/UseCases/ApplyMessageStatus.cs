@@ -15,6 +15,8 @@ public sealed class ApplyMessageStatus(
     {
         if (statusEvent.EventType != MetaWebhookEventTypes.DeliveryStatus ||
             string.IsNullOrWhiteSpace(statusEvent.PhoneNumberId) ||
+            statusEvent.TenantId is null ||
+            statusEvent.IntegrationId is null ||
             string.IsNullOrWhiteSpace(statusEvent.ProviderMessageId) ||
             string.IsNullOrWhiteSpace(statusEvent.DeliveryStatus) ||
             statusEvent.ProviderTimestampUtc is null)
@@ -29,7 +31,11 @@ public sealed class ApplyMessageStatus(
             return;
         }
 
-        var result = await messageRepository.ApplyDeliveryStatusAsync(statusEvent, cancellationToken);
+        var result = await messageRepository.ApplyDeliveryStatusAsync(
+            statusEvent.TenantId.Value,
+            statusEvent.IntegrationId.Value,
+            statusEvent,
+            cancellationToken);
         if (!result.Found)
         {
             logger.LogInformation(

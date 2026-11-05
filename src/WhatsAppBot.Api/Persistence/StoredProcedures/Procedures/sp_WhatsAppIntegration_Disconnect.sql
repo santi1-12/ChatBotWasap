@@ -28,7 +28,8 @@ BEGIN
     IF @@ROWCOUNT = 0 THROW 51004, 'WhatsApp integration slot was not found for the Tenant.', 1;
     UPDATE dbo.BotConfiguration
     SET IsBotEnabled = 0, UpdatedAtUtc = SYSUTCDATETIME()
-    WHERE IntegrationId = @IntegrationId;
+    WHERE IntegrationId = @IntegrationId
+      AND TenantId = @TenantId;
     COMMIT TRANSACTION;
 END;
 GO

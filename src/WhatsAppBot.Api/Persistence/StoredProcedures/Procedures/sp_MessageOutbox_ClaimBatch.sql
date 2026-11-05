@@ -12,9 +12,17 @@ BEGIN
     (
         SELECT TOP (@BatchSize) o.MessageId, o.IntegrationId
         FROM dbo.MessageOutbox o WITH (UPDLOCK, READPAST, ROWLOCK)
-        INNER JOIN dbo.WhatsAppIntegration i ON i.IntegrationId = o.IntegrationId
-        INNER JOIN dbo.Message m ON m.MessageId = o.MessageId
-        INNER JOIN dbo.Conversation conv ON conv.ConversationId = m.ConversationId
+        INNER JOIN dbo.WhatsAppIntegration i
+            ON i.IntegrationId = o.IntegrationId
+           AND i.TenantId = o.TenantId
+        INNER JOIN dbo.Message m
+            ON m.MessageId = o.MessageId
+           AND m.TenantId = o.TenantId
+           AND m.IntegrationId = o.IntegrationId
+        INNER JOIN dbo.Conversation conv
+            ON conv.ConversationId = m.ConversationId
+           AND conv.TenantId = o.TenantId
+           AND conv.IntegrationId = o.IntegrationId
         WHERE i.IsActive = 1 AND i.ConnectionState = N'Connected'
           AND i.TenantId = o.TenantId
           AND o.TenantId = conv.TenantId
@@ -42,8 +50,13 @@ BEGIN
            latestCustomerMessage.LastCustomerMessageAtUtc, o.AttemptCount
     FROM @Claimed claimed
     INNER JOIN dbo.MessageOutbox o ON o.MessageId = claimed.MessageId
-    INNER JOIN dbo.WhatsAppIntegration i ON i.IntegrationId = o.IntegrationId
-    INNER JOIN dbo.Message m ON m.MessageId = o.MessageId
+    INNER JOIN dbo.WhatsAppIntegration i
+        ON i.IntegrationId = o.IntegrationId
+       AND i.TenantId = o.TenantId
+    INNER JOIN dbo.Message m
+        ON m.MessageId = o.MessageId
+       AND m.TenantId = o.TenantId
+       AND m.IntegrationId = o.IntegrationId
     CROSS APPLY
     (
         SELECT MAX(inbound.ProviderTimestampUtc) AS LastCustomerMessageAtUtc
@@ -53,7 +66,10 @@ BEGIN
           AND inbound.ConversationId = m.ConversationId
           AND inbound.Direction = N'Inbound'
     ) latestCustomerMessage
-    INNER JOIN dbo.Conversation conv ON conv.ConversationId = m.ConversationId
+    INNER JOIN dbo.Conversation conv
+        ON conv.ConversationId = m.ConversationId
+       AND conv.TenantId = o.TenantId
+       AND conv.IntegrationId = o.IntegrationId
     INNER JOIN dbo.Contact c
         ON c.ContactId = conv.ContactId
        AND c.TenantId = conv.TenantId

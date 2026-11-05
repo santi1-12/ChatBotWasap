@@ -515,7 +515,10 @@ public sealed class WhatsAppIntegrationCompletionTests
         }
 
         public Task<WhatsAppIntegration> GetByPhoneNumberIdAsync(
-            string phoneNumberId, CancellationToken cancellationToken) => GetCurrentAsync(cancellationToken);
+            Guid tenantId,
+            Guid integrationId,
+            string phoneNumberId,
+            CancellationToken cancellationToken) => GetCurrentAsync(cancellationToken);
 
         public Task SaveSignupResultAsync(MetaSignupResult result, CancellationToken cancellationToken)
         {

@@ -6,6 +6,7 @@ namespace WhatsAppBot.Api.Business.UseCases;
 public sealed class GetConversationDetail(
     IWhatsAppIntegrationRepository integrationRepository,
     IMessageRepository messageRepository,
+    ITenantContext tenantContext,
     IConversationAuditRepository? auditRepository = null) : IGetConversationDetail
 {
     public const int MessagePageSize = 50;
@@ -23,8 +24,10 @@ public sealed class GetConversationDetail(
             throw new BusinessValidationException("beforeMessageId must be positive when supplied.");
         }
 
+        var tenant = await tenantContext.GetRequiredAsync(cancellationToken);
         var integration = await integrationRepository.GetCurrentAsync(cancellationToken);
         var detail = await messageRepository.GetHistoryAsync(
+                   tenant.TenantId,
                    integration.IntegrationId,
                    conversationId,
                    beforeMessageId,
@@ -32,12 +35,12 @@ public sealed class GetConversationDetail(
                    cancellationToken)
                ?? throw new BusinessNotFoundException("Conversation");
 
-        if (auditRepository is not null && integration.TenantId is { } tenantId)
+        if (auditRepository is not null)
         {
             detail = detail with
             {
                 AuditEvents = await auditRepository.ListAuditAsync(
-                    tenantId, conversationId, cancellationToken)
+                    tenant.TenantId, conversationId, cancellationToken)
             };
         }
 

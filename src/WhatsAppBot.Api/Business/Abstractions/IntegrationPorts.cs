@@ -17,7 +17,12 @@ public interface ISecretReferenceResolver
 public interface IMetaWhatsAppClient
 {
     Task<MetaMessageSendResult> SendTextAsync(
-        string phoneNumberId, string recipient, string text, CancellationToken cancellationToken);
+        Guid tenantId,
+        Guid integrationId,
+        string phoneNumberId,
+        string recipient,
+        string text,
+        CancellationToken cancellationToken);
 }
 
 public interface ISecretStore : ISecretReferenceResolver
@@ -55,7 +60,10 @@ public interface IWhatsAppIntegrationRepository
 {
     Task<WhatsAppIntegration> GetCurrentAsync(CancellationToken cancellationToken);
     Task<WhatsAppIntegration> GetByPhoneNumberIdAsync(
-        string phoneNumberId, CancellationToken cancellationToken);
+        Guid tenantId,
+        Guid integrationId,
+        string phoneNumberId,
+        CancellationToken cancellationToken);
     Task SaveSignupResultAsync(
         MetaSignupResult result, CancellationToken cancellationToken);
     Task SetConnectionStateAsync(
@@ -80,7 +88,11 @@ public interface IWebhookInboxRepository
     Task<bool> InsertAsync(NormalizedMetaEvent webhookEvent, CancellationToken cancellationToken);
     Task<IReadOnlyList<NormalizedMetaEvent>> ClaimBatchAsync(
         int batchSize, CancellationToken cancellationToken);
-    Task SetStateAsync(string eventKey, WebhookInboxState state, string? safeFailureCode,
+    Task SetStateAsync(
+        Guid tenantId,
+        string eventKey,
+        WebhookInboxState state,
+        string? safeFailureCode,
         CancellationToken cancellationToken);
 }
 
@@ -101,32 +113,51 @@ public interface IConversationRepository
         bool isBotEnabled,
         CancellationToken cancellationToken);
     Task<ConversationPage> ListAsync(
-        Guid integrationId, int page, int pageSize, CancellationToken cancellationToken);
+        Guid tenantId, Guid integrationId, int page, int pageSize, CancellationToken cancellationToken);
 }
 
 public interface IMessageRepository
 {
     Task<ConversationDetailRecord?> GetHistoryAsync(
+        Guid tenantId,
         Guid integrationId,
         long conversationId,
         long? beforeMessageId,
         int pageSize,
         CancellationToken cancellationToken);
     Task<InboundMessageInsertResult> InsertInboundAsync(
-        Guid integrationId, long conversationId, NormalizedMetaEvent inboundEvent,
+        Guid tenantId,
+        Guid integrationId,
+        long conversationId,
+        NormalizedMetaEvent inboundEvent,
         CancellationToken cancellationToken);
     Task SetProcessingOutcomeAsync(
-        long messageId, ProcessingState state, string? safeOutcomeCode, CancellationToken cancellationToken);
+        Guid tenantId,
+        long messageId,
+        ProcessingState state,
+        string? safeOutcomeCode,
+        CancellationToken cancellationToken);
     Task<DeliveryStatusApplyResult> ApplyDeliveryStatusAsync(
-        NormalizedMetaEvent statusEvent, CancellationToken cancellationToken);
+        Guid tenantId,
+        Guid integrationId,
+        NormalizedMetaEvent statusEvent,
+        CancellationToken cancellationToken);
     Task<IReadOnlyList<OutboundMessageWorkItem>> ClaimOutboxBatchAsync(
         int batchSize, CancellationToken cancellationToken);
     Task<OutboxRevalidationResult> RevalidateOutboxAsync(
         OutboundMessageWorkItem item, CancellationToken cancellationToken);
     Task SetOutboxResultAsync(
-        long messageId, MetaMessageSendResult result, bool isTerminal, CancellationToken cancellationToken);
+        Guid tenantId,
+        long messageId,
+        MetaMessageSendResult result,
+        bool isTerminal,
+        CancellationToken cancellationToken);
     Task SetOutboxStateAsync(
-        long messageId, MessageOutboxState state, int retryDelaySeconds, CancellationToken cancellationToken);
+        Guid tenantId,
+        long messageId,
+        MessageOutboxState state,
+        int retryDelaySeconds,
+        CancellationToken cancellationToken);
 }
 
 public interface IWhatsAppMessagingPolicy
@@ -137,7 +168,11 @@ public interface IWhatsAppMessagingPolicy
 public interface IMessageOutboxRepository
 {
     Task<OutboundMessageInsertResult> CreatePendingAsync(
-        long inboundMessageId, Guid integrationId, long conversationId, string text,
+        Guid tenantId,
+        long inboundMessageId,
+        Guid integrationId,
+        long conversationId,
+        string text,
          ReplySource source, long? frequentResponseId,
          CancellationToken cancellationToken);
 

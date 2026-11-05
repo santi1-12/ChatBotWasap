@@ -1,6 +1,7 @@
 using WhatsAppBot.Api.Business.Abstractions;
 using WhatsAppBot.Api.Business.UseCases;
 using WhatsAppBot.Api.Models.Contracts;
+using WhatsAppBot.Api.Models.Entities;
 
 namespace WhatsAppBot.Api.ContractTests;
 
@@ -48,6 +49,15 @@ public sealed class TextReplyFlowTests
             Event = inboundEvent;
             return Task.CompletedTask;
         }
+
+        public Task ProcessPersistedAsync(
+            WhatsAppIntegration integration,
+            Guid tenantId,
+            long conversationId,
+            long messageId,
+            string text,
+            DateTimeOffset providerTimestampUtc,
+            CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
     private sealed class RecordingDeliveryProcessor : IProcessMetaDeliveryStatus
@@ -64,6 +74,15 @@ public sealed class TextReplyFlowTests
     {
         public Task ProcessAsync(NormalizedMetaEvent inboundEvent, CancellationToken cancellationToken) =>
             Task.CompletedTask;
+
+        public Task ProcessPersistedAsync(
+            WhatsAppIntegration integration,
+            Guid tenantId,
+            long conversationId,
+            long messageId,
+            string text,
+            DateTimeOffset providerTimestampUtc,
+            CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
     private sealed class NoOpMediaProcessor : IProcessInboundMedia

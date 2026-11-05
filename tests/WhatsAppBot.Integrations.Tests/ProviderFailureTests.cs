@@ -230,12 +230,30 @@ public sealed class ProviderFailureTests
     {
         public Task ProcessAsync(NormalizedMetaEvent inboundEvent, CancellationToken cancellationToken) =>
             throw new InvalidOperationException("simulated processing failure");
+
+        public Task ProcessPersistedAsync(
+            WhatsAppIntegration integration,
+            Guid tenantId,
+            long conversationId,
+            long messageId,
+            string text,
+            DateTimeOffset providerTimestampUtc,
+            CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
     private sealed class DelayingInboundTextProcessor : IProcessInboundText
     {
         public Task ProcessAsync(NormalizedMetaEvent inboundEvent, CancellationToken cancellationToken) =>
             Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+
+        public Task ProcessPersistedAsync(
+            WhatsAppIntegration integration,
+            Guid tenantId,
+            long conversationId,
+            long messageId,
+            string text,
+            DateTimeOffset providerTimestampUtc,
+            CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
     private sealed class RecordingWebhookInboxRepository : IWebhookInboxRepository

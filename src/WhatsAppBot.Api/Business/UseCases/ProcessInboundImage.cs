@@ -12,7 +12,7 @@ public sealed class ProcessInboundImage(
     IMessageRepository messageRepository,
     IConversationStateRepository conversationStateRepository,
     IImageAnalysisService imageAnalysisService,
-    ProcessInboundText textProcessor,
+    IProcessInboundText textProcessor,
     IOptions<MediaStorageOptions> storageOptions,
     IConversationHandoffService handoffService,
     ILogger<ProcessInboundImage> logger) : IProcessInboundImage

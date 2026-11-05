@@ -12,7 +12,7 @@ public sealed class ProcessInboundAudio(
     IMessageRepository messageRepository,
     IAudioNormalizer audioNormalizer,
     IAudioTranscriptionService transcriptionService,
-    ProcessInboundText textProcessor,
+    IProcessInboundText textProcessor,
     IOptions<MediaStorageOptions> storageOptions,
     ILogger<ProcessInboundAudio> logger) : IProcessInboundAudio
 {

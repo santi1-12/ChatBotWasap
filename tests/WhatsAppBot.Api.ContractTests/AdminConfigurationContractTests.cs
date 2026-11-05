@@ -26,10 +26,12 @@ namespace WhatsAppBot.Api.ContractTests;
 public sealed class AdminConfigurationContractTests : IClassFixture<AdminApiFactory>
 {
     private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
+    private readonly AdminApiFactory _factory;
     private readonly HttpClient _client;
 
     public AdminConfigurationContractTests(AdminApiFactory factory)
     {
+        _factory = factory;
         _client = factory.CreateClient(new WebApplicationFactoryClientOptions
         {
             BaseAddress = new Uri("https://localhost"),
@@ -89,6 +91,16 @@ public sealed class AdminConfigurationContractTests : IClassFixture<AdminApiFact
         Assert.True(tenant?.Success);
         Assert.Equal(Guid.Parse("22222222-2222-2222-2222-222222222222"), tenant!.Data!.TenantId);
         Assert.Equal("Contract Tenant", tenant.Data.LegalName);
+    }
+
+    [Fact]
+    public void ApiHostCanResolveTextAudioAndImageProcessors()
+    {
+        using var scope = _factory.Services.CreateScope();
+
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IProcessInboundText>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IProcessInboundAudio>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<IProcessInboundImage>());
     }
 
     [Fact]

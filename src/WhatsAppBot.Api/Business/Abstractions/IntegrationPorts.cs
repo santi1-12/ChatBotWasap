@@ -188,6 +188,15 @@ public interface IMessageOutboxRepository
 public interface IProcessInboundText
 {
     Task ProcessAsync(NormalizedMetaEvent inboundEvent, CancellationToken cancellationToken);
+
+    Task ProcessPersistedAsync(
+        WhatsAppIntegration integration,
+        Guid tenantId,
+        long conversationId,
+        long messageId,
+        string text,
+        DateTimeOffset providerTimestampUtc,
+        CancellationToken cancellationToken);
 }
 
 public interface IProcessInboundMedia

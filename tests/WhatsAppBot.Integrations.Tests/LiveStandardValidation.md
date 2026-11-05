@@ -25,6 +25,8 @@ The existing integration was not disconnected, deleted, replaced, or modified.
 - Public webhook verification through `https://flail-salvation-posh.ngrok-free.dev` returned invalid-token `403`, valid challenge `200`, and signed no-op POST `200`.
 - API Development restarted cleanly on `https://localhost:7001`; Swagger returned HTTP `200` after restart.
 - Admin Development restarted cleanly on `https://localhost:7002`; both `/Settings/WhatsApp` and `/Dashboard` are reachable and redirect unauthenticated requests to `/Account/Login` as expected. The authenticated Admin screen supplied during this validation showed `Conectado`, `Standard`, `Bot Activo`, and the persisted WABA/Phone Number values.
+- After the final Admin-only Debug rebuild/restart, the Admin session was renewed and the operator visually confirmed that `/Dashboard` and `/Settings/WhatsApp` loaded correctly, continued to show the operational Standard integration, and required no disconnect or replacement.
+- The transient Admin errors before session renewal were caused by the Admin in-memory session invalidated by the restart, not by a Meta, WABA, Phone Number, webhook, or persistence failure.
 
 ## Historical Embedded Signup Evidence
 

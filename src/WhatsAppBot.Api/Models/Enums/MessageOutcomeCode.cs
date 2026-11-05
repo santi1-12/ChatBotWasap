@@ -34,6 +34,7 @@ public static class MessageOutcomeCodeRules
         MessageOutcomeCodes.ConversationClosed => true,
         MessageOutcomeCodes.ConversationVersionConflict => true,
         MessageOutcomeCodes.IntegrationUnavailable => true,
+        MessageOutcomeCodes.IntegrationMigrationInProgress => true,
         MessageOutcomeCodes.ManualSendFailed => true,
         MessageOutcomeCodes.ManualReplyRequiresHuman => true,
         MessageOutcomeCodes.ManualReplyNotAuthorized => true,

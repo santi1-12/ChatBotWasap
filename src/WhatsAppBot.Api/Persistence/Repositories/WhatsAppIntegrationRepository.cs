@@ -119,6 +119,9 @@ public sealed class WhatsAppIntegrationRepository(
             OnboardingType = GetNullableString(reader, "OnboardingType") is { } onboardingType
                 ? Enum.Parse<WhatsAppOnboardingType>(onboardingType, false)
                 : null,
+            TransitionState = Enum.Parse<TransitionState>(
+                reader.GetString(reader.GetOrdinal("TransitionState")), false),
+            TransitionStartedAtUtc = GetNullableDateTime(reader, "TransitionStartedAtUtc"),
             EffectiveEmbeddedSignupConfigId = GetNullableString(reader, "EffectiveEmbeddedSignupConfigId"),
             HistoryImportRequested = reader.GetBoolean(reader.GetOrdinal("HistoryImportRequested")),
             LastConnectionErrorCode = GetNullableString(reader, "LastConnectionErrorCode"),

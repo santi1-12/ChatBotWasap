@@ -13,6 +13,18 @@ public sealed class WhatsAppIntegrationDTO
     public string? DisplayName { get; init; }
     public required ConnectionState ConnectionState { get; init; }
     public WhatsAppOnboardingType? OnboardingType { get; init; }
+    public TransitionState TransitionState { get; init; } = TransitionState.None;
+    public DateTimeOffset? TransitionStartedAtUtc { get; init; }
+    public Guid? MigrationId { get; init; }
+    public MigrationCompletionState MigrationCompletionState { get; init; } = MigrationCompletionState.None;
+    public bool MigrationExternalMutationOccurred { get; init; }
+    public string? MigrationExpectedExternalOperation { get; init; }
+    public string? MigrationExternalOperationReferenceId { get; init; }
+    public string? MigrationErrorCode { get; init; }
+    public DateTimeOffset? MigrationStartedAtUtc { get; init; }
+    public DateTimeOffset? MigrationUpdatedAtUtc { get; init; }
+    public int MigrationHeldOutboxCount { get; init; }
+    public int MigrationSendingOutboxCount { get; init; }
     public required bool BotEnabled { get; init; }
     public DateTimeOffset? ConnectedAtUtc { get; init; }
     public string? ConnectionErrorCode { get; init; }
@@ -33,6 +45,56 @@ public sealed class WhatsAppIntegrationDTO
     public DateTimeOffset? HistoryStartedAtUtc { get; init; }
     public DateTimeOffset? HistoryCompletedAtUtc { get; init; }
     public string? HistoryErrorCode { get; init; }
+}
+
+public sealed class BeginWhatsAppMigrationRequestDTO
+{
+    [MaxLength(256)]
+    public string? ApprovalReference { get; init; }
+
+    [MaxLength(2048)]
+    public string? OperationalNotes { get; init; }
+}
+
+public sealed class WhatsAppMigrationPreflightDTO
+{
+    public Guid TenantId { get; init; }
+    public Guid IntegrationId { get; init; }
+    public bool CanBegin { get; init; }
+    public string? BlockingCode { get; init; }
+    public ConnectionState ConnectionState { get; init; }
+    public WhatsAppOnboardingType? OnboardingType { get; init; }
+    public TransitionState TransitionState { get; init; }
+    public bool HasMetaIdentity { get; init; }
+    public bool CoexistenceConfigurationAvailable { get; init; }
+    public int SendingOutboxCount { get; init; }
+    public int PendingOutboxCount { get; init; }
+    public int HeldOutboxCount { get; init; }
+    public int ProcessingWebhookCount { get; init; }
+}
+
+public sealed class WhatsAppMigrationExternalMutationRequestDTO
+{
+    [Required]
+    public Guid MigrationId { get; init; }
+
+    [Required, EnumDataType(typeof(TransitionState))]
+    public TransitionState NextState { get; init; }
+
+    [MaxLength(256)]
+    public string? ExternalOperationReferenceId { get; init; }
+}
+
+public sealed class WhatsAppMigrationUnknownRequestDTO
+{
+    [Required]
+    public Guid MigrationId { get; init; }
+
+    [Required, MaxLength(100)]
+    public string SafeErrorCode { get; init; } = string.Empty;
+
+    [MaxLength(256)]
+    public string? ExternalOperationReferenceId { get; init; }
 }
 
 public sealed class EmbeddedSignupCompletionRequestDTO

@@ -16,6 +16,7 @@ namespace WhatsAppBot.Api.Controllers;
 [Route("api/v1/admin/whatsapp")]
 public sealed class WhatsAppIntegrationController(
     IWhatsAppIntegrationService integrationService,
+    IWhatsAppMigrationService migrationService,
     IBotConfigurationService botConfigurationService,
     IOptions<MetaOptions> metaOptions) : ControllerBase
 {
@@ -24,11 +25,89 @@ public sealed class WhatsAppIntegrationController(
     public async Task<ActionResult<ResponseE<WhatsAppIntegrationDTO>>> GetCurrentAsync(
         CancellationToken cancellationToken)
     {
-        var integration = await integrationService.GetCurrentAsync(cancellationToken);
-        var configuration = await botConfigurationService.GetAsync(cancellationToken);
-        var history = await integrationService.GetHistoryImportStatusAsync(cancellationToken);
         return Ok(ResponseE<WhatsAppIntegrationDTO>.Ok(
-            Map(integration, configuration.IsBotEnabled, history), HttpContext.TraceIdentifier));
+            await GetDtoAsync(cancellationToken), HttpContext.TraceIdentifier));
+    }
+
+    [HttpGet("migration/preflight")]
+    [ProducesResponseType(typeof(ResponseE<WhatsAppMigrationPreflightDTO>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ResponseE<WhatsAppMigrationPreflightDTO>>> GetMigrationPreflightAsync(
+        CancellationToken cancellationToken)
+    {
+        var preflight = await migrationService.GetPreflightAsync(cancellationToken);
+        return Ok(ResponseE<WhatsAppMigrationPreflightDTO>.Ok(
+            new WhatsAppMigrationPreflightDTO
+            {
+                TenantId = preflight.TenantId,
+                IntegrationId = preflight.IntegrationId,
+                CanBegin = preflight.CanBegin,
+                BlockingCode = preflight.BlockingCode,
+                ConnectionState = preflight.ConnectionState,
+                OnboardingType = preflight.OnboardingType,
+                TransitionState = preflight.TransitionState,
+                HasMetaIdentity = preflight.HasMetaIdentity,
+                CoexistenceConfigurationAvailable = preflight.CoexistenceConfigurationAvailable,
+                SendingOutboxCount = preflight.SendingOutboxCount,
+                PendingOutboxCount = preflight.PendingOutboxCount,
+                HeldOutboxCount = preflight.HeldOutboxCount,
+                ProcessingWebhookCount = preflight.ProcessingWebhookCount
+            },
+            HttpContext.TraceIdentifier));
+    }
+
+    [HttpPost("migration/begin")]
+    [ProducesResponseType(typeof(ResponseE<WhatsAppIntegrationDTO>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ResponseE<WhatsAppIntegrationDTO>>> BeginMigrationAsync(
+        [FromBody] BeginWhatsAppMigrationRequestDTO request,
+        CancellationToken cancellationToken)
+    {
+        await migrationService.BeginAsync(
+            new BeginMigrationCommand(request.ApprovalReference, request.OperationalNotes),
+            cancellationToken);
+        return Ok(ResponseE<WhatsAppIntegrationDTO>.Ok(
+            await GetDtoAsync(cancellationToken), HttpContext.TraceIdentifier));
+    }
+
+    [HttpPost("migration/cancel")]
+    [ProducesResponseType(typeof(ResponseE<WhatsAppIntegrationDTO>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ResponseE<WhatsAppIntegrationDTO>>> CancelMigrationAsync(
+        CancellationToken cancellationToken)
+    {
+        await migrationService.CancelAsync(cancellationToken);
+        return Ok(ResponseE<WhatsAppIntegrationDTO>.Ok(
+            await GetDtoAsync(cancellationToken), HttpContext.TraceIdentifier));
+    }
+
+    [HttpPost("migration/external-mutation")]
+    [ProducesResponseType(typeof(ResponseE<WhatsAppIntegrationDTO>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ResponseE<WhatsAppIntegrationDTO>>> MarkMigrationExternalMutationAsync(
+        [FromBody] WhatsAppMigrationExternalMutationRequestDTO request,
+        CancellationToken cancellationToken)
+    {
+        await migrationService.MarkExternalMutationAsync(
+            new MigrationExternalMutationCommand(
+                request.MigrationId,
+                request.NextState,
+                request.ExternalOperationReferenceId),
+            cancellationToken);
+        return Ok(ResponseE<WhatsAppIntegrationDTO>.Ok(
+            await GetDtoAsync(cancellationToken), HttpContext.TraceIdentifier));
+    }
+
+    [HttpPost("migration/unknown")]
+    [ProducesResponseType(typeof(ResponseE<WhatsAppIntegrationDTO>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ResponseE<WhatsAppIntegrationDTO>>> MarkMigrationUnknownAsync(
+        [FromBody] WhatsAppMigrationUnknownRequestDTO request,
+        CancellationToken cancellationToken)
+    {
+        await migrationService.MarkUnknownAsync(
+            new MigrationUnknownCommand(
+                request.MigrationId,
+                request.SafeErrorCode,
+                request.ExternalOperationReferenceId),
+            cancellationToken);
+        return Ok(ResponseE<WhatsAppIntegrationDTO>.Ok(
+            await GetDtoAsync(cancellationToken), HttpContext.TraceIdentifier));
     }
 
     [HttpPost("embedded-signup")]
@@ -38,17 +117,15 @@ public sealed class WhatsAppIntegrationController(
         [FromBody] EmbeddedSignupCompletionRequestDTO request,
         CancellationToken cancellationToken)
     {
-        var integration = await integrationService.CompleteSignupAsync(
+        await integrationService.CompleteSignupAsync(
             request.AuthorizationCode,
             request.WabaId,
             string.IsNullOrWhiteSpace(request.PhoneNumberId) ? null : request.PhoneNumberId,
             request.OnboardingType!.Value,
             cancellationToken,
             request.ImportHistory);
-        var configuration = await botConfigurationService.GetAsync(cancellationToken);
-        var history = await integrationService.GetHistoryImportStatusAsync(cancellationToken);
         return Ok(ResponseE<WhatsAppIntegrationDTO>.Ok(
-            Map(integration, configuration.IsBotEnabled, history), HttpContext.TraceIdentifier));
+            await GetDtoAsync(cancellationToken), HttpContext.TraceIdentifier));
     }
 
     [HttpDelete("integration")]
@@ -59,16 +136,27 @@ public sealed class WhatsAppIntegrationController(
         return NoContent();
     }
 
+    private async Task<WhatsAppIntegrationDTO> GetDtoAsync(CancellationToken cancellationToken)
+    {
+        var integration = await integrationService.GetCurrentAsync(cancellationToken);
+        var configuration = await botConfigurationService.GetAsync(cancellationToken);
+        var history = await integrationService.GetHistoryImportStatusAsync(cancellationToken);
+        var migration = await migrationService.GetStatusAsync(cancellationToken);
+        return Map(integration, configuration.IsBotEnabled, history, migration);
+    }
+
     private WhatsAppIntegrationDTO Map(
         WhatsAppIntegration integration,
         bool botEnabled,
-        HistoryImportStatusRecord? history) =>
-        CreateDto(integration, botEnabled, history);
+        HistoryImportStatusRecord? history,
+        WhatsAppMigrationStatus? migration) =>
+        CreateDto(integration, botEnabled, history, migration);
 
     private WhatsAppIntegrationDTO CreateDto(
         WhatsAppIntegration integration,
         bool botEnabled,
-        HistoryImportStatusRecord? history)
+        HistoryImportStatusRecord? history,
+        WhatsAppMigrationStatus? migration)
     {
         var completionStateUnknown = integration.ConnectionState == ConnectionState.Unknown ||
                                      string.Equals(
@@ -89,6 +177,18 @@ public sealed class WhatsAppIntegrationController(
             DisplayName = integration.DisplayName,
             OnboardingType = integration.OnboardingType,
             ConnectionState = connectionState,
+            TransitionState = integration.TransitionState,
+            TransitionStartedAtUtc = integration.TransitionStartedAtUtc,
+            MigrationId = migration?.MigrationId,
+            MigrationCompletionState = migration?.CompletionState ?? MigrationCompletionState.None,
+            MigrationExternalMutationOccurred = migration?.ExternalMutationOccurred ?? false,
+            MigrationExpectedExternalOperation = migration?.ExpectedExternalOperation,
+            MigrationExternalOperationReferenceId = migration?.ExternalOperationReferenceId,
+            MigrationErrorCode = migration?.ErrorCode,
+            MigrationStartedAtUtc = migration?.StartedAtUtc,
+            MigrationUpdatedAtUtc = migration?.UpdatedAtUtc,
+            MigrationHeldOutboxCount = migration?.HeldOutboxCount ?? 0,
+            MigrationSendingOutboxCount = migration?.SendingOutboxCount ?? 0,
             ConnectionErrorCode = connectionState == ConnectionState.Unknown &&
                                   string.IsNullOrWhiteSpace(integration.LastConnectionErrorCode)
                 ? "CompletionStateUnknown"

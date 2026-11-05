@@ -14,6 +14,8 @@ AS
 BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
+    BEGIN TRANSACTION;
+    SET XACT_ABORT ON;
 
     IF @ReplyMode NOT IN (N'FaqOnly', N'FaqThenAi', N'AiOnly')
         THROW 51011, 'The selected reply mode is not supported.', 1;
@@ -26,6 +28,18 @@ BEGIN
           AND TenantId = @TenantId
     )
         THROW 51012, 'The integration is not assigned to the active Tenant.', 1;
+
+    IF EXISTS
+    (
+        SELECT 1
+        FROM dbo.WhatsAppIntegration WITH (UPDLOCK, HOLDLOCK)
+        WHERE IntegrationId = @IntegrationId
+          AND TenantId = @TenantId
+          AND TransitionState NOT IN (N'None', N'Completed')
+    )
+    BEGIN
+        THROW 51013, 'Bot configuration cannot change during a WhatsApp migration.', 1;
+    END;
 
     UPDATE dbo.BotConfiguration
     SET TenantId = @TenantId,
@@ -40,6 +54,8 @@ BEGIN
         INSERT dbo.BotConfiguration (IntegrationId, TenantId, IsBotEnabled, ReplyMode)
         VALUES (@IntegrationId, @TenantId, @IsBotEnabled, @ReplyMode);
     END;
+
+    COMMIT TRANSACTION;
 
     SELECT TenantId, IntegrationId, IsBotEnabled, ReplyMode, CreatedAtUtc, UpdatedAtUtc
     FROM dbo.BotConfiguration

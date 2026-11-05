@@ -33,6 +33,10 @@ BEGIN
     DECLARE @AttentionMode nvarchar(16);
     DECLARE @LifecycleStatus nvarchar(16);
     DECLARE @OutcomeCode nvarchar(100) = NULL;
+    DECLARE @TransitionState nvarchar(40);
+    SELECT @TransitionState = TransitionState
+    FROM dbo.WhatsAppIntegration WITH (UPDLOCK, HOLDLOCK)
+    WHERE TenantId = @TenantId AND IntegrationId = @IntegrationId;
     SELECT
         @ConversationVersion = conversation.Version,
         @AttentionMode = conversation.AttentionMode,
@@ -50,7 +54,11 @@ BEGIN
        AND Direction = N'Inbound'
        AND IsHistorical = 0;
 
-    IF NOT EXISTS
+    IF @TransitionState NOT IN (N'None', N'Completed')
+    BEGIN
+        SET @OutcomeCode = N'IntegrationMigrationInProgress';
+    END
+    ELSE IF NOT EXISTS
        (SELECT 1 FROM dbo.Message
          WHERE MessageId = @InboundMessageId
            AND TenantId = @TenantId

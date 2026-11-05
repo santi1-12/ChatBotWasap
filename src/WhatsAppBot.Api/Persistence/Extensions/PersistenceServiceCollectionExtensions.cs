@@ -13,6 +13,7 @@ public static class PersistenceServiceCollectionExtensions
         services.AddScoped<IBotConfigurationRepository, BotConfigurationRepository>();
         services.AddScoped<IFrequentResponseRepository, FrequentResponseRepository>();
         services.AddScoped<IWhatsAppIntegrationRepository, WhatsAppIntegrationRepository>();
+        services.AddScoped<IWhatsAppMigrationRepository, WhatsAppMigrationRepository>();
         services.AddScoped<IWebhookInboxRepository, WebhookInboxRepository>();
         services.AddScoped<IContactRepository, ContactRepository>();
         services.AddScoped<IConversationRepository, ConversationRepository>();

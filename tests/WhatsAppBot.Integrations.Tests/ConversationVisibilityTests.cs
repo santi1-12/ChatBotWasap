@@ -409,6 +409,19 @@ public sealed class ConversationVisibilityTests
             LoginRequestDTO request, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<ResponseE<WhatsAppIntegrationDTO>?> GetWhatsAppIntegrationAsync(
             CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<ResponseE<WhatsAppMigrationPreflightDTO>?> GetWhatsAppMigrationPreflightAsync(
+            CancellationToken cancellationToken) => Task.FromResult<ResponseE<WhatsAppMigrationPreflightDTO>?>(null);
+        public Task<ResponseE<WhatsAppIntegrationDTO>?> BeginWhatsAppMigrationAsync(
+            BeginWhatsAppMigrationRequestDTO request, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+        public Task<ResponseE<WhatsAppIntegrationDTO>?> CancelWhatsAppMigrationAsync(
+            CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<ResponseE<WhatsAppIntegrationDTO>?> MarkWhatsAppMigrationExternalMutationAsync(
+            WhatsAppMigrationExternalMutationRequestDTO request, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+        public Task<ResponseE<WhatsAppIntegrationDTO>?> MarkWhatsAppMigrationUnknownAsync(
+            WhatsAppMigrationUnknownRequestDTO request, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
         public Task<ResponseE<TenantDTO>?> GetCurrentTenantAsync(
             CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<ResponseE<WhatsAppIntegrationDTO>?> CompleteWhatsAppSignupAsync(

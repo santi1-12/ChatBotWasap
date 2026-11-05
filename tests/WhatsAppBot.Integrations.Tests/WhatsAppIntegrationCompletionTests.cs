@@ -590,6 +590,20 @@ public sealed class WhatsAppIntegrationCompletionTests
             return Task.FromResult(CurrentResponse);
         }
 
+        public Task<ResponseE<WhatsAppMigrationPreflightDTO>?> GetWhatsAppMigrationPreflightAsync(
+            CancellationToken cancellationToken) => Task.FromResult<ResponseE<WhatsAppMigrationPreflightDTO>?>(null);
+        public Task<ResponseE<WhatsAppIntegrationDTO>?> BeginWhatsAppMigrationAsync(
+            BeginWhatsAppMigrationRequestDTO request, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+        public Task<ResponseE<WhatsAppIntegrationDTO>?> CancelWhatsAppMigrationAsync(
+            CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<ResponseE<WhatsAppIntegrationDTO>?> MarkWhatsAppMigrationExternalMutationAsync(
+            WhatsAppMigrationExternalMutationRequestDTO request, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+        public Task<ResponseE<WhatsAppIntegrationDTO>?> MarkWhatsAppMigrationUnknownAsync(
+            WhatsAppMigrationUnknownRequestDTO request, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
         public Task<ResponseE<PagedResultDTO<ConversationSummaryDTO>>?> ListConversationsAsync(
             int page, int pageSize, CancellationToken cancellationToken) =>
             throw new NotSupportedException();

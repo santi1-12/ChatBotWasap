@@ -88,6 +88,49 @@ public interface IWhatsAppIntegrationService
     Task DisconnectAsync(CancellationToken cancellationToken);
 }
 
+public interface IWhatsAppMigrationRepository
+{
+    Task<WhatsAppMigrationStatus?> GetStatusAsync(
+        Guid tenantId, Guid integrationId, CancellationToken cancellationToken);
+    Task<WhatsAppMigrationPreflight> GetPreflightAsync(
+        Guid tenantId, Guid integrationId, CancellationToken cancellationToken);
+    Task<WhatsAppMigrationStatus> BeginAsync(
+        Guid tenantId,
+        Guid integrationId,
+        string? approvalReference,
+        string? operationalNotes,
+        CancellationToken cancellationToken);
+    Task<WhatsAppMigrationStatus> CancelAsync(
+        Guid tenantId, Guid integrationId, CancellationToken cancellationToken);
+    Task<WhatsAppMigrationStatus> MarkExternalMutationAsync(
+        Guid tenantId,
+        Guid integrationId,
+        MigrationExternalMutationCommand command,
+        CancellationToken cancellationToken);
+    Task<WhatsAppMigrationStatus> MarkUnknownAsync(
+        Guid tenantId,
+        Guid integrationId,
+        MigrationUnknownCommand command,
+        CancellationToken cancellationToken);
+    Task<WhatsAppIntegration> ReconcileSignupAsync(
+        MetaSignupResult result, CancellationToken cancellationToken);
+}
+
+public interface IWhatsAppMigrationService
+{
+    Task<WhatsAppMigrationStatus?> GetStatusAsync(CancellationToken cancellationToken);
+    Task<WhatsAppMigrationPreflight> GetPreflightAsync(CancellationToken cancellationToken);
+    Task<WhatsAppMigrationStatus> BeginAsync(
+        BeginMigrationCommand command, CancellationToken cancellationToken);
+    Task<WhatsAppMigrationStatus> CancelAsync(CancellationToken cancellationToken);
+    Task<WhatsAppMigrationStatus> MarkExternalMutationAsync(
+        MigrationExternalMutationCommand command, CancellationToken cancellationToken);
+    Task<WhatsAppMigrationStatus> MarkUnknownAsync(
+        MigrationUnknownCommand command, CancellationToken cancellationToken);
+    Task<WhatsAppIntegration> ReconcileSignupAsync(
+        MetaSignupResult result, CancellationToken cancellationToken);
+}
+
 public interface IWebhookInboxRepository
 {
     Task<bool> InsertAsync(NormalizedMetaEvent webhookEvent, CancellationToken cancellationToken);

@@ -24,6 +24,7 @@ BEGIN
            AND conv.TenantId = o.TenantId
            AND conv.IntegrationId = o.IntegrationId
         WHERE i.IsActive = 1 AND i.ConnectionState = N'Connected'
+          AND i.TransitionState IN (N'None', N'Completed')
           AND i.TenantId = o.TenantId
           AND o.TenantId = conv.TenantId
           AND o.IntegrationId = conv.IntegrationId
@@ -33,8 +34,8 @@ BEGIN
           AND ((m.ReplySource = N'Admin' AND conv.AttentionMode = N'Humano')
                OR (m.ReplySource <> N'Admin' AND conv.AttentionMode = N'Bot'))
           AND conv.LifecycleStatus = N'Abierta'
-          AND (o.State = N'Pending' AND o.NextAttemptAtUtc <= SYSUTCDATETIME()
-               OR o.State = N'Sending' AND o.UpdatedAtUtc < DATEADD(minute, -5, SYSUTCDATETIME()))
+           AND ((o.State IN (N'Pending', N'HeldForMigration') AND o.NextAttemptAtUtc <= SYSUTCDATETIME())
+                OR o.State = N'Sending' AND o.UpdatedAtUtc < DATEADD(minute, -5, SYSUTCDATETIME()))
         ORDER BY o.NextAttemptAtUtc, o.MessageId
     )
     UPDATE o

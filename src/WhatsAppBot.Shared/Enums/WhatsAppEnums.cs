@@ -1,6 +1,19 @@
 namespace WhatsAppBot.Shared.Enums;
 
 public enum ConnectionState { NotConnected, Configuring, Connected, Error, Unknown }
+public enum TransitionState
+{
+    None,
+    PreparingMigration,
+    MigrationToCoexistence,
+    AwaitingBusinessApp,
+    AwaitingCoexistenceSignup,
+    Reconciling,
+    Completed,
+    Failed,
+    Unknown
+}
+public enum MigrationCompletionState { None, Pending, Succeeded, Canceled, Failed, Unknown }
 public enum BotReplyMode { FaqOnly, FaqThenAi, AiOnly }
 public enum ConversationStatus { Open, Closed }
 public enum MessageDirection { Inbound, Outbound }
@@ -12,7 +25,7 @@ public enum MediaKind { Audio, Image }
 public enum MediaAvailabilityState { Pending, Available, Expired, Failed, Deleted }
 public enum TranscriptState { Pending, Completed, Failed }
 public enum WebhookInboxState { Received, Processing, Completed, Failed }
-public enum MessageOutboxState { Pending, Sending, Sent, Failed }
+public enum MessageOutboxState { Pending, Sending, Sent, Failed, HeldForMigration }
 public enum WhatsAppOnboardingType { Standard, Coexistence }
 public enum AttentionMode { Bot, Humano }
 public enum LifecycleStatus { Abierta, Cerrada }

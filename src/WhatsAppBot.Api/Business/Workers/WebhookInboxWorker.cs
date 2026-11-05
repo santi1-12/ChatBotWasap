@@ -46,6 +46,7 @@ public sealed class WebhookInboxWorker(
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var inbox = scope.ServiceProvider.GetRequiredService<IWebhookInboxRepository>();
+        var integrations = scope.ServiceProvider.GetService<IWhatsAppIntegrationRepository>();
         var processor = scope.ServiceProvider.GetRequiredService<MessageProcessingService>();
         var events = await inbox.ClaimBatchAsync(batchSize, cancellationToken);
         foreach (var webhookEvent in events)
@@ -58,6 +59,26 @@ public sealed class WebhookInboxWorker(
                 {
                     throw new BusinessValidationException(
                         "A claimed webhook event must have server-assigned TenantId and IntegrationId.");
+                }
+
+                if (integrations is not null)
+                {
+                    var integration = await integrations.GetByPhoneNumberIdAsync(
+                        tenantId,
+                        webhookEvent.IntegrationId.Value,
+                        webhookEvent.PhoneNumberId,
+                        itemDeadline.Token);
+                    if (integration.IsMigrationBlocking)
+                    {
+                        // Keep the event in the inbox until the migration is canceled or reconciled.
+                        await inbox.SetStateAsync(
+                            tenantId,
+                            webhookEvent.EventKey,
+                            WebhookInboxState.Received,
+                            null,
+                            cancellationToken);
+                        continue;
+                    }
                 }
 
                 var processingResult = await processor.ProcessAsync(webhookEvent, itemDeadline.Token);

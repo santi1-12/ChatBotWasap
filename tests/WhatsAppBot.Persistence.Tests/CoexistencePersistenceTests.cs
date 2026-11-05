@@ -127,6 +127,139 @@ public sealed class CoexistencePersistenceTests(LocalDbFixture fixture)
         }
     }
 
+    [Fact]
+    public async Task MigrationBeginAndCancel_HoldsAndRestoresInternalState()
+    {
+        var tenantId = Guid.NewGuid();
+        var integrationId = Guid.NewGuid();
+        await using var connection = new SqlConnection(fixture.ConnectionString);
+        await connection.OpenAsync();
+
+        try
+        {
+            await ExecuteAsync(
+                connection,
+                "INSERT dbo.Tenant (TenantId, LegalName, IsActive) VALUES (@TenantId, N'Migration persistence test', 1); " +
+                "INSERT dbo.WhatsAppIntegration (IntegrationId, TenantId, WabaId, PhoneNumberId, ConnectionState, IsActive, OnboardingType) " +
+                "VALUES (@IntegrationId, @TenantId, N'waba-migration', N'phone-migration', N'Connected', 1, N'Standard'); " +
+                "INSERT dbo.BotConfiguration (IntegrationId, TenantId, IsBotEnabled, ReplyMode) " +
+                "VALUES (@IntegrationId, @TenantId, 1, N'FaqOnly');",
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId },
+                new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier) { Value = integrationId });
+
+            var migrations = new WhatsAppMigrationRepository(fixture.Executor);
+            var preflight = await migrations.GetPreflightAsync(
+                tenantId, integrationId, CancellationToken.None);
+            Assert.True(preflight.CanBegin);
+
+            var started = await migrations.BeginAsync(
+                tenantId,
+                integrationId,
+                "approval-test",
+                "internal-only",
+                CancellationToken.None);
+            Assert.Equal(TransitionState.MigrationToCoexistence, started.TransitionState);
+            Assert.Equal(MigrationCompletionState.Pending, started.CompletionState);
+            Assert.Equal(0, Convert.ToInt32(await ScalarAsync(
+                connection,
+                "SELECT IsBotEnabled FROM dbo.BotConfiguration WHERE IntegrationId = @IntegrationId;",
+                new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier) { Value = integrationId })));
+
+            var canceled = await migrations.CancelAsync(
+                tenantId, integrationId, CancellationToken.None);
+            Assert.Equal(TransitionState.None, canceled.TransitionState);
+            Assert.Equal(MigrationCompletionState.Canceled, canceled.CompletionState);
+            Assert.Equal(1, Convert.ToInt32(await ScalarAsync(
+                connection,
+                "SELECT IsBotEnabled FROM dbo.BotConfiguration WHERE IntegrationId = @IntegrationId;",
+                new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier) { Value = integrationId })));
+        }
+        finally
+        {
+            await ExecuteAsync(
+                connection,
+                "DELETE dbo.WhatsAppIntegrationMigration WHERE IntegrationId = @IntegrationId; " +
+                "DELETE dbo.BotConfiguration WHERE IntegrationId = @IntegrationId; " +
+                "DELETE dbo.WhatsAppIntegration WHERE IntegrationId = @IntegrationId; " +
+                "DELETE dbo.Tenant WHERE TenantId = @TenantId;",
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId },
+                new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier) { Value = integrationId });
+        }
+    }
+
+    [Fact]
+    public async Task MigrationExternalMutationAndReconcile_UpdatesConnectionWithoutLosingSlot()
+    {
+        var tenantId = Guid.NewGuid();
+        var integrationId = Guid.NewGuid();
+        await using var connection = new SqlConnection(fixture.ConnectionString);
+        await connection.OpenAsync();
+
+        try
+        {
+            await ExecuteAsync(
+                connection,
+                "INSERT dbo.Tenant (TenantId, LegalName, IsActive) VALUES (@TenantId, N'Migration reconcile test', 1); " +
+                "INSERT dbo.WhatsAppIntegration (IntegrationId, TenantId, WabaId, PhoneNumberId, ConnectionState, IsActive, OnboardingType) " +
+                "VALUES (@IntegrationId, @TenantId, N'waba-before', N'phone-before', N'Connected', 1, N'Standard'); " +
+                "INSERT dbo.BotConfiguration (IntegrationId, TenantId, IsBotEnabled, ReplyMode) " +
+                "VALUES (@IntegrationId, @TenantId, 0, N'FaqThenAi');",
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId },
+                new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier) { Value = integrationId });
+
+            var migrations = new WhatsAppMigrationRepository(fixture.Executor);
+            await migrations.BeginAsync(
+                tenantId, integrationId, null, null, CancellationToken.None);
+            var marked = await migrations.MarkExternalMutationAsync(
+                tenantId,
+                integrationId,
+                new MigrationExternalMutationCommand(
+                    (await migrations.GetStatusAsync(tenantId, integrationId, CancellationToken.None))!.MigrationId,
+                    TransitionState.AwaitingCoexistenceSignup,
+                    "external-reference-test"),
+                CancellationToken.None);
+            Assert.True(marked.ExternalMutationOccurred);
+            Assert.Equal(TransitionState.AwaitingCoexistenceSignup, marked.TransitionState);
+
+            var reconciled = await migrations.ReconcileSignupAsync(
+                new MetaSignupResult(
+                    integrationId,
+                    "waba-after",
+                    "phone-after",
+                    "+15550000001",
+                    "Coexistence Test",
+                    "Meta:BusinessAccessTokens:test-reconcile",
+                    "Meta:AppSecret",
+                    "Meta:VerifyToken")
+                {
+                    TenantId = tenantId,
+                    OnboardingType = WhatsAppOnboardingType.Coexistence,
+                    EffectiveEmbeddedSignupConfigId = "coexistence-config",
+                    ImportHistory = false
+                },
+                CancellationToken.None);
+
+            Assert.Equal(TransitionState.Completed, reconciled.TransitionState);
+            Assert.Equal(WhatsAppOnboardingType.Coexistence, reconciled.OnboardingType);
+            Assert.Equal("phone-after", reconciled.PhoneNumberId);
+            Assert.True(reconciled.IsActive);
+            var status = await migrations.GetStatusAsync(
+                tenantId, integrationId, CancellationToken.None);
+            Assert.Equal(MigrationCompletionState.Succeeded, status!.CompletionState);
+        }
+        finally
+        {
+            await ExecuteAsync(
+                connection,
+                "DELETE dbo.WhatsAppIntegrationMigration WHERE IntegrationId = @IntegrationId; " +
+                "DELETE dbo.BotConfiguration WHERE IntegrationId = @IntegrationId; " +
+                "DELETE dbo.WhatsAppIntegration WHERE IntegrationId = @IntegrationId; " +
+                "DELETE dbo.Tenant WHERE TenantId = @TenantId;",
+                new SqlParameter("@TenantId", SqlDbType.UniqueIdentifier) { Value = tenantId },
+                new SqlParameter("@IntegrationId", SqlDbType.UniqueIdentifier) { Value = integrationId });
+        }
+    }
+
     private NormalizedMetaEvent CreateEvent(
         Guid integrationId,
         string eventType,
@@ -185,6 +318,14 @@ public sealed class CoexistencePersistenceTests(LocalDbFixture fixture)
         await using var command = new SqlCommand(sql, connection);
         command.Parameters.AddRange(parameters);
         return await command.ExecuteScalarAsync();
+    }
+
+    private static async Task ExecuteAsync(
+        SqlConnection connection, string sql, params SqlParameter[] parameters)
+    {
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.AddRange(parameters);
+        await command.ExecuteNonQueryAsync();
     }
 
     private static async Task DeleteIntegrationDataAsync(SqlConnection connection, Guid integrationId)

@@ -12,11 +12,16 @@ namespace WhatsAppBot.Admin.Pages.Settings.WhatsApp;
 public sealed class IndexModel(IWhatsAppBotApiClient apiClient) : PageModel
 {
     public WhatsAppIntegrationDTO? Integration { get; private set; }
+    public WhatsAppMigrationPreflightDTO? MigrationPreflight { get; private set; }
     public string? ErrorMessage { get; private set; }
     public string? SuccessMessage { get; private set; }
     public string? PendingMessage { get; private set; }
     public bool ApiResponseAvailable { get; private set; }
     public bool IsConnected => HasCompleteConnection(Integration);
+    public bool IsMigrationBlocking => Integration?.TransitionState is not (
+        TransitionState.None or TransitionState.Completed or null);
+    public bool CanCancelMigration =>
+        IsMigrationBlocking && Integration is not null && !Integration.MigrationExternalMutationOccurred;
     public bool ShowConfigurationMissing =>
         ApiResponseAvailable && Integration is not null && !HasSignupConfiguration(Integration);
 
@@ -34,6 +39,21 @@ public sealed class IndexModel(IWhatsAppBotApiClient apiClient) : PageModel
 
     [BindProperty]
     public bool ImportHistory { get; set; }
+
+    [BindProperty, MaxLength(256)]
+    public string? MigrationApprovalReference { get; set; }
+
+    [BindProperty, MaxLength(2048)]
+    public string? MigrationOperationalNotes { get; set; }
+
+    [BindProperty]
+    public TransitionState MigrationNextState { get; set; } = TransitionState.AwaitingCoexistenceSignup;
+
+    [BindProperty, MaxLength(256)]
+    public string? MigrationExternalOperationReferenceId { get; set; }
+
+    [BindProperty, MaxLength(100)]
+    public string MigrationSafeErrorCode { get; set; } = "MigrationStateUnknown";
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -101,6 +121,138 @@ public sealed class IndexModel(IWhatsAppBotApiClient apiClient) : PageModel
         }
     }
 
+    public async Task<IActionResult> OnPostBeginMigrationAsync(CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            await LoadIntegrationAsync(cancellationToken);
+            return Page();
+        }
+
+        try
+        {
+            var response = await apiClient.BeginWhatsAppMigrationAsync(
+                new BeginWhatsAppMigrationRequestDTO
+                {
+                    ApprovalReference = MigrationApprovalReference,
+                    OperationalNotes = MigrationOperationalNotes
+                },
+                cancellationToken);
+            if (response?.Success == true)
+            {
+                SuccessMessage = "La migración interna quedó preparada. No se ejecutó ninguna operación externa.";
+            }
+            else
+            {
+                ErrorMessage = response?.Error?.Message ?? "No se pudo preparar la migración interna.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            ErrorMessage = "No se pudo contactar la API. La migración interna no fue modificada.";
+        }
+
+        await LoadIntegrationAsync(cancellationToken);
+        return Page();
+    }
+
+    public async Task<IActionResult> OnPostCancelMigrationAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await apiClient.CancelWhatsAppMigrationAsync(cancellationToken);
+            if (response?.Success == true)
+            {
+                SuccessMessage = "La migración interna fue cancelada. No se ejecutó ninguna operación externa.";
+            }
+            else
+            {
+                ErrorMessage = response?.Error?.Message ?? "La migración no se pudo cancelar.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            ErrorMessage = "No se pudo contactar la API. La migración interna no fue modificada.";
+        }
+
+        await LoadIntegrationAsync(cancellationToken);
+        return Page();
+    }
+
+    public async Task<IActionResult> OnPostMarkExternalMutationAsync(CancellationToken cancellationToken)
+    {
+        if (Integration?.MigrationId is null)
+        {
+            ErrorMessage = "No hay una migración interna activa.";
+            await LoadIntegrationAsync(cancellationToken);
+            return Page();
+        }
+
+        try
+        {
+            var response = await apiClient.MarkWhatsAppMigrationExternalMutationAsync(
+                new WhatsAppMigrationExternalMutationRequestDTO
+                {
+                    MigrationId = Integration.MigrationId.Value,
+                    NextState = MigrationNextState,
+                    ExternalOperationReferenceId = MigrationExternalOperationReferenceId
+                },
+                cancellationToken);
+            if (response?.Success == true)
+            {
+                SuccessMessage = "La fase externa fue registrada. Este control no ejecuta ninguna operación sobre Meta.";
+            }
+            else
+            {
+                ErrorMessage = response?.Error?.Message ?? "No se pudo registrar la fase externa.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            ErrorMessage = "No se pudo contactar la API. El estado de migración no fue modificado.";
+        }
+
+        await LoadIntegrationAsync(cancellationToken);
+        return Page();
+    }
+
+    public async Task<IActionResult> OnPostMarkMigrationUnknownAsync(CancellationToken cancellationToken)
+    {
+        if (Integration?.MigrationId is null)
+        {
+            ErrorMessage = "No hay una migración interna activa.";
+            await LoadIntegrationAsync(cancellationToken);
+            return Page();
+        }
+
+        try
+        {
+            var response = await apiClient.MarkWhatsAppMigrationUnknownAsync(
+                new WhatsAppMigrationUnknownRequestDTO
+                {
+                    MigrationId = Integration.MigrationId.Value,
+                    SafeErrorCode = MigrationSafeErrorCode,
+                    ExternalOperationReferenceId = MigrationExternalOperationReferenceId
+                },
+                cancellationToken);
+            if (response?.Success == true)
+            {
+                SuccessMessage = "La migración quedó bloqueada en estado indeterminado. No se ejecutó ninguna operación externa.";
+            }
+            else
+            {
+                ErrorMessage = response?.Error?.Message ?? "No se pudo registrar el estado indeterminado.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            ErrorMessage = "No se pudo contactar la API. El estado de migración no fue modificado.";
+        }
+
+        await LoadIntegrationAsync(cancellationToken);
+        return Page();
+    }
+
     public async Task<IActionResult> OnPostDisconnectAsync(CancellationToken cancellationToken)
     {
         try
@@ -120,6 +272,8 @@ public sealed class IndexModel(IWhatsAppBotApiClient apiClient) : PageModel
     public string ConnectionLabel(ConnectionState? state) =>
         !ApiResponseAvailable
             ? "Estado no disponible"
+            : IsMigrationBlocking
+            ? "Migración interna en curso"
             : state == ConnectionState.Connected && !IsConnected
             ? "Error"
             : state switch
@@ -135,6 +289,7 @@ public sealed class IndexModel(IWhatsAppBotApiClient apiClient) : PageModel
     private async Task LoadIntegrationAsync(CancellationToken cancellationToken)
     {
         Integration = null;
+        MigrationPreflight = null;
         ApiResponseAvailable = false;
         try
         {
@@ -144,6 +299,7 @@ public sealed class IndexModel(IWhatsAppBotApiClient apiClient) : PageModel
                 ApiResponseAvailable = true;
                 Integration = response.Data;
                 ErrorMessage ??= ConnectionErrorMessage(Integration.ConnectionErrorCode);
+                await LoadMigrationPreflightAsync(cancellationToken);
             }
             else
             {
@@ -161,6 +317,26 @@ public sealed class IndexModel(IWhatsAppBotApiClient apiClient) : PageModel
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             ErrorMessage ??= "No se pudo consultar la API dentro del tiempo esperado.";
+        }
+    }
+
+    private async Task LoadMigrationPreflightAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await apiClient.GetWhatsAppMigrationPreflightAsync(cancellationToken);
+            if (response?.Success == true)
+            {
+                MigrationPreflight = response.Data;
+            }
+        }
+        catch (AdminApiTimeoutException)
+        {
+            // The integration status remains useful when the optional preflight query times out.
+        }
+        catch (HttpRequestException)
+        {
+            // The integration status remains useful when the optional preflight query fails.
         }
     }
 

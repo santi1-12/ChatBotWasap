@@ -122,6 +122,7 @@ public static class MessageOutcomeCodes
     public const string ConversationClosed = "ConversationClosed";
     public const string ConversationVersionConflict = "ConversationVersionConflict";
     public const string IntegrationUnavailable = "IntegrationUnavailable";
+    public const string IntegrationMigrationInProgress = "IntegrationMigrationInProgress";
     public const string ManualSendFailed = "ManualSendFailed";
     public const string ManualReplyRequiresHuman = "ManualReplyRequiresHuman";
     public const string ManualReplyNotAuthorized = "ManualReplyNotAuthorized";

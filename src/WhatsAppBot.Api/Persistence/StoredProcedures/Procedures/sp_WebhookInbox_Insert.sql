@@ -29,17 +29,19 @@ BEGIN
     -- ambiguous tenant-less webhook routing for the same provider identity.
     IF (SELECT COUNT(*)
         FROM dbo.WhatsAppIntegration
-        WHERE PhoneNumberId = @PhoneNumberId
-          AND (@WabaId IS NULL OR WabaId = @WabaId)
-          AND IsActive = 1 AND ConnectionState = N'Connected') > 1
+         WHERE PhoneNumberId = @PhoneNumberId
+           AND (@WabaId IS NULL OR WabaId = @WabaId)
+           AND ((IsActive = 1 AND ConnectionState = N'Connected')
+                OR TransitionState NOT IN (N'None', N'Completed'))) > 1
         THROW 51003, 'The webhook phone number is connected to multiple active integrations.', 1;
 
     DECLARE @IntegrationId uniqueidentifier =
         (SELECT TOP (1) IntegrationId
          FROM dbo.WhatsAppIntegration
-         WHERE PhoneNumberId = @PhoneNumberId
-           AND (@WabaId IS NULL OR WabaId = @WabaId)
-           AND IsActive = 1 AND ConnectionState = N'Connected');
+          WHERE PhoneNumberId = @PhoneNumberId
+            AND (@WabaId IS NULL OR WabaId = @WabaId)
+            AND ((IsActive = 1 AND ConnectionState = N'Connected')
+                 OR TransitionState NOT IN (N'None', N'Completed')));
     DECLARE @TenantId uniqueidentifier =
         (SELECT TenantId FROM dbo.WhatsAppIntegration WHERE IntegrationId = @IntegrationId);
     IF @IntegrationId IS NULL OR @TenantId IS NULL

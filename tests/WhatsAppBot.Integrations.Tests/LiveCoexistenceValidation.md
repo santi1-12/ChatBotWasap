@@ -21,7 +21,7 @@ Implementation status: T134 implementación local completa / validación live pe
 - The current number is `+57 321 5644731`, Phone Number ID `1346146225253204`, WABA `937023445764944`, `ConnectionState=Connected`, and `OnboardingType=Standard`.
 - The current Graph API phone metadata is valid and reports `platform_type=CLOUD_API`, `quality_rating=GREEN`, and `code_verification_status=EXPIRED`. These fields do not prove that the number is currently active in WhatsApp Business App or eligible for Coexistence.
 - No separate Coexistence candidate number is configured or persisted in the repository/database. The intended candidate under the requested same-number scenario would therefore be the currently connected Standard number, but using it would require changing the active integration.
-- The current Admin page exposes only `Desconectar WhatsApp` because the integration is complete. The server-side `WhatsAppIntegrationService` also rejects a new signup while `HasCompleteConnection` is true and requires disconnecting the current number first.
+- The Admin page now exposes only internal migration preparation/status controls for this path. It does not execute deregistration, Business App registration, or any other Meta mutation. The server-side `WhatsAppIntegrationService` rejects a new signup while `HasCompleteConnection` is true unless an approved migration journal is in the Coexistence completion phase.
 - `Meta:CoexistenceEmbeddedSignupConfigId` is not configured as a dedicated secret. The application now refuses to start the Coexistence path without that dedicated configuration; Meta-side enablement and eligibility are not confirmed by configuration presence alone.
 - The current WABA subscription and webhook are operational, but that is evidence for the existing Standard connection, not evidence of Coexistence onboarding.
 
@@ -32,6 +32,16 @@ Implementation status: T134 implementación local completa / validación live pe
 - The adapter validates the WABA/Phone Number relationship, obtains phone details, skips Standard `/register`, subscribes the WABA, stores only a secret reference, and persists `OnboardingType=Coexistence` only after confirmation.
 - Automated integration coverage verifies that the Coexistence branch does not call `register-phone`.
 - `history` is accepted only after persisted consent and uses a separate idempotent, progress-tracked path with no bot/outbox work. `smb_message_echoes` is accepted as outbound human activity and moves the conversation to Humano priority. `smb_app_state_sync` remains ignored.
+
+## Internal Controls Ready
+
+- `GET /api/v1/admin/whatsapp/migration/preflight` reports whether the current Standard integration can enter the protected transition.
+- `POST /api/v1/admin/whatsapp/migration/begin` freezes Bot/manual producers, moves pending outbox rows to `HeldForMigration`, and creates a Tenant-scoped migration journal.
+- `POST /api/v1/admin/whatsapp/migration/cancel` is allowed only before an external mutation is confirmed; retained outbox rows are released to individual worker revalidation.
+- `POST /api/v1/admin/whatsapp/migration/external-mutation` records an externally completed phase without executing it.
+- `POST /api/v1/admin/whatsapp/migration/unknown` blocks further progression when the external state cannot be confirmed.
+- Webhooks remain durably persisted in `Received` during a blocking transition; outbox claims and all new outbound producers are blocked by `TransitionState`.
+- `GET /api/v1/admin/whatsapp/integration` exposes the transition/journal status without exposing secret values.
 
 ## Actions Not Performed
 

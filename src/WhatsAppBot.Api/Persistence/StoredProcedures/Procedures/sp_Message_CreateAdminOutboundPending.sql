@@ -24,6 +24,7 @@ BEGIN
     DECLARE @PreviousLifecycleStatus nvarchar(16);
     DECLARE @CurrentVersion binary(8);
     DECLARE @LastCustomerMessageAtUtc datetime2(3);
+    DECLARE @TransitionState nvarchar(40);
 
     IF NOT EXISTS
     (
@@ -42,26 +43,35 @@ BEGIN
     WHERE conversation.TenantId = @TenantId
       AND conversation.ConversationId = @ConversationId;
 
-    IF @Found = 0
+    IF @OutcomeCode IS NULL AND @Found = 0
     BEGIN
         SET @OutcomeCode = N'ConversationVersionConflict';
     END
-    ELSE IF @CurrentVersion <> @ExpectedVersion
+    ELSE IF @OutcomeCode IS NULL
+    BEGIN
+        SELECT @TransitionState = TransitionState
+        FROM dbo.WhatsAppIntegration WITH (UPDLOCK, HOLDLOCK)
+        WHERE TenantId = @TenantId AND IntegrationId = @IntegrationId;
+        IF @TransitionState NOT IN (N'None', N'Completed')
+            SET @OutcomeCode = N'IntegrationMigrationInProgress';
+    END;
+
+    IF @OutcomeCode IS NULL AND @Found = 1 AND @CurrentVersion <> @ExpectedVersion
     BEGIN
         SET @Conflict = 1;
         SET @OutcomeCode = N'ConversationVersionConflict';
     END
-    ELSE IF @PreviousAttentionMode <> N'Humano'
+    ELSE IF @OutcomeCode IS NULL AND @PreviousAttentionMode <> N'Humano'
     BEGIN
         SET @Conflict = 1;
         SET @OutcomeCode = N'ManualReplyRequiresHuman';
     END
-    ELSE IF @PreviousLifecycleStatus <> N'Abierta'
+    ELSE IF @OutcomeCode IS NULL AND @PreviousLifecycleStatus <> N'Abierta'
     BEGIN
         SET @Conflict = 1;
         SET @OutcomeCode = N'ConversationClosed';
     END
-    ELSE IF NOT EXISTS
+    ELSE IF @OutcomeCode IS NULL AND NOT EXISTS
     (
         SELECT 1
         FROM dbo.WhatsAppIntegration
@@ -73,7 +83,7 @@ BEGIN
     BEGIN
         SET @OutcomeCode = N'IntegrationUnavailable';
     END
-    ELSE
+    ELSE IF @OutcomeCode IS NULL
     BEGIN
         SELECT @LastCustomerMessageAtUtc = MAX(message.ProviderTimestampUtc)
         FROM dbo.Message AS message

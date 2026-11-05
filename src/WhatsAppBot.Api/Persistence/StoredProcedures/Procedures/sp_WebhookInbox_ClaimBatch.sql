@@ -19,8 +19,16 @@ BEGIN
     (
         SELECT TOP (@BatchSize) *
         FROM dbo.WebhookInboxEvent WITH (UPDLOCK, READPAST, ROWLOCK)
-        WHERE State = N'Received'
-           OR (State = N'Processing' AND ReceivedAtUtc < DATEADD(minute, -5, SYSUTCDATETIME()))
+        WHERE (State = N'Received'
+           OR (State = N'Processing' AND ReceivedAtUtc < DATEADD(minute, -5, SYSUTCDATETIME())))
+          AND EXISTS
+          (
+              SELECT 1
+              FROM dbo.WhatsAppIntegration AS integration
+              WHERE integration.TenantId = WebhookInboxEvent.TenantId
+                AND integration.IntegrationId = WebhookInboxEvent.IntegrationId
+                AND integration.TransitionState IN (N'None', N'Completed')
+          )
         ORDER BY ReceivedAtUtc, WebhookInboxEventId
     )
     UPDATE Claimable

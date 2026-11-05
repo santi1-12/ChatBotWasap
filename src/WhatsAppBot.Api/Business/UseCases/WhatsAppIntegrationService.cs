@@ -15,7 +15,8 @@ public sealed class WhatsAppIntegrationService(
     ISecretStore secretStore,
     CompletionPhaseLogger phaseLogger,
     CompletionExecutionContext executionContext,
-    IOptions<ApiOptions> apiOptions) : IWhatsAppIntegrationService
+    IOptions<ApiOptions> apiOptions,
+    IWhatsAppMigrationService? migrationService = null) : IWhatsAppIntegrationService
 {
     public Task<WhatsAppIntegration> GetCurrentAsync(CancellationToken cancellationToken) =>
         repository.GetCurrentAsync(cancellationToken);
@@ -47,30 +48,72 @@ public sealed class WhatsAppIntegrationService(
         }
 
         var integration = await repository.GetCurrentAsync(cancellationToken);
-        if (integration.ConnectionState == ConnectionState.Unknown ||
+        var migration = migrationService is null
+            ? null
+            : await migrationService.GetStatusAsync(cancellationToken);
+        var migrationActive = integration.IsMigrationBlocking;
+        if (migrationActive && migration is null)
+        {
+            throw new BusinessValidationException(
+                "The WhatsApp migration state has no journal and requires reconciliation.");
+        }
+
+        if ((integration.ConnectionState == ConnectionState.Unknown ||
             string.Equals(integration.LastConnectionErrorCode, "CompletionStateUnknown", StringComparison.Ordinal))
+            && !migrationActive)
         {
             throw new BusinessValidationException(
                 "The previous Meta completion has an indeterminate state. Reconcile or disconnect it before retrying.");
         }
-        if (integration.HasCompleteConnection)
+        if (integration.HasCompleteConnection &&
+            !(migrationActive && onboardingType == WhatsAppOnboardingType.Coexistence))
         {
             throw new BusinessValidationException("Disconnect the current WhatsApp number before connecting another.");
         }
+        if (migrationActive && onboardingType != WhatsAppOnboardingType.Coexistence)
+        {
+            throw new BusinessValidationException(
+                "Only Coexistence completion is allowed during the approved migration.");
+        }
+        if (migrationActive && migration!.TransitionState == TransitionState.Unknown)
+        {
+            throw new BusinessValidationException(
+                "The Coexistence migration has an indeterminate external state and requires reconciliation.");
+        }
+        if (migrationActive &&
+            (!migration!.ExternalMutationOccurred ||
+             migration.TransitionState is not (
+                 TransitionState.AwaitingCoexistenceSignup or TransitionState.Reconciling)))
+        {
+            throw new BusinessValidationException(
+                "The external migration steps must be confirmed before Coexistence signup can continue.");
+        }
+
+        var migrationExternalMutationOccurred = migration?.ExternalMutationOccurred == true;
 
         try
         {
-            await phaseLogger.RunAsync(
-                "IntegrationPersistence",
-                () => repository.SetConnectionStateAsync(
-                    integration.IntegrationId, ConnectionState.Configuring, null, cancellationToken));
+            if (!migrationActive)
+            {
+                await phaseLogger.RunAsync(
+                    "IntegrationPersistence",
+                    () => repository.SetConnectionStateAsync(
+                        integration.IntegrationId, ConnectionState.Configuring, null, cancellationToken));
+            }
 
             var result = await signupAdapter.CompleteAsync(
                 authorizationCode, wabaId, phoneNumberId, onboardingType, cancellationToken, importHistory);
 
-            await phaseLogger.RunAsync(
-                "IntegrationPersistence",
-                () => repository.SaveSignupResultAsync(result, cancellationToken));
+            if (migrationActive)
+            {
+                await migrationService!.ReconcileSignupAsync(result, cancellationToken);
+            }
+            else
+            {
+                await phaseLogger.RunAsync(
+                    "IntegrationPersistence",
+                    () => repository.SaveSignupResultAsync(result, cancellationToken));
+            }
 
             var persistedIntegration = await phaseLogger.RunAsync(
                 "PersistenceConfirmation",
@@ -89,7 +132,12 @@ public sealed class WhatsAppIntegrationService(
         }
         catch (ExternalDependencyException exception)
         {
-            var safeCode = executionContext.ExternalMutationMayHaveOccurred
+            if (migrationActive && migrationService is not null && migration is not null &&
+                migrationExternalMutationOccurred)
+            {
+                await TryMarkMigrationUnknownAsync(migration, exception.SafeCode);
+            }
+            var safeCode = migrationExternalMutationOccurred || executionContext.ExternalMutationMayHaveOccurred
                 ? "CompletionStateUnknown"
                 : exception.SafeCode;
             await TryPersistFailureStateAsync(integration.IntegrationId, safeCode);
@@ -97,7 +145,12 @@ public sealed class WhatsAppIntegrationService(
         }
         catch (OperationCanceledException)
         {
-            var safeCode = executionContext.ExternalMutationMayHaveOccurred
+            if (migrationActive && migrationService is not null && migration is not null &&
+                migrationExternalMutationOccurred)
+            {
+                await TryMarkMigrationUnknownAsync(migration, "CompletionCanceled");
+            }
+            var safeCode = migrationExternalMutationOccurred || executionContext.ExternalMutationMayHaveOccurred
                 ? "CompletionStateUnknown"
                 : cancellationToken.IsCancellationRequested
                     ? "CompletionCanceled"
@@ -108,11 +161,31 @@ public sealed class WhatsAppIntegrationService(
         catch (Exception exception) when (
             exception is System.Data.Common.DbException or InvalidOperationException or TimeoutException)
         {
-            var safeCode = executionContext.ExternalMutationMayHaveOccurred
+            if (migrationActive && migrationService is not null && migration is not null &&
+                migrationExternalMutationOccurred)
+            {
+                await TryMarkMigrationUnknownAsync(migration, "CompletionStateUnknown");
+            }
+            var safeCode = migrationExternalMutationOccurred || executionContext.ExternalMutationMayHaveOccurred
                 ? "CompletionStateUnknown"
                 : "IntegrationPersistenceFailed";
             await TryPersistFailureStateAsync(integration.IntegrationId, safeCode);
             throw;
+        }
+    }
+
+    private async Task TryMarkMigrationUnknownAsync(
+        WhatsAppMigrationStatus migration, string safeErrorCode)
+    {
+        try
+        {
+            await migrationService!.MarkUnknownAsync(
+                new MigrationUnknownCommand(migration.MigrationId, safeErrorCode, null),
+                CancellationToken.None);
+        }
+        catch (Exception)
+        {
+            phaseLogger.LogFailure("MigrationJournal", "MigrationUnknownStatePersistenceFailed");
         }
     }
 
@@ -123,7 +196,7 @@ public sealed class WhatsAppIntegrationService(
         try
         {
             var current = await repository.GetCurrentAsync(timeout.Token);
-            if (current.HasCompleteConnection)
+            if (current.HasCompleteConnection || current.IsMigrationBlocking)
             {
                 return;
             }
@@ -145,6 +218,12 @@ public sealed class WhatsAppIntegrationService(
     public async Task DisconnectAsync(CancellationToken cancellationToken)
     {
         var integration = await repository.GetCurrentAsync(cancellationToken);
+        if (integration.IsMigrationBlocking)
+        {
+            throw new BusinessValidationException(
+                "The WhatsApp integration cannot be disconnected during a migration.");
+        }
+
         await repository.DisconnectAsync(integration.IntegrationId, cancellationToken);
         if (!string.IsNullOrWhiteSpace(integration.AccessTokenSecretRef))
         {

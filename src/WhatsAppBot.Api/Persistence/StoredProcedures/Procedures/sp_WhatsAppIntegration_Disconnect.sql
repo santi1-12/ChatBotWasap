@@ -9,6 +9,16 @@ BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
     BEGIN TRANSACTION;
+    IF EXISTS
+    (
+        SELECT 1
+        FROM dbo.WhatsAppIntegration WITH (UPDLOCK, HOLDLOCK)
+        WHERE IntegrationId = @IntegrationId
+          AND TenantId = @TenantId
+          AND TransitionState NOT IN (N'None', N'Completed')
+    )
+        THROW 51005, 'The WhatsApp integration cannot be disconnected during a migration.', 1;
+
     UPDATE dbo.WhatsAppIntegration
     SET WabaId = NULL,
         PhoneNumberId = NULL,
@@ -23,6 +33,8 @@ BEGIN
         MetaAppSecretRef = NULL,
         WebhookVerifyTokenRef = NULL,
         IsActive = 0,
+        TransitionState = N'None',
+        TransitionStartedAtUtc = NULL,
         UpdatedAtUtc = SYSUTCDATETIME()
     WHERE IntegrationId = @IntegrationId AND TenantId = @TenantId;
     IF @@ROWCOUNT = 0 THROW 51004, 'WhatsApp integration slot was not found for the Tenant.', 1;

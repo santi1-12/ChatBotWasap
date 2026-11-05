@@ -17,6 +17,16 @@ public interface IWhatsAppBotApiClient
 {
     Task<ResponseE<AuthResponseDTO>?> LoginAsync(LoginRequestDTO request, CancellationToken cancellationToken);
     Task<ResponseE<WhatsAppIntegrationDTO>?> GetWhatsAppIntegrationAsync(CancellationToken cancellationToken);
+    Task<ResponseE<WhatsAppMigrationPreflightDTO>?> GetWhatsAppMigrationPreflightAsync(
+        CancellationToken cancellationToken);
+    Task<ResponseE<WhatsAppIntegrationDTO>?> BeginWhatsAppMigrationAsync(
+        BeginWhatsAppMigrationRequestDTO request, CancellationToken cancellationToken);
+    Task<ResponseE<WhatsAppIntegrationDTO>?> CancelWhatsAppMigrationAsync(
+        CancellationToken cancellationToken);
+    Task<ResponseE<WhatsAppIntegrationDTO>?> MarkWhatsAppMigrationExternalMutationAsync(
+        WhatsAppMigrationExternalMutationRequestDTO request, CancellationToken cancellationToken);
+    Task<ResponseE<WhatsAppIntegrationDTO>?> MarkWhatsAppMigrationUnknownAsync(
+        WhatsAppMigrationUnknownRequestDTO request, CancellationToken cancellationToken);
     Task<ResponseE<TenantDTO>?> GetCurrentTenantAsync(CancellationToken cancellationToken);
     Task<ResponseE<WhatsAppIntegrationDTO>?> CompleteWhatsAppSignupAsync(
         EmbeddedSignupCompletionRequestDTO request, CancellationToken cancellationToken);
@@ -97,6 +107,31 @@ public sealed class WhatsAppBotApiClient : IWhatsAppBotApiClient
     public Task<ResponseE<WhatsAppIntegrationDTO>?> GetWhatsAppIntegrationAsync(
         CancellationToken cancellationToken) =>
         GetAsync<WhatsAppIntegrationDTO>("api/v1/admin/whatsapp/integration", cancellationToken);
+
+    public Task<ResponseE<WhatsAppMigrationPreflightDTO>?> GetWhatsAppMigrationPreflightAsync(
+        CancellationToken cancellationToken) =>
+        GetAsync<WhatsAppMigrationPreflightDTO>(
+            "api/v1/admin/whatsapp/migration/preflight", cancellationToken);
+
+    public Task<ResponseE<WhatsAppIntegrationDTO>?> BeginWhatsAppMigrationAsync(
+        BeginWhatsAppMigrationRequestDTO request, CancellationToken cancellationToken) =>
+        SendAsync<WhatsAppIntegrationDTO>(
+            HttpMethod.Post, "api/v1/admin/whatsapp/migration/begin", request, cancellationToken);
+
+    public Task<ResponseE<WhatsAppIntegrationDTO>?> CancelWhatsAppMigrationAsync(
+        CancellationToken cancellationToken) =>
+        SendAsync<WhatsAppIntegrationDTO>(
+            HttpMethod.Post, "api/v1/admin/whatsapp/migration/cancel", new { }, cancellationToken);
+
+    public Task<ResponseE<WhatsAppIntegrationDTO>?> MarkWhatsAppMigrationExternalMutationAsync(
+        WhatsAppMigrationExternalMutationRequestDTO request, CancellationToken cancellationToken) =>
+        SendAsync<WhatsAppIntegrationDTO>(
+            HttpMethod.Post, "api/v1/admin/whatsapp/migration/external-mutation", request, cancellationToken);
+
+    public Task<ResponseE<WhatsAppIntegrationDTO>?> MarkWhatsAppMigrationUnknownAsync(
+        WhatsAppMigrationUnknownRequestDTO request, CancellationToken cancellationToken) =>
+        SendAsync<WhatsAppIntegrationDTO>(
+            HttpMethod.Post, "api/v1/admin/whatsapp/migration/unknown", request, cancellationToken);
 
     public Task<ResponseE<TenantDTO>?> GetCurrentTenantAsync(CancellationToken cancellationToken) =>
         GetAsync<TenantDTO>("api/v1/admin/tenant", cancellationToken);

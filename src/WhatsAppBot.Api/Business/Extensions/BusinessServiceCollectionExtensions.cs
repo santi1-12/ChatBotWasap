@@ -30,6 +30,7 @@ public static class BusinessServiceCollectionExtensions
         services.AddSingleton<AiContextBuilder>();
         services.AddScoped<IBotReplyResolver, BotReplyResolver>();
         services.AddScoped<IWhatsAppIntegrationService, WhatsAppIntegrationService>();
+        services.AddScoped<IWhatsAppMigrationService, WhatsAppMigrationService>();
         services.AddScoped<IAcceptMetaWebhookEvent, AcceptMetaWebhookEvent>();
         services.AddScoped<IProcessInboundText, ProcessInboundText>();
         services.AddScoped<InboundMediaIngestionService>();

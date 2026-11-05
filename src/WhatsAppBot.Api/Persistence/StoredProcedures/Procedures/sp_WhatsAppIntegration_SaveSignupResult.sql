@@ -19,6 +19,22 @@ BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
     BEGIN TRANSACTION;
+    IF @OnboardingType NOT IN (N'Standard', N'Coexistence')
+        THROW 51005, 'The WhatsApp onboarding type is invalid.', 1;
+
+    IF EXISTS
+    (
+        SELECT 1
+        FROM dbo.WhatsAppIntegration WITH (UPDLOCK, HOLDLOCK)
+        WHERE IntegrationId = @IntegrationId
+          AND TenantId = @TenantId
+          AND (
+              TransitionState NOT IN (N'None', N'Completed')
+              OR (@OnboardingType = N'Standard' AND TransitionState = N'Completed')
+          )
+    )
+        THROW 51006, 'The signup result must be reconciled through the active migration.', 1;
+
     UPDATE dbo.WhatsAppIntegration WITH (UPDLOCK, SERIALIZABLE)
     SET WabaId = @WabaId,
         PhoneNumberId = @PhoneNumberId,

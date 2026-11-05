@@ -24,6 +24,8 @@ BEGIN
     DECLARE @LifecycleStatus nvarchar(16);
     DECLARE @ReplySource nvarchar(32);
     DECLARE @LastCustomerMessageAtUtc datetime2(3);
+    DECLARE @TransitionState nvarchar(40);
+    DECLARE @BotEnabled bit;
 
     SELECT
         @State = outbox.State,
@@ -31,6 +33,8 @@ BEGIN
         @AttentionMode = conversation.AttentionMode,
         @LifecycleStatus = conversation.LifecycleStatus,
         @ReplySource = message.ReplySource
+        ,@TransitionState = integration.TransitionState
+        ,@BotEnabled = bot.IsBotEnabled
     FROM dbo.MessageOutbox AS outbox WITH (UPDLOCK, HOLDLOCK)
     INNER JOIN dbo.Message AS message
         ON message.MessageId = outbox.MessageId
@@ -40,9 +44,12 @@ BEGIN
         ON conversation.ConversationId = message.ConversationId
        AND conversation.TenantId = outbox.TenantId
        AND conversation.IntegrationId = outbox.IntegrationId
-    INNER JOIN dbo.WhatsAppIntegration AS integration
+     INNER JOIN dbo.WhatsAppIntegration AS integration
         ON integration.IntegrationId = outbox.IntegrationId
        AND integration.TenantId = outbox.TenantId
+     INNER JOIN dbo.BotConfiguration AS bot
+        ON bot.IntegrationId = outbox.IntegrationId
+       AND bot.TenantId = outbox.TenantId
     WHERE outbox.MessageId = @MessageId
       AND outbox.TenantId = @TenantId
       AND outbox.IntegrationId = @IntegrationId
@@ -63,12 +70,16 @@ BEGIN
 
     IF @State IS NULL
         SET @OutcomeCode = N'ConversationVersionConflict';
+    ELSE IF @State = N'HeldForMigration' OR @TransitionState NOT IN (N'None', N'Completed')
+        SET @OutcomeCode = N'IntegrationMigrationInProgress';
     ELSE IF @State <> N'Sending'
         SET @OutcomeCode = N'ConversationVersionConflict';
     ELSE IF @CurrentVersion <> @ConversationVersion
         SET @OutcomeCode = N'ConversationVersionConflict';
     ELSE IF @ReplySource = N'Admin' AND @AttentionMode <> N'Humano'
         SET @OutcomeCode = N'ManualReplyRequiresHuman';
+    ELSE IF @ReplySource <> N'Admin' AND @BotEnabled = 0
+        SET @OutcomeCode = N'BotDisabled';
     ELSE IF @ReplySource <> N'Admin' AND @AttentionMode <> N'Bot'
         SET @OutcomeCode = N'ConversationInHumanMode';
     ELSE IF @LifecycleStatus <> N'Abierta'

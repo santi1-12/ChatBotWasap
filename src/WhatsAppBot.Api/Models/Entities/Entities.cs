@@ -30,12 +30,15 @@ public sealed record WhatsAppIntegration(Guid IntegrationId, string? WabaId, str
 {
     public Guid? TenantId { get; init; }
     public WhatsAppOnboardingType? OnboardingType { get; init; }
+    public TransitionState TransitionState { get; init; } = TransitionState.None;
+    public DateTimeOffset? TransitionStartedAtUtc { get; init; }
     public string? EffectiveEmbeddedSignupConfigId { get; init; }
     public bool HistoryImportRequested { get; init; }
     public bool HasCompleteConnection =>
         ConnectionState == ConnectionState.Connected &&
         IsActive &&
         TenantId.HasValue &&
+        !IsMigrationBlocking &&
         OnboardingType.HasValue &&
         ConnectedAtUtc.HasValue &&
         string.IsNullOrWhiteSpace(LastConnectionErrorCode) &&
@@ -52,7 +55,58 @@ public sealed record WhatsAppIntegration(Guid IntegrationId, string? WabaId, str
     public string? WebhookVerifyTokenRef { get; init; }
     public DateTimeOffset CreatedAtUtc { get; init; }
     public DateTimeOffset UpdatedAtUtc { get; init; }
+
+    public bool IsMigrationBlocking => TransitionState is not (
+        TransitionState.None or TransitionState.Completed);
 }
+
+public sealed record WhatsAppMigrationStatus(
+    Guid MigrationId,
+    Guid TenantId,
+    Guid IntegrationId,
+    TransitionState TransitionState,
+    MigrationCompletionState CompletionState,
+    bool ExternalMutationOccurred,
+    string? PreviousWabaId,
+    string? PreviousPhoneNumberId,
+    string? PreviousAccessTokenSecretRef,
+    string? NewWabaId,
+    string? NewPhoneNumberId,
+    string? NewAccessTokenSecretRef,
+    string ExpectedExternalOperation,
+    string? ExternalOperationReferenceId,
+    DateTimeOffset StartedAtUtc,
+    DateTimeOffset UpdatedAtUtc,
+    DateTimeOffset? PreparingAtUtc,
+    DateTimeOffset? MigrationToCoexistenceAtUtc,
+    DateTimeOffset? AwaitingBusinessAppAtUtc,
+    DateTimeOffset? AwaitingCoexistenceSignupAtUtc,
+    DateTimeOffset? ReconcilingAtUtc,
+    DateTimeOffset? CompletedAtUtc,
+    DateTimeOffset? FailedAtUtc,
+    DateTimeOffset? UnknownAtUtc,
+    string? ErrorCode,
+    string? ApprovalReference,
+    string? OperationalNotes,
+    bool PreviousBotEnabled,
+    BotReplyMode PreviousReplyMode,
+    int HeldOutboxCount,
+    int SendingOutboxCount);
+
+public sealed record WhatsAppMigrationPreflight(
+    Guid TenantId,
+    Guid IntegrationId,
+    bool CanBegin,
+    string? BlockingCode,
+    ConnectionState ConnectionState,
+    WhatsAppOnboardingType? OnboardingType,
+    TransitionState TransitionState,
+    bool HasMetaIdentity,
+    bool CoexistenceConfigurationAvailable,
+    int SendingOutboxCount,
+    int PendingOutboxCount,
+    int HeldOutboxCount,
+    int ProcessingWebhookCount);
 
 public sealed record BotConfiguration(Guid IntegrationId, bool IsBotEnabled, BotReplyMode ReplyMode)
 {

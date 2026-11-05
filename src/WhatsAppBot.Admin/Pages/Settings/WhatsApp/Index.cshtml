@@ -9,7 +9,8 @@
     var canStartSignup = !string.IsNullOrWhiteSpace(integration?.MetaAppId)
         && (hasStandardSignup || hasCoexistenceSignup)
         && !string.IsNullOrWhiteSpace(integration.MetaGraphApiVersion)
-        && !Model.IsConnected;
+        && !Model.IsConnected
+        && !Model.IsMigrationBlocking;
 }
 
 <div class="page-heading">
@@ -39,7 +40,11 @@
             <span class="eyebrow">ESTADO DE LA CONEXIÓN</span>
             <h2 class="h4 mt-2">@Model.ConnectionLabel(integration?.ConnectionState)</h2>
             <p class="text-muted mb-0">
-                @if (Model.IsConnected && integration is not null)
+                @if (Model.IsMigrationBlocking && integration is not null)
+                {
+                    <span>La automatización está retenida mientras se confirma la transición. No se ejecutó ninguna operación externa.</span>
+                }
+                else if (Model.IsConnected && integration is not null)
                 {
                     <span>El número se autorizó y vinculó mediante Meta Embedded Signup.</span>
                 }
@@ -53,6 +58,124 @@
             @Model.ConnectionLabel(integration?.ConnectionState)
         </span>
     </div>
+
+    @if (Model.IsMigrationBlocking && integration is not null)
+    {
+        <hr />
+        <div class="alert alert-warning mb-3">
+            <strong>Transición interna: @integration.TransitionState</strong>
+            <div class="small mt-1">
+                El bot, las respuestas manuales y el outbox permanecen bloqueados. Los webhooks se conservan en recepción.
+            </div>
+        </div>
+        <dl class="row mb-3">
+            <dt class="col-sm-4">WABA ID actual</dt>
+            <dd class="col-sm-8"><code>@(integration.WabaId ?? "No informado")</code></dd>
+            <dt class="col-sm-4">Phone Number ID actual</dt>
+            <dd class="col-sm-8"><code>@(integration.PhoneNumberId ?? "No informado")</code></dd>
+            <dt class="col-sm-4">Mutación externa confirmada</dt>
+            <dd class="col-sm-8">@(integration.MigrationExternalMutationOccurred ? "Sí" : "No")</dd>
+            <dt class="col-sm-4">Outbox retenido</dt>
+            <dd class="col-sm-8">@integration.MigrationHeldOutboxCount</dd>
+            <dt class="col-sm-4">Operación esperada</dt>
+            <dd class="col-sm-8">@(integration.MigrationExpectedExternalOperation ?? "No disponible")</dd>
+        </dl>
+        @if (Model.CanCancelMigration)
+        {
+            <form method="post" asp-page-handler="CancelMigration">
+                <button type="submit" class="btn btn-outline-secondary">
+                    Cancelar preparación interna
+                </button>
+            </form>
+        }
+        else
+        {
+            <p class="text-muted mb-0">
+                La cancelación ya no está disponible porque se confirmó una mutación externa o el estado es indeterminado.
+            </p>
+        }
+        @if (integration.MigrationId is not null && integration.TransitionState != TransitionState.Unknown)
+        {
+            <hr />
+            <p class="small text-muted">
+                Los siguientes controles solo registran evidencia operativa ya obtenida. No llaman a Meta ni ejecutan deregistro, registro o borrado.
+            </p>
+            <form method="post" asp-page-handler="MarkExternalMutation" class="mb-3">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label" asp-for="MigrationNextState">Siguiente fase confirmada</label>
+                        <select class="form-select" asp-for="MigrationNextState">
+                            <option value="@TransitionState.AwaitingBusinessApp">Business App confirmada</option>
+                            <option value="@TransitionState.AwaitingCoexistenceSignup">Lista para Coexistence Signup</option>
+                            <option value="@TransitionState.Reconciling">Lista para reconciliación</option>
+                        </select>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label" asp-for="MigrationExternalOperationReferenceId">Referencia externa opcional</label>
+                        <input class="form-control" asp-for="MigrationExternalOperationReferenceId" maxlength="256" />
+                    </div>
+                    <div class="col-md-3">
+                        <button type="submit" class="btn btn-outline-primary w-100">Registrar evidencia</button>
+                    </div>
+                </div>
+            </form>
+            <form method="post" asp-page-handler="MarkMigrationUnknown">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-5">
+                        <label class="form-label" asp-for="MigrationSafeErrorCode">Código seguro de incertidumbre</label>
+                        <input class="form-control" asp-for="MigrationSafeErrorCode" maxlength="100" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" asp-for="MigrationExternalOperationReferenceId">Referencia opcional</label>
+                        <input class="form-control" asp-for="MigrationExternalOperationReferenceId" maxlength="256" />
+                    </div>
+                    <div class="col-md-3">
+                        <button type="submit" class="btn btn-outline-warning w-100">Bloquear como Unknown</button>
+                    </div>
+                </div>
+            </form>
+        }
+    }
+    else if (Model.IsConnected && Model.MigrationPreflight is not null)
+    {
+        <hr />
+        <div class="d-flex justify-content-between align-items-start gap-3">
+            <div>
+                <span class="eyebrow">PREPARACIÓN SEGURA</span>
+                <h3 class="h5 mt-2">Migración a Coexistence</h3>
+                <p class="text-muted mb-2">
+                    Solo congela operaciones internas y retiene outbox. No deregistra ni modifica Meta.
+                </p>
+            </div>
+            <span class="badge @(Model.MigrationPreflight.CanBegin ? "text-bg-success" : "text-bg-warning")">
+                @(Model.MigrationPreflight.CanBegin ? "Lista" : "Bloqueada")
+            </span>
+        </div>
+        @if (!Model.MigrationPreflight.CanBegin)
+        {
+            <p class="small text-muted mb-0">
+                Motivo: @(Model.MigrationPreflight.BlockingCode ?? "No disponible")
+            </p>
+        }
+        else
+        {
+            <form method="post" asp-page-handler="BeginMigration">
+                <div class="row g-2 mb-3">
+                    <div class="col-md-5">
+                        <label class="form-label" asp-for="MigrationApprovalReference">Referencia de aprobación</label>
+                        <input class="form-control" asp-for="MigrationApprovalReference" maxlength="256" />
+                    </div>
+                    <div class="col-md-7">
+                        <label class="form-label" asp-for="MigrationOperationalNotes">Notas operativas</label>
+                        <input class="form-control" asp-for="MigrationOperationalNotes" maxlength="2048" />
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-outline-primary">
+                    Preparar migración interna
+                </button>
+            </form>
+        }
+    }
 
     @if (Model.IsConnected && integration is not null)
     {

@@ -135,6 +135,8 @@
             @foreach (var message in detail.Messages)
             {
                 var inbound = message.Direction == MessageDirection.Inbound;
+                var mediaExpired = message.MediaExpiresAtUtc is { } expiresAtUtc &&
+                                    expiresAtUtc <= DateTimeOffset.UtcNow;
                 <article class="message-row @(inbound ? "message-inbound" : "message-outbound")">
                     <div class="message-bubble">
                             <header class="message-header">
@@ -149,25 +151,25 @@
                         }
                         else if (message.MessageType == MessageType.Audio)
                         {
-                            @if (!string.IsNullOrWhiteSpace(message.MediaUrl))
+                            @if (message.MediaAvailable)
                             {
-                                <audio controls preload="none" src="@message.MediaUrl">El navegador no puede reproducir este audio.</audio>
+                                <audio controls preload="none" src="@Model.MediaUrl(message.MessageId)">El navegador no puede reproducir este audio.</audio>
                             }
                             else
                             {
-                                <p class="media-placeholder">@(message.MediaAvailable ? "Audio conservado; el acceso seguro todavía no está habilitado." : "Audio recibido; el contenido multimedia no está disponible.")</p>
+                                <p class="media-placeholder">@(mediaExpired ? "Audio recibido; el contenido multimedia expiró." : "Audio recibido; el contenido multimedia no está disponible.")</p>
                             }
                             <p class="message-transcription"><strong>Transcripción:</strong> @(message.Transcription ?? "No disponible")</p>
                         }
                         else if (message.MessageType == MessageType.Image)
                         {
-                            @if (!string.IsNullOrWhiteSpace(message.MediaUrl))
+                            @if (message.MediaAvailable)
                             {
-                                <img class="message-image" src="@message.MediaUrl" alt="Imagen recibida" loading="lazy" />
+                                <img class="message-image" src="@Model.MediaUrl(message.MessageId)" alt="Imagen recibida" loading="lazy" />
                             }
                             else
                             {
-                                <p class="media-placeholder">@(message.MediaAvailable ? "Imagen conservada; el acceso seguro todavía no está habilitado." : "Imagen recibida; el contenido multimedia no está disponible.")</p>
+                                <p class="media-placeholder">@(mediaExpired ? "Imagen recibida; el contenido multimedia expiró." : "Imagen recibida; el contenido multimedia no está disponible.")</p>
                             }
                         }
                         else

@@ -1,22 +1,22 @@
 # Quickstart de validación: POC de Bot de WhatsApp Business
 
-This guide distinguishes the repository behavior currently validated from the approved POC target.
+This guide distinguishes the repository behavior currently implemented from the approved POC target.
 The current local slice covers solution/bootstrap, bot configuration/FAQ, Meta Embedded Signup,
-signed text-webhook/outbox processing, Admin conversation visibility and provider-neutral AI text
-generation. The approved POC target additionally includes OpenAI, GitHub Copilot, audio, image,
-Bot/Humano attention, manual Admin replies, conversation lifecycle control and tenant-aware
-isolation. Coexistence history synchronization remains future work.
+signed text/audio/image webhook processing, Admin conversation visibility, private media access,
+retention cleanup and provider-neutral AI text/audio/image adapters. Live media validation and
+Coexistence history synchronization remain future work.
 
 ## Scope status
 
 - **Implementado o validado localmente**: bootstrap, autenticación Admin, configuración del bot,
   respuestas frecuentes, Embedded Signup/estado de integración, webhook firmado, inbox/outbox,
   procesamiento de texto/FAQ, consulta de conversaciones y adapters de texto OpenAI/Copilot con
-  selección explícita, límites y fallos seguros.
-- **Dentro de esta POC, pendiente de validación o implementación**: smoke adicional de Copilot,
-  audio, imagen, storage privado con
-  expiración inicial de 30 días, toma/handoff, respuesta manual, devolución al bot,
-  cierre/reapertura, auditoría, membresías de tenant y asignación simple.
+  selección explícita, límites y fallos seguros; storage privado local aprobado para Development,
+  descarga Meta de media, transcripción OpenAI, análisis OpenAI opcional, proxy Admin autorizado,
+  expiración/cleanup y pruebas T123-T129.
+- **Dentro de esta POC, pendiente de validación real**: audio/imagen con proveedores y datos
+  consentidos, además de cualquier gate externo de Meta/OpenAI. La ausencia de proveedor no se
+  presenta como procesamiento exitoso: transcript/análisis quedan en estado o outcome seguro.
 - **Fase posterior explícita**: `history`, `smb_app_state_sync`, `smb_message_echoes`,
   sincronización de contactos, recuperación histórica, video, documentos, ubicación, contactos y
   otros tipos multimedia.
@@ -37,7 +37,9 @@ ya existan en el código.
   `AI:Provider=OpenAI` is selected.
 - For the local GitHub Copilot POC, the Windows user running the API must be authenticated in
   Copilot CLI. Do not configure a GitHub token, PAT, device code or cookie in the application.
-- FFmpeg available to the API worker for OGG/Opus normalization; private media storage.
+- FFmpeg available to the API worker for audio conversion; incoming `audio/ogg` and `audio/opus`
+  voice notes are converted to OpenAI-compatible `audio/wav`. Development uses the private local
+  adapter; production requires an approved private provider implementing `IMediaStorage`.
 - User Secrets locally; production secret-store adapter configured before any live customer
   data is processed.
 - Owner approval for the initial 30-day media retention, Meta opt-in/message policy, and AI
@@ -64,8 +66,26 @@ El 2026-11-04 se validó el flujo real de texto sobre la conversación `6`: se c
 `AttentionMode=Bot` desde Admin, se envió un mensaje sin coincidencia FAQ, el webhook llegó a la
 API, GitHub Copilot generó la respuesta con el modelo efectivo reportado `gpt-6-luna`, WhatsApp
 entregó la respuesta y Admin mostró `Origen: IA` con estado `Entregado/Leído`. La evidencia no
-registra prompts, respuestas completas ni credenciales. Audio, imagen y los demás escenarios
-amplios del POC permanecen pendientes.
+registra prompts, respuestas completas ni credenciales. T123-T129 está implementado y probado
+localmente con fakes/LocalDB; la validación real de audio/imagen aún no está realizada.
+
+### Media local y retención
+
+El pipeline multimedia descarga metadata y bytes desde Meta server-to-server, valida MIME/tamaño,
+guarda el contenido fuera de SQL mediante una referencia privada `media/{id}`, y persiste en SQL
+solo Tenant, mensaje, tipo, MIME, tamaño, estado y expiración. El adapter Development guarda en
+`%LocalAppData%\WhatsAppBot\private-media` o en `MediaStorage:PrivateContainer`; nunca devuelve una
+URL pública ni una ruta física.
+
+`MediaStorage:RetentionDays` inicia en 30 días. `RetentionCleanupWorker` elimina el objeto privado
+y marca metadata como `Deleted`, conservando el mensaje y transcript. El endpoint Admin
+`/api/v1/admin/messages/{id}/media` exige autenticación/Tenant y devuelve `410` cuando expiró;
+Admin usa un proxy server-side para no enviar tokens al navegador.
+
+Audio convierte OGG/Opus a WAV mediante FFmpeg temporal con límites y cleanup; OpenAI
+transcription es opcional y GitHub Copilot no se usa para audio. Imagen se analiza solo si el modo
+no es `FaqOnly` y `MediaStorage:EnableImageAnalysis=true`; el resultado sigue las mismas reglas
+FAQ/IA/ventana/outbox que texto.
 
 ## Local setup and first administrator
 
@@ -235,6 +255,10 @@ amplios del POC permanecen pendientes.
     dotnet test .\WhatsAppBot.sln --configuration Release
     Remove-Item Env:WHATSAPPBOT_TEST_CONNECTION_STRING
     ```
+
+    The current local baseline is `32 Business`, `25 Contract`, `84 Integrations` and `22
+    Persistence` tests. A successful build still reports the existing NU1902/NU1903 advisory for
+    `System.Security.Cryptography.Pkcs 9.0.18`; it is not hidden by the media slice.
 
 ## Remaining Approved POC Validation
 

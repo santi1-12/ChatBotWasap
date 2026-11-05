@@ -5,6 +5,7 @@ using RestSharp;
 using WhatsAppBot.Api.Business.Abstractions;
 using WhatsAppBot.Api.Infrastructure.Options;
 using WhatsAppBot.Api.Models.Contracts;
+using WhatsAppBot.Shared.Enums;
 
 namespace WhatsAppBot.Api.Integrations.Meta;
 
@@ -12,6 +13,13 @@ public sealed class MetaCloudApiClient(
     IRestClient restClient,
     IOptions<MetaOptions> options) : IMetaCloudApiClient
 {
+    private static readonly string[] AllowedMediaHostSuffixes =
+    [
+        ".facebook.com",
+        ".fbcdn.net",
+        ".fbsbx.com"
+    ];
+
     public async Task<string> ExchangeAuthorizationCodeAsync(
         string code, CancellationToken cancellationToken)
     {
@@ -167,6 +175,64 @@ public sealed class MetaCloudApiClient(
         _ = await ExecuteAsync(request, cancellationToken);
     }
 
+    public async Task<MetaMediaDownload> DownloadMediaAsync(
+        string accessToken,
+        string mediaId,
+        MediaKind mediaKind,
+        string? expectedMimeType,
+        long maxBytes,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(mediaId) || mediaId.Length > 128 || maxBytes < 1)
+        {
+            throw new MediaProcessingException(MessageOutcomeCodes.MediaDownloadFailed);
+        }
+
+        var metadataRequest = CreateRequest(Uri.EscapeDataString(mediaId), Method.Get);
+        metadataRequest.AddHeader("Authorization", $"Bearer {accessToken}");
+        var metadataResponse = await ExecuteAsync(metadataRequest, cancellationToken);
+        using var metadataDocument = JsonDocument.Parse(metadataResponse.Content!);
+        var metadataRoot = metadataDocument.RootElement;
+        var url = GetRequiredString(metadataRoot, "url");
+        var metadataMimeType = GetNullableString(metadataRoot, "mime_type");
+        long? declaredSize = metadataRoot.TryGetProperty("file_size", out var fileSize) &&
+                             fileSize.ValueKind == JsonValueKind.Number &&
+                             fileSize.TryGetInt64(out var parsedSize)
+            ? parsedSize
+            : null;
+        if (declaredSize is < 0 || declaredSize > maxBytes)
+        {
+            throw new MediaProcessingException(MessageOutcomeCodes.MediaTooLarge);
+        }
+
+        var mimeType = NormalizeMimeType(metadataMimeType ?? expectedMimeType);
+        ValidateMimeType(mediaKind, mimeType, expectedMimeType);
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var mediaUri) ||
+            mediaUri.Scheme != Uri.UriSchemeHttps ||
+            !IsAllowedMediaHost(mediaUri.Host))
+        {
+            throw new MediaProcessingException(MessageOutcomeCodes.MediaDownloadFailed);
+        }
+
+        var binaryRequest = new RestRequest(mediaUri, Method.Get);
+        binaryRequest.AddHeader("Authorization", $"Bearer {accessToken}");
+        var downloaded = await DownloadBoundedAsync(binaryRequest, maxBytes, cancellationToken);
+        var content = downloaded.Content;
+        var responseMimeType = downloaded.ResponseMimeType;
+        if (!string.IsNullOrWhiteSpace(responseMimeType))
+        {
+            ValidateMimeType(mediaKind, responseMimeType, mimeType);
+            mimeType = responseMimeType;
+        }
+
+        if (content.Length == 0)
+        {
+            throw new MediaProcessingException(MessageOutcomeCodes.MediaDownloadFailed);
+        }
+
+        return new MetaMediaDownload(mimeType!, declaredSize, content);
+    }
+
     public async Task<MetaMessageSendResult> SendTextAsync(
         string accessToken,
         string phoneNumberId,
@@ -264,6 +330,94 @@ public sealed class MetaCloudApiClient(
         return response;
     }
 
+    private async Task<(byte[] Content, string? ResponseMimeType)> DownloadBoundedAsync(
+        RestRequest request, long maxBytes, CancellationToken cancellationToken)
+    {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(TimeSpan.FromSeconds(options.Value.RequestTimeoutSeconds));
+        using var output = new MemoryStream();
+        MediaProcessingException? sizeFailure = null;
+        request.CompletionOption = HttpCompletionOption.ResponseHeadersRead;
+        request.ResponseWriter = source =>
+        {
+            sizeFailure = CopyBounded(source, output, maxBytes, deadline.Token);
+            return output;
+        };
+
+        try
+        {
+            var response = await restClient.ExecuteAsync(request, deadline.Token);
+            if (sizeFailure is not null)
+            {
+                throw sizeFailure;
+            }
+
+            if (response.ErrorException is OperationCanceledException)
+            {
+                throw new OperationCanceledException(deadline.Token);
+            }
+
+            if (!response.IsSuccessful)
+            {
+                throw new MediaProcessingException(
+                    MessageOutcomeCodes.MediaDownloadFailed,
+                    IsTransient(response.StatusCode));
+            }
+
+            return (output.ToArray(), NormalizeMimeType(response.ContentType));
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new MediaProcessingException(MessageOutcomeCodes.MediaDownloadFailed, true);
+        }
+        catch (HttpRequestException)
+        {
+            throw new MediaProcessingException(MessageOutcomeCodes.MediaDownloadFailed, true);
+        }
+        catch (TimeoutException)
+        {
+            throw new MediaProcessingException(MessageOutcomeCodes.MediaDownloadFailed, true);
+        }
+        catch (MediaProcessingException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (
+            !cancellationToken.IsCancellationRequested && exception is not OutOfMemoryException)
+        {
+            throw new MediaProcessingException(MessageOutcomeCodes.MediaDownloadFailed, true);
+        }
+    }
+
+    private static MediaProcessingException? CopyBounded(
+        Stream source, Stream destination, long maxBytes, CancellationToken cancellationToken)
+    {
+        if (maxBytes < 1)
+        {
+            return new MediaProcessingException(MessageOutcomeCodes.MediaTooLarge);
+        }
+
+        var buffer = new byte[64 * 1024];
+        long size = 0;
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var read = source.Read(buffer, 0, buffer.Length);
+            if (read == 0)
+            {
+                return null;
+            }
+
+            size += read;
+            if (size > maxBytes)
+            {
+                return new MediaProcessingException(MessageOutcomeCodes.MediaTooLarge);
+            }
+
+            destination.Write(buffer, 0, read);
+        }
+    }
+
     private RestRequest CreateRequest(string resource, Method method)
     {
         var version = options.Value.GraphApiVersion;
@@ -295,6 +449,40 @@ public sealed class MetaCloudApiClient(
         !string.IsNullOrWhiteSpace(value.GetString())
             ? value.GetString()!
             : throw new MetaApiException("MetaInvalidResponse", false);
+
+    private static string? GetNullableString(JsonElement root, string propertyName) =>
+        root.TryGetProperty(propertyName, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+
+    private static string? NormalizeMimeType(string? mimeType) =>
+        string.IsNullOrWhiteSpace(mimeType)
+            ? null
+            : mimeType.Split(';', 2)[0].Trim().ToLowerInvariant();
+
+    private static bool IsAllowedMediaHost(string host) =>
+        host.Equals("facebook.com", StringComparison.OrdinalIgnoreCase) ||
+        host.Equals("fbcdn.net", StringComparison.OrdinalIgnoreCase) ||
+        host.Equals("fbsbx.com", StringComparison.OrdinalIgnoreCase) ||
+        AllowedMediaHostSuffixes.Any(suffix =>
+            host.EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
+
+    private static void ValidateMimeType(
+        MediaKind mediaKind, string? actualMimeType, string? expectedMimeType)
+    {
+        if (actualMimeType is null ||
+            (mediaKind == MediaKind.Audio && !actualMimeType.StartsWith("audio/", StringComparison.Ordinal)) ||
+            (mediaKind == MediaKind.Image && !actualMimeType.StartsWith("image/", StringComparison.Ordinal)))
+        {
+            throw new MediaProcessingException(MessageOutcomeCodes.MediaInvalidMime);
+        }
+
+        if (!string.IsNullOrWhiteSpace(expectedMimeType) &&
+            !string.Equals(actualMimeType, NormalizeMimeType(expectedMimeType), StringComparison.Ordinal))
+        {
+            throw new MediaProcessingException(MessageOutcomeCodes.MediaInvalidMime);
+        }
+    }
 
     private static string MapSafeFailureCode(HttpStatusCode statusCode) =>
         statusCode switch

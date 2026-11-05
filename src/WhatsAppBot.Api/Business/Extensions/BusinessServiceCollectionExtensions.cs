@@ -32,11 +32,16 @@ public static class BusinessServiceCollectionExtensions
         services.AddScoped<IWhatsAppIntegrationService, WhatsAppIntegrationService>();
         services.AddScoped<IAcceptMetaWebhookEvent, AcceptMetaWebhookEvent>();
         services.AddScoped<IProcessInboundText, ProcessInboundText>();
-        services.AddScoped<IProcessInboundMedia, PreserveInboundMedia>();
+        services.AddScoped<InboundMediaIngestionService>();
+        services.AddScoped<IProcessInboundAudio, ProcessInboundAudio>();
+        services.AddScoped<IProcessInboundImage, ProcessInboundImage>();
+        services.AddScoped<IProcessInboundMedia, ProcessInboundMedia>();
+        services.AddScoped<IGetMessageMedia, GetMessageMedia>();
         services.AddScoped<IProcessMetaDeliveryStatus, ApplyMessageStatus>();
         services.AddScoped<MessageProcessingService>();
         services.AddHostedService<WebhookInboxWorker>();
         services.AddHostedService<MessageOutboxWorker>();
+        services.AddHostedService<RetentionCleanupWorker>();
         services.AddSingleton<IPasswordHasher<Administrator>, PasswordHasher<Administrator>>();
         return services;
     }

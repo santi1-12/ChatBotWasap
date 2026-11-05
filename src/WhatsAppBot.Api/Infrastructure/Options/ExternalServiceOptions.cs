@@ -45,6 +45,7 @@ public sealed class OpenAiOptions
     public const string SectionName = "OpenAI";
     public string ApiKeyReference { get; init; } = "OpenAI:ApiKey";
     public string Endpoint { get; init; } = "https://api.openai.com/v1/chat/completions";
+    public string TranscriptionEndpoint { get; init; } = "https://api.openai.com/v1/audio/transcriptions";
     public string? TextModel { get; init; }
     public string? ImageModel { get; init; }
     public string? TranscriptionModel { get; init; }
@@ -63,11 +64,15 @@ public sealed class GitHubCopilotOptions
 public sealed class MediaStorageOptions
 {
     public const string SectionName = "MediaStorage";
-    public string? Provider { get; init; }
+    public const string LocalPrivateProvider = "LocalPrivate";
+    public string Provider { get; init; } = LocalPrivateProvider;
     public string? PrivateContainer { get; init; }
     public int RequestTimeoutSeconds { get; init; } = 30;
     public long MaxFileBytes { get; init; } = 25_000_000;
     public int RetentionDays { get; init; } = 30;
+    public bool EnableImageAnalysis { get; init; }
+    public int CleanupBatchSize { get; init; } = 50;
+    public int CleanupIntervalMinutes { get; init; } = 60;
 }
 
 public sealed class FfmpegOptions

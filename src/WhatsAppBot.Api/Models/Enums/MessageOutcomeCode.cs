@@ -28,6 +28,12 @@ public static class MessageOutcomeCodeRules
         MessageOutcomeCodes.ManualReplyNotAuthorized => true,
         MessageOutcomeCodes.BlockingError => true,
         MessageOutcomeCodes.MediaExpired => true,
+        MessageOutcomeCodes.MediaDownloadFailed => true,
+        MessageOutcomeCodes.MediaStorageFailed => true,
+        MessageOutcomeCodes.MediaInvalidMime => true,
+        MessageOutcomeCodes.MediaTooLarge => true,
+        MessageOutcomeCodes.TranscriptionFailed => true,
+        MessageOutcomeCodes.ImageAnalysisUnavailable => true,
         MessageOutcomeCodes.HandoffToHuman => true,
         _ => false
     };

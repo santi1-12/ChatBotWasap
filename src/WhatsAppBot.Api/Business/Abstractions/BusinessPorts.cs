@@ -90,3 +90,8 @@ public interface IBotReplyResolver
     Task<BotReplyResolution> ResolveAsync(
         BotConfiguration configuration, string message, CancellationToken cancellationToken);
 }
+
+public interface IGetMessageMedia
+{
+    Task<MediaAccessResult> ExecuteAsync(long messageId, CancellationToken cancellationToken);
+}

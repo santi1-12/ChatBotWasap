@@ -160,6 +160,16 @@ public interface IProcessInboundMedia
     Task ProcessAsync(NormalizedMetaEvent inboundEvent, CancellationToken cancellationToken);
 }
 
+public interface IProcessInboundAudio
+{
+    Task ProcessAsync(NormalizedMetaEvent inboundEvent, CancellationToken cancellationToken);
+}
+
+public interface IProcessInboundImage
+{
+    Task ProcessAsync(NormalizedMetaEvent inboundEvent, CancellationToken cancellationToken);
+}
+
 public interface IProcessMetaDeliveryStatus
 {
     Task ProcessAsync(NormalizedMetaEvent statusEvent, CancellationToken cancellationToken);
@@ -182,6 +192,13 @@ public interface IMetaCloudApiClient
     Task RegisterPhoneNumberAsync(
         string accessToken, string phoneNumberId, CancellationToken cancellationToken);
     Task SubscribeWabaAsync(string accessToken, string wabaId, CancellationToken cancellationToken);
+    Task<MetaMediaDownload> DownloadMediaAsync(
+        string accessToken,
+        string mediaId,
+        MediaKind mediaKind,
+        string? expectedMimeType,
+        long maxBytes,
+        CancellationToken cancellationToken);
     Task<MetaMessageSendResult> SendTextAsync(
         string accessToken, string phoneNumberId, string recipient, string text,
         CancellationToken cancellationToken);
@@ -202,7 +219,60 @@ public interface IAudioTranscriptionService
     Task<string> TranscribeAsync(Stream audio, string contentType, CancellationToken cancellationToken);
 }
 
+public interface IAudioNormalizer
+{
+    Task<NormalizedAudio> NormalizeAsync(
+        Stream audio, string contentType, long maxBytes, CancellationToken cancellationToken);
+}
+
 public interface IMediaStorage
 {
-    Task<string> StorePrivateAsync(Stream content, string contentType, CancellationToken cancellationToken);
+    Task<MediaStorageObject> StorePrivateAsync(
+        Stream content, string contentType, CancellationToken cancellationToken);
+    Task<Stream?> OpenReadPrivateAsync(
+        string storageReference, CancellationToken cancellationToken);
+    Task DeletePrivateAsync(string storageReference, CancellationToken cancellationToken);
+}
+
+public interface IMediaRepository
+{
+    Task<MediaAttachmentRecord> UpsertPendingAsync(
+        Guid tenantId,
+        long conversationId,
+        long messageId,
+        string metaMediaId,
+        MediaKind mediaKind,
+        string? mimeType,
+        DateTimeOffset expiresAtUtc,
+        CancellationToken cancellationToken);
+    Task SetAvailableAsync(
+        Guid tenantId,
+        long conversationId,
+        long messageId,
+        string storageReference,
+        string mimeType,
+        long sizeBytes,
+        DateTimeOffset expiresAtUtc,
+        CancellationToken cancellationToken);
+    Task SetFailedAsync(
+        Guid tenantId,
+        long conversationId,
+        long messageId,
+        string? storageReference,
+        CancellationToken cancellationToken);
+    Task<AuthorizedMediaRecord?> GetForAccessAsync(
+        Guid tenantId, long messageId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<MediaAttachmentRecord>> ListExpiredAsync(
+        DateTimeOffset nowUtc, int batchSize, CancellationToken cancellationToken);
+    Task MarkDeletedAsync(
+        Guid tenantId, long messageId, CancellationToken cancellationToken);
+    Task UpsertTranscriptPendingAsync(
+        Guid tenantId, long conversationId, long messageId, CancellationToken cancellationToken);
+    Task SetTranscriptAsync(
+        Guid tenantId,
+        long conversationId,
+        long messageId,
+        string? transcriptText,
+        TranscriptState state,
+        CancellationToken cancellationToken);
 }

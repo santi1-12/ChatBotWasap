@@ -28,6 +28,8 @@ public interface IWhatsAppBotApiClient
         long conversationId, ConversationActionRequestDTO request, CancellationToken cancellationToken);
     Task<ResponseE<MessageDTO>?> SendManualConversationMessageAsync(
         long conversationId, ManualMessageRequestDTO request, CancellationToken cancellationToken);
+    Task<MediaProxyResponse> GetMessageMediaAsync(
+        long messageId, CancellationToken cancellationToken);
     Task<ResponseE<BotConfigurationDTO>?> GetBotConfigurationAsync(CancellationToken cancellationToken);
     Task<ResponseE<BotConfigurationDTO>?> UpdateBotConfigurationAsync(
         UpdateBotConfigurationRequestDTO request, CancellationToken cancellationToken);
@@ -43,6 +45,11 @@ public interface IWhatsAppBotApiClient
         long id, bool isActive, CancellationToken cancellationToken);
     Task DeleteFrequentResponseAsync(long id, CancellationToken cancellationToken);
 }
+
+public sealed record MediaProxyResponse(
+    System.Net.HttpStatusCode StatusCode,
+    byte[]? Content,
+    string? ContentType);
 
 public sealed class WhatsAppBotApiClient : IWhatsAppBotApiClient
 {
@@ -143,6 +150,24 @@ public sealed class WhatsAppBotApiClient : IWhatsAppBotApiClient
         CancellationToken cancellationToken) =>
         SendAsync<MessageDTO>(
             HttpMethod.Post, $"api/v1/admin/conversations/{conversationId}/messages", request, cancellationToken);
+
+    public async Task<MediaProxyResponse> GetMessageMediaAsync(
+        long messageId, CancellationToken cancellationToken)
+    {
+        using var request = CreateAuthorizedRequest(
+            HttpMethod.Get, $"api/v1/admin/messages/{messageId}/media");
+        using var response = await SendHttpAsync(
+            request, cancellationToken, $"api/v1/admin/messages/{messageId}/media");
+        if (!response.IsSuccessStatusCode)
+        {
+            return new MediaProxyResponse(response.StatusCode, null, null);
+        }
+
+        return new MediaProxyResponse(
+            response.StatusCode,
+            await response.Content.ReadAsByteArrayAsync(cancellationToken),
+            response.Content.Headers.ContentType?.MediaType);
+    }
 
     public Task<ResponseE<BotConfigurationDTO>?> UpdateBotConfigurationAsync(
         UpdateBotConfigurationRequestDTO request, CancellationToken cancellationToken) =>

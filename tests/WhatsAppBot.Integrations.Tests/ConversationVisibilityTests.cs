@@ -371,6 +371,11 @@ public sealed class ConversationVisibilityTests
             long conversationId, ManualMessageRequestDTO request, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
+        public Task<MediaProxyResponse> GetMessageMediaAsync(
+            long messageId, CancellationToken cancellationToken) =>
+            Task.FromResult(new MediaProxyResponse(
+                System.Net.HttpStatusCode.NotFound, null, null));
+
         public Task<ResponseE<AuthResponseDTO>?> LoginAsync(
             LoginRequestDTO request, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<ResponseE<WhatsAppIntegrationDTO>?> GetWhatsAppIntegrationAsync(

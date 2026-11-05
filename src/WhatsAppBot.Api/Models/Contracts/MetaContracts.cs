@@ -39,6 +39,8 @@ public sealed record MetaPhoneNumberSummary(string PhoneNumberId);
 
 public sealed record MetaPhoneNumberDetails(string DisplayPhoneNumber, string? VerifiedName);
 
+public sealed record MetaMediaMetadata(string Url, string MimeType, long? FileSizeBytes);
+
 public sealed record MetaMessageSendResult(
     bool Succeeded,
     string? ProviderMessageId,
@@ -103,6 +105,12 @@ public static class MessageOutcomeCodes
     public const string MetaDeliveryFailed = "MetaDeliveryFailed";
     public const string MediaExpired = "MediaExpired";
     public const string HandoffToHuman = "HandoffToHuman";
+    public const string MediaDownloadFailed = "MediaDownloadFailed";
+    public const string MediaStorageFailed = "MediaStorageFailed";
+    public const string MediaInvalidMime = "MediaInvalidMime";
+    public const string MediaTooLarge = "MediaTooLarge";
+    public const string TranscriptionFailed = "TranscriptionFailed";
+    public const string ImageAnalysisUnavailable = "ImageAnalysisUnavailable";
 }
 
 public static class MetaWebhookEventTypes

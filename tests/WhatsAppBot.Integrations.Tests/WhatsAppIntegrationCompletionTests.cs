@@ -461,6 +461,15 @@ public sealed class WhatsAppIntegrationCompletionTests
                 : Task.CompletedTask;
         }
 
+        public Task<MetaMediaDownload> DownloadMediaAsync(
+            string accessToken,
+            string mediaId,
+            MediaKind mediaKind,
+            string? expectedMimeType,
+            long maxBytes,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
         public Task<MetaMessageSendResult> SendTextAsync(
             string accessToken, string phoneNumberId, string recipient, string text,
             CancellationToken cancellationToken) => throw new NotSupportedException();
@@ -588,6 +597,11 @@ public sealed class WhatsAppIntegrationCompletionTests
         public Task<ResponseE<MessageDTO>?> SendManualConversationMessageAsync(
             long conversationId, ManualMessageRequestDTO request, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
+
+        public Task<MediaProxyResponse> GetMessageMediaAsync(
+            long messageId, CancellationToken cancellationToken) =>
+            Task.FromResult(new MediaProxyResponse(
+                System.Net.HttpStatusCode.NotFound, null, null));
 
         public Task<ResponseE<WhatsAppIntegrationDTO>?> CompleteWhatsAppSignupAsync(
             EmbeddedSignupCompletionRequestDTO request, CancellationToken cancellationToken) =>

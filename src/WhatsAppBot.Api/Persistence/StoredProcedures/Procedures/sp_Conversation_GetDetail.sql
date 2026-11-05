@@ -57,7 +57,11 @@ BEGIN
         message_page.CreatedByAdminId,
          outbox.SourceInboundMessageId,
         CASE WHEN transcript.State = N'Completed' THEN transcript.TranscriptText END AS Transcription,
-        CONVERT(bit, CASE WHEN media.MediaAttachmentId IS NULL THEN 0 ELSE 1 END) AS MediaAvailable,
+         CONVERT(bit, CASE WHEN media.AvailabilityState = N'Available'
+                                AND (media.ExpiresAtUtc IS NULL OR media.ExpiresAtUtc > SYSUTCDATETIME())
+                            THEN 1 ELSE 0 END) AS MediaAvailable,
+         media.AvailabilityState AS MediaAvailabilityState,
+         media.ExpiresAtUtc AS MediaExpiresAtUtc,
         message_page.ReplySource,
         message_page.ProcessingState,
         message_page.DeliveryState,
@@ -86,8 +90,7 @@ BEGIN
     LEFT JOIN dbo.MessageOutbox AS outbox
         ON outbox.MessageId = message_page.MessageId
     LEFT JOIN dbo.MediaAttachment AS media
-        ON media.MessageId = message_page.MessageId
-       AND media.AvailabilityState = N'Available'
+         ON media.MessageId = message_page.MessageId
     LEFT JOIN dbo.Transcript AS transcript
         ON transcript.MessageId = message_page.MessageId
     WHERE conversation.IntegrationId = @IntegrationId

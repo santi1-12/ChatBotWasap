@@ -112,6 +112,8 @@ public sealed class MessageDTO
     public string? Transcription { get; init; }
     public bool MediaAvailable { get; init; }
     public string? MediaUrl { get; init; }
+    public MediaAvailabilityState? MediaAvailabilityState { get; init; }
+    public DateTimeOffset? MediaExpiresAtUtc { get; init; }
     public ReplySource? ReplySource { get; init; }
     public required ProcessingState ProcessingState { get; init; }
     public DeliveryState? DeliveryState { get; init; }

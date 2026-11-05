@@ -120,6 +120,32 @@ public sealed class DetailsModel(IWhatsAppBotApiClient apiClient) : PageModel
         return Page();
     }
 
+    public async Task<IActionResult> OnGetMediaAsync(
+        long id, long messageId, CancellationToken cancellationToken)
+    {
+        if (id < 1 || messageId < 1)
+        {
+            return NotFound();
+        }
+
+        var response = await apiClient.GetMessageMediaAsync(messageId, cancellationToken);
+        if (response.StatusCode == System.Net.HttpStatusCode.OK && response.Content is not null)
+        {
+            return File(response.Content, response.ContentType ?? "application/octet-stream");
+        }
+
+        return response.StatusCode == System.Net.HttpStatusCode.Gone
+            ? StatusCode(StatusCodes.Status410Gone)
+            : NotFound();
+    }
+
+    public string MediaUrl(long messageId) =>
+        Url.Page("./Details", "Media", new
+        {
+            id = Conversation?.Conversation.ConversationId,
+            messageId
+        }) ?? string.Empty;
+
     public string StatusLabel(ConversationStatus status) => status switch
     {
         ConversationStatus.Open => "Abierta",

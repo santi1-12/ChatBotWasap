@@ -5,6 +5,8 @@ using WhatsAppBot.Api.Infrastructure.Options;
 using WhatsAppBot.Api.Integrations.GitHubCopilot;
 using WhatsAppBot.Api.Integrations.Meta;
 using WhatsAppBot.Api.Integrations.OpenAI;
+using WhatsAppBot.Api.Integrations.Audio;
+using WhatsAppBot.Api.Integrations.Media;
 
 namespace WhatsAppBot.Api.Integrations.Extensions;
 
@@ -17,7 +19,8 @@ public static class IntegrationsServiceCollectionExtensions
             var metaOptions = provider.GetRequiredService<IOptions<MetaOptions>>().Value;
             return new RestClient(new RestClientOptions("https://graph.facebook.com/")
             {
-                Timeout = TimeSpan.FromSeconds(metaOptions.RequestTimeoutSeconds)
+                Timeout = TimeSpan.FromSeconds(metaOptions.RequestTimeoutSeconds),
+                FollowRedirects = false
             });
         });
         services.AddScoped<IMetaCloudApiClient, MetaCloudApiClient>();
@@ -27,6 +30,23 @@ public static class IntegrationsServiceCollectionExtensions
         services.AddSingleton<IMetaWebhookChallengeValidator, MetaWebhookChallengeValidator>();
         services.AddSingleton<IMetaWebhookEventParser, MetaWebhookEventParser>();
         services.AddOpenAi();
+        services.AddScoped<IAudioNormalizer, AudioNormalizationService>();
+        services.AddScoped<UnavailableAudioTranscriptionService>();
+        services.AddScoped<UnavailableImageAnalysisService>();
+        services.AddScoped<IAudioTranscriptionService>(provider =>
+            string.Equals(
+                provider.GetRequiredService<IOptions<AiOptions>>().Value.Provider,
+                AiProviderNames.OpenAI,
+                StringComparison.OrdinalIgnoreCase)
+                ? provider.GetRequiredService<OpenAiAudioTranscriptionService>()
+                : provider.GetRequiredService<UnavailableAudioTranscriptionService>());
+        services.AddScoped<IImageAnalysisService>(provider =>
+            string.Equals(
+                provider.GetRequiredService<IOptions<AiOptions>>().Value.Provider,
+                AiProviderNames.OpenAI,
+                StringComparison.OrdinalIgnoreCase)
+                ? provider.GetRequiredService<OpenAiImageAnalysisService>()
+                : provider.GetRequiredService<UnavailableImageAnalysisService>());
         services.AddGitHubCopilot();
         services.AddScoped<AiReplyGeneratorSelector>();
         services.AddScoped<IAiReplyGenerator>(provider =>

@@ -46,6 +46,105 @@ public sealed class WhatsAppIntegrationPersistenceTests(LocalDbFixture fixture)
     }
 
     [Fact]
+    public async Task MediaCleanupMarksAttachmentDeletedWithoutChangingMessageOrTranscript()
+    {
+        var tenantId = Guid.NewGuid();
+        var integrationId = Guid.NewGuid();
+        var providerMessageId = $"media-retention-{Guid.NewGuid():N}";
+        long messageId = 0;
+        await using var connection = new SqlConnection(fixture.ConnectionString);
+        await connection.OpenAsync();
+
+        try
+        {
+            messageId = Convert.ToInt64(await ExecuteScalarAsync(
+                connection,
+                """
+                DECLARE @ContactId bigint;
+                DECLARE @ConversationId bigint;
+                DECLARE @MessageId bigint;
+                INSERT dbo.Tenant (TenantId, LegalName, IsActive)
+                VALUES (@TenantId, N'Media retention test', 1);
+                INSERT dbo.WhatsAppIntegration (IntegrationId, ConnectionState, IsActive, TenantId)
+                VALUES (@IntegrationId, N'Connected', 0, @TenantId);
+                INSERT dbo.Contact (IntegrationId, WhatsAppUserId, TenantId)
+                VALUES (@IntegrationId, @WhatsAppUserId, @TenantId);
+                SET @ContactId = CONVERT(bigint, SCOPE_IDENTITY());
+                INSERT dbo.Conversation (IntegrationId, ContactId, TenantId)
+                VALUES (@IntegrationId, @ContactId, @TenantId);
+                SET @ConversationId = CONVERT(bigint, SCOPE_IDENTITY());
+                INSERT dbo.Message
+                    (IntegrationId, ConversationId, ProviderMessageId, Direction, MessageType,
+                     ContentText, ProcessingState, TenantId, ActorType, Origin)
+                VALUES
+                    (@IntegrationId, @ConversationId, @ProviderMessageId, N'Inbound', N'Audio',
+                     N'Preserve this message', N'Completed', @TenantId, N'Customer', N'MetaCloudApi');
+                SET @MessageId = CONVERT(bigint, SCOPE_IDENTITY());
+                INSERT dbo.Transcript (MessageId, TranscriptText, State, TenantId)
+                VALUES (@MessageId, N'Preserve this transcript', N'Completed', @TenantId);
+                INSERT dbo.MediaAttachment
+                    (MessageId, TenantId, MediaKind, MimeType, SizeBytes, StorageReference,
+                     AvailabilityState, ExpiresAtUtc)
+                VALUES
+                    (@MessageId, @TenantId, N'Audio', N'audio/wav', 3, N'media/private-reference',
+                     N'Available', DATEADD(minute, -1, SYSUTCDATETIME()));
+                SELECT @MessageId;
+                """,
+                ("@TenantId", SqlDbType.UniqueIdentifier, tenantId),
+                ("@IntegrationId", SqlDbType.UniqueIdentifier, integrationId),
+                ("@WhatsAppUserId", SqlDbType.NVarChar, $"retention-user-{Guid.NewGuid():N}"),
+                ("@ProviderMessageId", SqlDbType.NVarChar, providerMessageId)));
+
+            await ExecuteStoredProcedureAsync(
+                connection,
+                "dbo.sp_MediaAttachment_MarkDeleted",
+                ("@TenantId", SqlDbType.UniqueIdentifier, tenantId),
+                ("@MessageId", SqlDbType.BigInt, messageId));
+
+            await using var command = new SqlCommand(
+                """
+                SELECT message.ContentText, message.ProcessingState,
+                       transcript.TranscriptText, transcript.State,
+                       media.AvailabilityState, media.StorageReference
+                FROM dbo.Message AS message
+                INNER JOIN dbo.Transcript AS transcript ON transcript.MessageId = message.MessageId
+                INNER JOIN dbo.MediaAttachment AS media ON media.MessageId = message.MessageId
+                WHERE message.MessageId = @MessageId;
+                """,
+                connection);
+            command.Parameters.Add(new SqlParameter("@MessageId", SqlDbType.BigInt) { Value = messageId });
+            await using var reader = await command.ExecuteReaderAsync();
+            Assert.True(await reader.ReadAsync());
+            Assert.Equal("Preserve this message", reader.GetString(0));
+            Assert.Equal("Completed", reader.GetString(1));
+            Assert.Equal("Preserve this transcript", reader.GetString(2));
+            Assert.Equal("Completed", reader.GetString(3));
+            Assert.Equal("Deleted", reader.GetString(4));
+            Assert.True(reader.IsDBNull(5));
+        }
+        finally
+        {
+            await ExecuteAsync(
+                connection,
+                """
+                DELETE dbo.MediaAttachment WHERE MessageId = @MessageId;
+                DELETE dbo.Transcript WHERE MessageId = @MessageId;
+                DELETE dbo.Message WHERE MessageId = @MessageId;
+                DELETE conversation
+                FROM dbo.Conversation AS conversation
+                INNER JOIN dbo.Contact AS contact ON contact.ContactId = conversation.ContactId
+                WHERE contact.TenantId = @TenantId;
+                DELETE dbo.Contact WHERE TenantId = @TenantId;
+                DELETE dbo.WhatsAppIntegration WHERE IntegrationId = @IntegrationId;
+                DELETE dbo.Tenant WHERE TenantId = @TenantId;
+                """,
+                ("@TenantId", SqlDbType.UniqueIdentifier, tenantId),
+                ("@IntegrationId", SqlDbType.UniqueIdentifier, integrationId),
+                ("@MessageId", SqlDbType.BigInt, messageId));
+        }
+    }
+
+    [Fact]
     public async Task SignupResultPersistsTenantModalityAndEffectiveConfiguration()
     {
         var tenantId = Guid.NewGuid();
@@ -119,6 +218,16 @@ public sealed class WhatsAppIntegrationPersistenceTests(LocalDbFixture fixture)
         };
         AddParameters(command, parameters);
         await command.ExecuteNonQueryAsync();
+    }
+
+    private static async Task<object?> ExecuteScalarAsync(
+        SqlConnection connection,
+        string sql,
+        params (string Name, SqlDbType Type, object Value)[] parameters)
+    {
+        await using var command = new SqlCommand(sql, connection);
+        AddParameters(command, parameters);
+        return await command.ExecuteScalarAsync();
     }
 
     private static async Task ExecuteAsync(

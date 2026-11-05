@@ -220,6 +220,15 @@ public sealed class MetaEmbeddedSignupTests
             return Task.CompletedTask;
         }
 
+        public Task<MetaMediaDownload> DownloadMediaAsync(
+            string accessToken,
+            string mediaId,
+            MediaKind mediaKind,
+            string? expectedMimeType,
+            long maxBytes,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
         public Task<MetaMessageSendResult> SendTextAsync(
             string accessToken, string phoneNumberId, string recipient, string text,
             CancellationToken cancellationToken) => throw new NotImplementedException();

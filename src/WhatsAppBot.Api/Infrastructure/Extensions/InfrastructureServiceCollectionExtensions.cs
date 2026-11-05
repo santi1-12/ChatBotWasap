@@ -8,6 +8,7 @@ using WhatsAppBot.Api.Infrastructure.Options;
 using WhatsAppBot.Api.Infrastructure.Security;
 using WhatsAppBot.Api.Business.Services;
 using WhatsAppBot.Api.Infrastructure;
+using WhatsAppBot.Api.Infrastructure.MediaStorage;
 
 namespace WhatsAppBot.Api.Infrastructure.Extensions;
 
@@ -62,8 +63,11 @@ public static class InfrastructureServiceCollectionExtensions
             .Validate(options => options.MaxOutputTokens is >= 1 and <= 100_000,
                 "OpenAI:MaxOutputTokens must be between 1 and 100000.")
             .Validate(options => Uri.TryCreate(options.Endpoint, UriKind.Absolute, out var endpoint)
-                                 && endpoint.Scheme == Uri.UriSchemeHttps,
+                                  && endpoint.Scheme == Uri.UriSchemeHttps,
                  "OpenAI:Endpoint must be an absolute HTTPS URL.")
+            .Validate(options => Uri.TryCreate(options.TranscriptionEndpoint, UriKind.Absolute, out var transcriptionEndpoint)
+                                 && transcriptionEndpoint.Scheme == Uri.UriSchemeHttps,
+                 "OpenAI:TranscriptionEndpoint must be an absolute HTTPS URL.")
             .Validate(options => options.MaxAudioBytes is >= 1_024 and <= 100_000_000,
                 "OpenAI:MaxAudioBytes must be between 1024 and 100000000.")
             .Validate(options => options.MaxImageBytes is >= 1_024 and <= 100_000_000,
@@ -76,12 +80,21 @@ public static class InfrastructureServiceCollectionExtensions
             .ValidateOnStart();
         services.AddOptions<MediaStorageOptions>()
             .Bind(configuration.GetSection(MediaStorageOptions.SectionName))
+            .Validate(options => string.Equals(
+                    options.Provider,
+                    MediaStorageOptions.LocalPrivateProvider,
+                    StringComparison.OrdinalIgnoreCase),
+                "MediaStorage:Provider must be the approved private provider.")
             .Validate(options => options.RequestTimeoutSeconds is > 0 and <= 600,
                 "MediaStorage:RequestTimeoutSeconds must be between 1 and 600.")
             .Validate(options => options.MaxFileBytes is >= 1_024 and <= 1_000_000_000,
                 "MediaStorage:MaxFileBytes must be between 1024 and 1000000000.")
             .Validate(options => options.RetentionDays is >= 1 and <= 3650,
                 "MediaStorage:RetentionDays must be between 1 and 3650.")
+            .Validate(options => options.CleanupBatchSize is >= 1 and <= 500,
+                "MediaStorage:CleanupBatchSize must be between 1 and 500.")
+            .Validate(options => options.CleanupIntervalMinutes is >= 1 and <= 1440,
+                "MediaStorage:CleanupIntervalMinutes must be between 1 and 1440.")
             .ValidateOnStart();
         services.AddOptions<FfmpegOptions>()
             .Bind(configuration.GetSection(FfmpegOptions.SectionName))
@@ -154,6 +167,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<IAccessTokenIssuer, AccessTokenIssuer>();
         services.AddSingleton<IClock, SystemClock>();
         services.AddSingleton<IWhatsAppMessagingPolicy, WhatsAppMessagingPolicy>();
+        services.AddSingleton<IMediaStorage, LocalPrivateMediaStorage>();
         services.AddSingleton<UserSecretsSecretStore>();
         services.AddSingleton<ISecretStore>(provider => provider.GetRequiredService<UserSecretsSecretStore>());
         services.AddSingleton<ISecretReferenceResolver>(provider =>

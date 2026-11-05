@@ -145,7 +145,11 @@ public sealed class ConversationsController(
         Text = record.Text,
         Transcription = record.Transcription,
         MediaAvailable = record.MediaAvailable,
-        MediaUrl = null,
+        MediaUrl = record.MediaAvailable
+            ? $"/api/v1/admin/messages/{record.MessageId}/media"
+            : null,
+        MediaAvailabilityState = record.MediaAvailabilityState,
+        MediaExpiresAtUtc = record.MediaExpiresAtUtc,
         ReplySource = record.ReplySource,
         ProcessingState = record.ProcessingState,
         DeliveryState = record.DeliveryState,

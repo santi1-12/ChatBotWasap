@@ -54,8 +54,10 @@ public sealed class MessageRepository(StoredProcedureExecutor executor) : IMessa
                 new SqlParameter("@ConversationId", SqlDbType.BigInt) { Value = conversationId },
                 new SqlParameter("@ProviderMessageId", SqlDbType.NVarChar, 256)
                     { Value = inboundEvent.ProviderMessageId! },
-                new SqlParameter("@MessageType", SqlDbType.NVarChar, 24) { Value = MessageType.Text.ToString() },
-                new SqlParameter("@ContentText", SqlDbType.NVarChar, -1) { Value = inboundEvent.Text! },
+                new SqlParameter("@MessageType", SqlDbType.NVarChar, 24)
+                    { Value = (inboundEvent.MessageType ?? MessageType.Text).ToString() },
+                new SqlParameter("@ContentText", SqlDbType.NVarChar, -1)
+                    { Value = (object?)(inboundEvent.Text ?? inboundEvent.MediaCaption) ?? DBNull.Value },
                 new SqlParameter("@ProviderTimestampUtc", SqlDbType.DateTime2)
                     { Scale = 3, Value = inboundEvent.ProviderTimestampUtc!.Value.UtcDateTime }
             ],
@@ -233,6 +235,13 @@ public sealed class MessageRepository(StoredProcedureExecutor executor) : IMessa
         message = message with
         {
             TenantId = reader.GetGuid(reader.GetOrdinal("TenantId")),
+            MediaAvailabilityState = reader.IsDBNull(reader.GetOrdinal("MediaAvailabilityState"))
+                ? null
+                : Enum.Parse<MediaAvailabilityState>(
+                    reader.GetString(reader.GetOrdinal("MediaAvailabilityState")), false),
+            MediaExpiresAtUtc = reader.IsDBNull(reader.GetOrdinal("MediaExpiresAtUtc"))
+                ? null
+                : ToUtc(reader, "MediaExpiresAtUtc"),
             ActorType = reader.IsDBNull(actorTypeOrdinal)
                 ? null
                 : Enum.Parse<ActorType>(reader.GetString(actorTypeOrdinal), false),

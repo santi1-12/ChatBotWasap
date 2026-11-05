@@ -44,6 +44,8 @@ public sealed record ConversationMessageRecord(
     DateTimeOffset CreatedAtUtc)
 {
     public Guid? TenantId { get; init; }
+    public MediaAvailabilityState? MediaAvailabilityState { get; init; }
+    public DateTimeOffset? MediaExpiresAtUtc { get; init; }
     public ActorType? ActorType { get; init; }
     public Origin? Origin { get; init; }
     public long? CreatedByAdminId { get; init; }

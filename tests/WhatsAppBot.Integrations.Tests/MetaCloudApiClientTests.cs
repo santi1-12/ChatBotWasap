@@ -4,6 +4,8 @@ using Microsoft.Extensions.Options;
 using RestSharp;
 using WhatsAppBot.Api.Infrastructure.Options;
 using WhatsAppBot.Api.Integrations.Meta;
+using WhatsAppBot.Api.Models.Contracts;
+using WhatsAppBot.Shared.Enums;
 
 namespace WhatsAppBot.Integrations.Tests;
 
@@ -111,6 +113,141 @@ public sealed class MetaCloudApiClientTests
         Assert.DoesNotContain("private detail", exception.Message);
     }
 
+    [Fact]
+    public async Task DownloadMedia_ResolvesMetadataThenDownloadsBoundedPrivateBytes()
+    {
+        var requestNumber = 0;
+        var handler = new RecordingHandler(request =>
+        {
+            if (requestNumber++ == 0)
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(
+                         "{\"url\":\"https://lookaside.fbsbx.com/private/media-123\",\"mime_type\":\"image/jpeg\",\"file_size\":4}")
+                };
+            }
+
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent([1, 2, 3, 4])
+            };
+            response.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/jpeg");
+            return response;
+        });
+        var client = CreateClient(handler);
+
+        var result = await client.DownloadMediaAsync(
+            "business-token", "media-123", MediaKind.Image, "image/jpeg", 10, CancellationToken.None);
+
+        Assert.Equal("image/jpeg", result.MimeType);
+        Assert.Equal(4, result.DeclaredSizeBytes);
+        Assert.Equal([1, 2, 3, 4], result.Content);
+        Assert.Equal(2, handler.RequestCount);
+        Assert.Equal("Bearer business-token", handler.Authorization);
+        Assert.Equal("lookaside.fbsbx.com", handler.RequestUris[1].Host);
+    }
+
+    [Fact]
+    public async Task DownloadMedia_RejectsMetadataAboveConfiguredLimit()
+    {
+        var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(
+                "{\"url\":\"https://lookaside.fbsbx.com/private/media-123\",\"mime_type\":\"image/jpeg\",\"file_size\":11}")
+        });
+        var client = CreateClient(handler);
+
+        var exception = await Assert.ThrowsAsync<MediaProcessingException>(() =>
+            client.DownloadMediaAsync(
+                "business-token", "media-123", MediaKind.Image, "image/jpeg", 10, CancellationToken.None));
+
+        Assert.Equal(MessageOutcomeCodes.MediaTooLarge, exception.SafeCode);
+        Assert.Equal(1, handler.RequestCount);
+    }
+
+    [Fact]
+    public async Task DownloadMedia_RejectsNonMetaMediaHostBeforeSendingBearerToken()
+    {
+        var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(
+                "{\"url\":\"https://cdn.example.test/private/media-123\",\"mime_type\":\"image/jpeg\",\"file_size\":4}")
+        });
+        var client = CreateClient(handler);
+
+        var exception = await Assert.ThrowsAsync<MediaProcessingException>(() =>
+            client.DownloadMediaAsync(
+                "business-token", "media-123", MediaKind.Image, "image/jpeg", 10, CancellationToken.None));
+
+        Assert.Equal(MessageOutcomeCodes.MediaDownloadFailed, exception.SafeCode);
+        Assert.Equal(1, handler.RequestCount);
+    }
+
+    [Fact]
+    public async Task DownloadMedia_RejectsBinaryBodyAboveConfiguredLimitWhileStreaming()
+    {
+        var requestNumber = 0;
+        var handler = new RecordingHandler(_ =>
+        {
+            if (requestNumber++ == 0)
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(
+                        "{\"url\":\"https://lookaside.fbsbx.com/private/media-123\",\"mime_type\":\"image/jpeg\",\"file_size\":4}")
+                };
+            }
+
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
+            };
+            response.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/jpeg");
+            return response;
+        });
+        var client = CreateClient(handler);
+
+        var exception = await Assert.ThrowsAsync<MediaProcessingException>(() =>
+            client.DownloadMediaAsync(
+                "business-token", "media-123", MediaKind.Image, "image/jpeg", 10, CancellationToken.None));
+
+        Assert.Equal(MessageOutcomeCodes.MediaTooLarge, exception.SafeCode);
+        Assert.Equal(2, handler.RequestCount);
+    }
+
+    [Fact]
+    public async Task DownloadMedia_RejectsBinaryMimeTypeThatDoesNotMatchMediaKind()
+    {
+        var requestNumber = 0;
+        var handler = new RecordingHandler(_ =>
+        {
+            if (requestNumber++ == 0)
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(
+                        "{\"url\":\"https://lookaside.fbsbx.com/private/media-123\",\"mime_type\":\"image/jpeg\",\"file_size\":4}")
+                };
+            }
+
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent([1, 2, 3, 4])
+            };
+            response.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("audio/ogg");
+            return response;
+        });
+        var client = CreateClient(handler);
+
+        var exception = await Assert.ThrowsAsync<MediaProcessingException>(() =>
+            client.DownloadMediaAsync(
+                "business-token", "media-123", MediaKind.Image, "image/jpeg", 10, CancellationToken.None));
+
+        Assert.Equal(MessageOutcomeCodes.MediaInvalidMime, exception.SafeCode);
+        Assert.Equal(2, handler.RequestCount);
+    }
+
     private static MetaCloudApiClient CreateClient(RecordingHandler handler)
     {
         var httpClient = new HttpClient(handler);
@@ -131,6 +268,7 @@ public sealed class MetaCloudApiClientTests
         public string? Authorization { get; private set; }
         public string Body { get; private set; } = string.Empty;
         public int RequestCount { get; private set; }
+        public List<Uri> RequestUris { get; } = [];
 
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
@@ -138,6 +276,7 @@ public sealed class MetaCloudApiClientTests
             RequestCount++;
             Method = request.Method;
             RequestUri = request.RequestUri;
+            RequestUris.Add(request.RequestUri!);
             Authorization = request.Headers.Authorization?.ToString();
             Body = request.Content is null
                 ? string.Empty

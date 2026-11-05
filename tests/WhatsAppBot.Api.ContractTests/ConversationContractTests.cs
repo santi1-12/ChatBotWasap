@@ -75,7 +75,7 @@ public sealed class ConversationContractTests : IClassFixture<ConversationApiFac
         var message = Assert.Single(detail.Data.Messages);
         Assert.Equal(MessageType.Audio, message.MessageType);
         Assert.True(message.MediaAvailable);
-        Assert.Null(message.MediaUrl);
+        Assert.Equal("/api/v1/admin/messages/7/media", message.MediaUrl);
         Assert.Equal("BotDisabled", message.OutcomeCode);
         Assert.Equal(ConversationContractTestData.TenantId, message.TenantId);
         Assert.Equal(ActorType.Admin, message.ActorType);

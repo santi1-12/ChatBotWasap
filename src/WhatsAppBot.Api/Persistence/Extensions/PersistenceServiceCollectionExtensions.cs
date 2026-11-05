@@ -27,6 +27,7 @@ public static class PersistenceServiceCollectionExtensions
             ?? throw new InvalidOperationException("Conversation repository does not expose audit queries."));
         services.AddScoped<IMessageRepository, MessageRepository>();
         services.AddScoped<IMessageOutboxRepository, MessageOutboxRepository>();
+        services.AddScoped<IMediaRepository, MediaRepository>();
         return services;
     }
 }
